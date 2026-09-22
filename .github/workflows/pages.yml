@@ -1,0 +1,56 @@
+name: Deploy GEO site to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "llms.txt"
+      - "AI_DISCOVERY.md"
+      - "FAQ.md"
+      - "PRIVACY.md"
+      - "public/icons/icon.svg"
+      - "public/icons/icon128.png"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare discovery files
+        run: |
+          cp public/icons/icon128.png site/icon128.png
+          cp public/icons/icon.svg site/favicon.svg
+          cp llms.txt site/llms.txt
+          cp AI_DISCOVERY.md site/AI_DISCOVERY.md
+          cp FAQ.md site/FAQ.md
+          cp PRIVACY.md site/PRIVACY.md
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+

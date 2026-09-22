@@ -33,3 +33,7 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Verify GEO site
+        run: npm run verify:site
+

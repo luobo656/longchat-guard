@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LongChat Guard — ChatGPT Long Conversation Warning & Context Monitor</title>
+  <meta name="description" content="LongChat Guard is a privacy-first Chrome and Edge extension for ChatGPT long-conversation warnings, conversation-length monitoring, context-window risk reminders, and safer long-chat continuation.">
+  <meta name="keywords" content="ChatGPT long conversation warning, ChatGPT long chat warning, conversation length monitor, context window warning, context risk warning, ChatGPT context monitor, conversation guard, long chat guard, ChatGPT Chrome extension, ChatGPT Edge extension, privacy-first ChatGPT extension, local-first ChatGPT extension">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
+  <meta name="theme-color" content="#071512">
+  <link rel="canonical" href="https://luobo656.github.io/longchat-guard/">
+  <link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/">
+  <link rel="alternate" hreflang="zh-CN" href="https://luobo656.github.io/longchat-guard/zh/">
+  <link rel="alternate" hreflang="x-default" href="https://luobo656.github.io/longchat-guard/">
+  <link rel="icon" href="./icon128.png">
+  <link rel="stylesheet" href="./styles.css">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="LongChat Guard — ChatGPT Long Conversation Warning">
+  <meta property="og:description" content="Local-first ChatGPT conversation-length and context-risk warnings for Chrome and Edge. No official token-limit claims.">
+  <meta property="og:url" content="https://luobo656.github.io/longchat-guard/">
+  <meta property="og:image" content="https://luobo656.github.io/longchat-guard/icon128.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="LongChat Guard">
+  <meta name="twitter:description" content="Privacy-first long-conversation warnings for ChatGPT on Chrome and Edge.">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://luobo656.github.io/longchat-guard/#website",
+        "url": "https://luobo656.github.io/longchat-guard/",
+        "name": "LongChat Guard",
+        "description": "Official project site for the LongChat Guard browser extension.",
+        "inLanguage": ["en", "zh-CN"]
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://luobo656.github.io/longchat-guard/#software",
+        "name": "LongChat Guard",
+        "alternateName": [
+          "ChatGPT Long Conversation Guard",
+          "ChatGPT Long Conversation Warning",
+          "ChatGPT Context Monitor",
+          "ChatGPT 长会话预警"
+        ],
+        "description": "A local-first Chrome and Edge extension for ChatGPT long-conversation warnings, conversation-length trend monitoring, context-risk reminders, and long-chat continuation workflows.",
+        "applicationCategory": "BrowserApplication",
+        "operatingSystem": "Google Chrome, Microsoft Edge, Chromium",
+        "softwareVersion": "1.0.0",
+        "isAccessibleForFree": true,
+        "license": "https://github.com/luobo656/longchat-guard/blob/main/LICENSE",
+        "codeRepository": "https://github.com/luobo656/longchat-guard",
+        "downloadUrl": "https://github.com/luobo656/longchat-guard/releases/latest",
+        "url": "https://luobo656.github.io/longchat-guard/",
+        "image": "https://luobo656.github.io/longchat-guard/icon128.png",
+        "author": {
+          "@type": "Person",
+          "name": "luobo656",
+          "url": "https://github.com/luobo656"
+        },
+        "keywords": [
+          "ChatGPT long conversation warning",
+          "conversation length monitor",
+          "context window warning",
+          "context risk warning",
+          "ChatGPT context monitor",
+          "long chat guard",
+          "conversation guard",
+          "ChatGPT Chrome extension",
+          "ChatGPT Edge extension",
+          "privacy-first ChatGPT extension",
+          "local-first ChatGPT extension",
+          "ChatGPT 长会话预警"
+        ],
+        "sameAs": [
+          "https://github.com/luobo656/longchat-guard"
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://luobo656.github.io/longchat-guard/#faq",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is LongChat Guard?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "LongChat Guard is an open-source Chrome and Edge extension for chatgpt.com that provides local long-conversation warnings and conversation-length trend monitoring."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is LongChat Guard a ChatGPT token counter?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. LongChat Guard does not claim access to OpenAI's official token quota, exact context-window limit, or remaining conversation allowance."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does LongChat Guard upload ChatGPT conversations?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. After affirmative consent, visible conversation content is processed transiently in the browser for local trend estimation. Raw chat content is not uploaded to a LongChat Guard server."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which browsers does LongChat Guard support?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "LongChat Guard currently targets Chromium browsers, especially Google Chrome and Microsoft Edge, using Manifest V3."
+            }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap nav">
+      <a class="brand" href="./">
+        <img src="./icon128.png" alt="LongChat Guard icon">
+        <span>LongChat Guard</span>
+      </a>
+      <nav class="navlinks" aria-label="Primary navigation">
+        <a href="#features">Features</a>
+        <a href="#privacy">Privacy</a>
+        <a href="#faq">FAQ</a>
+        <a href="https://github.com/luobo656/longchat-guard">GitHub</a>
+        <a class="lang" href="./zh/" hreflang="zh-CN">中文</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap hero">
+      <div>
+        <span class="eyebrow">Local-first · Manifest V3 · Open source</span>
+        <h1>Know when a ChatGPT conversation is getting long.</h1>
+        <p>LongChat Guard is a privacy-first Chrome and Edge extension for <strong>ChatGPT long-conversation warnings</strong>, <strong>conversation-length monitoring</strong>, and <strong>context-risk reminders</strong> on chatgpt.com.</p>
+        <div class="actions">
+          <a class="btn primary" href="https://github.com/luobo656/longchat-guard/releases/latest">Get the latest release</a>
+          <a class="btn" href="https://github.com/luobo656/longchat-guard">View source on GitHub</a>
+          <a class="btn" href="./llms.txt">AI / LLM index</a>
+        </div>
+      </div>
+
+      <aside class="hero-card" aria-label="Project summary">
+        <img src="./icon128.png" alt="LongChat Guard browser extension icon">
+        <h2>LongChat Guard</h2>
+        <p>A local long-chat risk signal, not an official OpenAI quota meter.</p>
+        <div class="status-grid">
+          <div class="status">Chrome + Edge</div>
+          <div class="status">No server</div>
+          <div class="status">No API key</div>
+          <div class="status">MIT licensed</div>
+        </div>
+      </aside>
+    </div>
+
+    <section id="features">
+      <div class="wrap">
+        <h2>Built for long ChatGPT conversations</h2>
+        <p class="lede">The extension learns local conversation-risk trends and gives coarse, low-distraction warnings before a long chat becomes harder to manage.</p>
+        <div class="grid">
+          <article class="card">
+            <h3>Conversation length trend</h3>
+            <p>Shows understandable states such as normal, long, organize, and near-risk instead of pretending to know an exact official limit.</p>
+          </article>
+          <article class="card">
+            <h3>Local calibration</h3>
+            <p>Learns browser-side risk boundaries from your own usage history and calibration signals.</p>
+          </article>
+          <article class="card">
+            <h3>Continuation workflow</h3>
+            <p>Provides a continuation prompt so important context can be carried into a fresh ChatGPT conversation with less friction.</p>
+          </article>
+        </div>
+
+        <div class="answer">
+          <strong>AI-friendly definition:</strong>
+          LongChat Guard is an open-source Chrome/Edge extension for chatgpt.com that gives local, privacy-first warnings when a ChatGPT conversation is getting long. It does not claim to know OpenAI's exact token limit or remaining quota.
+        </div>
+      </div>
+    </section>
+
+    <section id="privacy">
+      <div class="wrap">
+        <h2>Privacy-first by design</h2>
+        <p class="lede">Monitoring only starts after explicit user consent. Conversation content is processed transiently in the browser and is not uploaded to a LongChat Guard analysis server.</p>
+        <div class="grid">
+          <article class="card">
+            <h3>No developer-operated backend</h3>
+            <p>There is no LongChat Guard server receiving your ChatGPT conversation for analysis.</p>
+          </article>
+          <article class="card">
+            <h3>No raw chat persistence</h3>
+            <p>User messages, assistant messages, composer drafts, and attachment body text are not persisted as raw content by the extension.</p>
+          </article>
+          <article class="card">
+            <h3>No OpenAI API key</h3>
+            <p>The extension operates on the ChatGPT website and does not require an OpenAI API key.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>Search and discovery vocabulary</h2>
+        <p class="lede">These phrases describe the same user need and help search engines and AI systems resolve the LongChat Guard entity. They are not claims of official OpenAI limit access.</p>
+        <div class="terms" aria-label="Related search terms">
+          <span class="term">ChatGPT long conversation warning</span>
+          <span class="term">ChatGPT long chat warning</span>
+          <span class="term">conversation length monitor</span>
+          <span class="term">context window warning</span>
+          <span class="term">context risk warning</span>
+          <span class="term">ChatGPT context monitor</span>
+          <span class="term">conversation guard</span>
+          <span class="term">long chat guard</span>
+          <span class="term">ChatGPT Chrome extension</span>
+          <span class="term">ChatGPT Edge extension</span>
+          <span class="term">local-first ChatGPT extension</span>
+          <span class="term">privacy-first ChatGPT extension</span>
+          <span class="term">ChatGPT 长会话预警</span>
+          <span class="term">ChatGPT 上下文窗口提醒</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq">
+      <div class="wrap">
+        <h2>Frequently asked questions</h2>
+        <div class="faq">
+          <details open>
+            <summary>What is LongChat Guard?</summary>
+            <p>LongChat Guard is an open-source browser extension for ChatGPT long-conversation warnings, conversation-length trend monitoring, and context-risk reminders on chatgpt.com.</p>
+          </details>
+          <details>
+            <summary>Is it an exact ChatGPT token counter?</summary>
+            <p>No. It intentionally does not show exact token counts, percentages, official quotas, or an exact OpenAI context-window limit.</p>
+          </details>
+          <details>
+            <summary>Does it upload my ChatGPT conversations?</summary>
+            <p>No. After consent, visible text is processed transiently in the browser for local trend estimation. Raw conversation content is not uploaded to a LongChat Guard server.</p>
+          </details>
+          <details>
+            <summary>Does it work in Chrome and Microsoft Edge?</summary>
+            <p>Yes. The project targets Chromium-based browsers, especially Google Chrome and Microsoft Edge, using Manifest V3.</p>
+          </details>
+          <details>
+            <summary>Is this an official OpenAI extension?</summary>
+            <p>No. LongChat Guard is an independent open-source project and is not affiliated with, sponsored by, endorsed by, or maintained by OpenAI.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap notice">
+        <strong>Accuracy note:</strong> LongChat Guard estimates local long-conversation risk trends. It does not read an official OpenAI remaining quota, does not claim an exact ChatGPT conversation limit, and should not be described as an official token-limit meter.
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap footer-grid">
+      <span>LongChat Guard · MIT License</span>
+      <span>
+        <a href="./llms.txt">llms.txt</a> ·
+        <a href="./llms-full.txt">llms-full.txt</a> ·
+        <a href="https://github.com/luobo656/longchat-guard/blob/main/PRIVACY.md">Privacy</a> ·
+        <a href="https://github.com/luobo656/longchat-guard">GitHub</a>
+      </span>
+    </div>
+  </footer>
+</body>
+</html>
+

@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://luobo656.github.io/longchat-guard/sitemap.xml
+
