@@ -2,7 +2,7 @@
 
 ## Name
 
-ChatGPT Conversation Guard
+LongChat Guard for ChatGPT
 
 ## Short Description
 
@@ -10,7 +10,7 @@ Local trend warning for long chatgpt.com conversations without exact quota claim
 
 ## Description
 
-ChatGPT Conversation Guard helps users notice when a ChatGPT web conversation is getting long and may be worth organizing or continuing elsewhere. It uses local trend judgment and local calibration only.
+LongChat Guard helps users notice when a ChatGPT web conversation is getting long and may be worth organizing or continuing elsewhere. It uses local trend judgment and local calibration only.
 
 It does not show exact token counts, percentages, K values, remaining quota, or official limits. It does not require an OpenAI API key and does not upload chat content.
 

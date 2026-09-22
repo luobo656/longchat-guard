@@ -48,34 +48,101 @@ function renderPng(size) {
 }
 
 function sampleIcon(x, y) {
-  if (roundedRectContains(x, y, 12, 12, 104, 104, 24)) {
-    let color = baseGradient(x, y)
-    if (bubbleContains(x, y)) color = [255, 255, 255, 255]
-    color = over(color, roundedRectContains(x, y, 38, 82, 10, 8, 4) ? [248, 194, 74, 255] : [0, 0, 0, 0])
-    color = over(color, roundedRectContains(x, y, 52, 82, 10, 8, 4) ? [246, 169, 47, 255] : [0, 0, 0, 0])
-    color = over(color, roundedRectContains(x, y, 66, 82, 10, 8, 4) ? [240, 120, 36, 255] : [0, 0, 0, 0])
-    color = over(color, roundedRectContains(x, y, 80, 82, 10, 8, 4) ? [224, 82, 45, 255] : [0, 0, 0, 0])
-    return color
+  let color = [0, 0, 0, 0]
+
+  if (roundedRectContains(x, y, 10, 10, 108, 108, 25)) {
+    color = baseGradient(x, y)
   }
-  return [0, 0, 0, 0]
+
+  if (bubbleContains(x, y)) color = [255, 255, 255, 255]
+
+  for (const cx of [39, 61, 83]) {
+    if (Math.hypot(x - cx, y - 60) <= 6) color = [8, 114, 101, 255]
+  }
+
+  if (shieldContains(x, y, 0)) color = [255, 255, 255, 255]
+  if (shieldContains(x, y, 4)) color = shieldGradient(x, y)
+
+  if (
+    distanceToSegment(x, y, 79, 91, 88, 100) <= 3.5 ||
+    distanceToSegment(x, y, 88, 100, 104, 82) <= 3.5
+  ) {
+    color = [255, 255, 255, 255]
+  }
+
+  return color
 }
 
 function bubbleContains(x, y) {
-  const body = roundedRectContains(x, y, 25, 35, 78, 46, 12)
+  const body = roundedRectContains(x, y, 14, 31, 95, 58, 14)
   const tail =
-    pointInTriangle(x, y, [53, 80], [67, 80], [52, 94]) ||
-    pointInTriangle(x, y, [52, 81], [57, 81], [52, 94])
+    pointInTriangle(x, y, [40, 87], [61, 87], [40, 103]) ||
+    pointInTriangle(x, y, [40, 88], [48, 88], [40, 103])
   return body || tail
 }
 
 function baseGradient(x, y) {
-  const t = clamp((x + y - 36) / 192, 0, 1)
+  const t = clamp((x + y - 30) / 205, 0, 1)
   return [
-    Math.round(15 + (6 - 15) * t),
-    Math.round(118 + (67 - 118) * t),
-    Math.round(110 + (62 - 110) * t),
+    Math.round(11 + (5 - 11) * t),
+    Math.round(128 + (88 - 128) * t),
+    Math.round(111 + (79 - 111) * t),
     255
   ]
+}
+
+function shieldGradient(x, y) {
+  const t = clamp((x + y - 142) / 92, 0, 1)
+  return [
+    255,
+    Math.round(122 + (75 - 122) * t),
+    Math.round(24 + (18 - 24) * t),
+    255
+  ]
+}
+
+function shieldContains(x, y, inset) {
+  const topY = 62 + inset * 0.75
+  const leftX = 69 + inset
+  const rightX = 113 - inset
+  const bottomY = 123 - inset
+  const polygon = [
+    [91, topY],
+    [rightX, 72 + inset * 0.5],
+    [rightX, 90],
+    [rightX - inset * 1.5, 99],
+    [104, 111 - inset * 0.4],
+    [91, bottomY],
+    [78, 111 - inset * 0.4],
+    [leftX + inset * 1.5, 99],
+    [leftX, 90],
+    [leftX, 72 + inset * 0.5]
+  ]
+  return pointInPolygon(x, y, polygon)
+}
+
+function pointInPolygon(x, y, points) {
+  let inside = false
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const [xi, yi] = points[i]
+    const [xj, yj] = points[j]
+    const intersects =
+      yi > y !== yj > y &&
+      x < ((xj - xi) * (y - yi)) / ((yj - yi) || Number.EPSILON) + xi
+    if (intersects) inside = !inside
+  }
+  return inside
+}
+
+function distanceToSegment(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1
+  const dy = y2 - y1
+  const lengthSq = dx * dx + dy * dy
+  const t =
+    lengthSq === 0
+      ? 0
+      : clamp(((px - x1) * dx + (py - y1) * dy) / lengthSq, 0, 1)
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy))
 }
 
 function pointInTriangle(x, y, a, b, c) {
@@ -85,11 +152,6 @@ function pointInTriangle(x, y, a, b, c) {
   const total = area(a, b, c)
   const sum = area(p, b, c) + area(a, p, c) + area(a, b, p)
   return Math.abs(total - sum) < 0.5
-}
-
-function over(base, top) {
-  if (top[3] === 0) return base
-  return top
 }
 
 function roundedRectContains(x, y, rx, ry, rw, rh, rr) {

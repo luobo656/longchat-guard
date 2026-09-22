@@ -24,7 +24,7 @@ F:\ChatGPT 长会话提前预警器\dist
 - [ ] 不需要 OpenAI API Key
 - [ ] 不需要插件账号
 - [ ] 不自动弹浏览器通知
-- [ ] 扩展图标显示为深青绿底板、白色气泡、四段橙色趋势条，不是 ChatGPT/OpenAI logo
+- [ ] 扩展图标显示为深青绿底板、白色气泡、橙色守护盾牌，在 16px/32px 下仍能辨认，且不是 ChatGPT/OpenAI logo
 - [ ] manifest 名称、描述和 action title 不暗示官方关系
 
 ## 2. 首次隐私同意

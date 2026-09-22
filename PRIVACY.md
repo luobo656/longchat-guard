@@ -1,6 +1,6 @@
 # Privacy Policy
 
-ChatGPT Conversation Guard is a local browser extension for `chatgpt.com`.
+LongChat Guard is a local browser extension for `chatgpt.com`.
 
 Before the extension reads or processes visible ChatGPT conversation content for the first time, it presents an in-product privacy disclosure and requires the user to choose **“同意并开始 / Agree and start.”** Choosing “暂不开启 / Not now” keeps monitoring disabled.
 

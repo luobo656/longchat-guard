@@ -1,22 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Conversation risk trend icon">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Conversation guard icon">
   <defs>
-    <linearGradient id="base" x1="20" y1="16" x2="108" y2="112" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0f766e"/>
-      <stop offset="1" stop-color="#06433e"/>
+    <linearGradient id="base" x1="18" y1="12" x2="112" y2="118" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0b806f"/>
+      <stop offset="1" stop-color="#05584f"/>
     </linearGradient>
-    <linearGradient id="bar" x1="38" y1="84" x2="92" y2="84" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#f8c24a"/>
-      <stop offset="0.55" stop-color="#f59a23"/>
-      <stop offset="1" stop-color="#e0522d"/>
+    <linearGradient id="shield" x1="74" y1="64" x2="112" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff7a18"/>
+      <stop offset="1" stop-color="#ff4b12"/>
     </linearGradient>
   </defs>
-  <rect x="12" y="12" width="104" height="104" rx="24" fill="url(#base)"/>
-  <path
-    d="M37 35h54c6.6 0 12 5.4 12 12v22c0 6.6-5.4 12-12 12H67L52 94l3.5-13H37c-6.6 0-12-5.4-12-12V47c0-6.6 5.4-12 12-12Z"
-    fill="#fff"
-  />
-  <rect x="38" y="82" width="10" height="8" rx="4" fill="#f8c24a"/>
-  <rect x="52" y="82" width="10" height="8" rx="4" fill="#f6a92f"/>
-  <rect x="66" y="82" width="10" height="8" rx="4" fill="#f07824"/>
-  <rect x="80" y="82" width="10" height="8" rx="4" fill="#e0522d"/>
+
+  <rect x="10" y="10" width="108" height="108" rx="25" fill="url(#base)"/>
+
+  <path d="M28 31h67c8 0 14 6 14 14v30c0 8-6 14-14 14H60L40 103l4-14H28c-8 0-14-6-14-14V45c0-8 6-14 14-14Z" fill="#fff"/>
+  <circle cx="39" cy="60" r="6" fill="#087265"/>
+  <circle cx="61" cy="60" r="6" fill="#087265"/>
+  <circle cx="83" cy="60" r="6" fill="#087265"/>
+
+  <path d="M91 62 113 72v18c0 15-8 26-22 33-14-7-22-18-22-33V72l22-10Z" fill="url(#shield)" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
+  <path d="m79 91 9 9 16-18" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

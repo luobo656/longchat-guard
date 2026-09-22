@@ -18,7 +18,8 @@ describe('release manifest', () => {
 
     expect(manifest.icons).toEqual(expected)
     expect(manifest.action.default_icon).toEqual(expected)
-    expect(manifest.action.default_title).toBe('ChatGPT 长会话预警')
+    expect(manifest.name).toBe('LongChat Guard')
+    expect(manifest.action.default_title).toBe('LongChat Guard')
 
   })
 })

@@ -1,7 +1,16 @@
 {
-  "name": "chatgpt-conversation-guard",
+  "name": "longchat-guard",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/luobo656/longchat-guard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/luobo656/longchat-guard/issues"
+  },
+  "homepage": "https://github.com/luobo656/longchat-guard#readme",
   "type": "module",
   "scripts": {
     "build": "vite build && vite build --config vite.content.config.ts && npm run verify:dist",
@@ -14,6 +23,6 @@
     "@types/chrome": "^0.0.320",
     "typescript": "^5.9.2",
     "vite": "^7.1.7",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.11"
   }
 }

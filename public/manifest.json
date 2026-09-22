@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "ChatGPT Conversation Guard",
+  "name": "LongChat Guard",
   "version": "1.0.0",
   "description": "Local long-conversation trend warning for chatgpt.com. Not affiliated with OpenAI.",
   "permissions": ["storage"],
@@ -12,7 +12,7 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "ChatGPT 长会话预警",
+    "default_title": "LongChat Guard",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

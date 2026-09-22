@@ -279,7 +279,7 @@ function template(): string {
       <div class="toast" data-role="toast" hidden></div>
       <div class="panel" data-role="panel" hidden>
         <div class="section" data-role="monitor-panel">
-          <div class="title">ChatGPT 长会话预警</div>
+          <div class="title">LongChat Guard</div>
           <div class="metric"><span>当前会话长度</span><strong data-value="current-load">暂时无法判断</strong></div>
           <div class="trend" data-role="trend"><span>本地风险趋势</span><div class="track"><div class="fill"></div></div></div>
           <div class="metric"><span>学习状态</span><strong data-value="learning">学习中</strong></div>

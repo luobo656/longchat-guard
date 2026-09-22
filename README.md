@@ -1,65 +1,118 @@
-# ChatGPT 长会话提前预警器
+# LongChat Guard
 
-这是一个面向 `chatgpt.com` 网页端的 Chrome / Edge 浏览器扩展。
+> ChatGPT 长会话本地风险预警器 · Local long-conversation warning for `chatgpt.com`
 
-它不读取 OpenAI 官方“剩余额度”，也不声明精确会话上限。它只在本地判断当前会话长度趋势，结合本机历史学习到的边界，在临近风险时提醒用户整理和续接。
+[![CI](https://github.com/luobo656/longchat-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/luobo656/longchat-guard/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-## V1 功能
+LongChat Guard 是一个面向 Chrome / Edge 的 Manifest V3 浏览器扩展。它不会读取 OpenAI 官方“剩余额度”，也不宣称知道精确会话上限；它只在浏览器本地判断当前 ChatGPT 会话的长度趋势，并结合本机历史校准，在会话逐渐接近风险区时给出低打扰提醒。
 
-- 当前会话长度趋势判断
-- 后台个体校准
-- 临近已学习边界提醒
-- 状态胶囊
-- 点击胶囊后显示当前会话长度、本地风险趋势、学习状态、必要时旧会话历史可能不完整说明
-- 复制续接提示词
-- 重新学习
-- 本会话暂不提醒
-- 点击页面其他位置或按 Escape 收起面板
-- 原创深青绿底板、白色气泡、四段橙色趋势条图标，不使用 ChatGPT/OpenAI logo
-- 首次处理聊天内容前显示一次性隐私说明，只有用户主动点击“同意并开始”后才启动监测
+![LongChat Guard icon](./public/icons/icon128.png)
 
-## V1 不做
+## 核心功能
 
-- 下一轮预测
-- 统计完整性卡片
-- 校准置信度百分比
-- 确认安全至
-- 历史风险区
-- 太早 / 正好 / 太晚反馈
-- 5 轮后提醒
-- 恢复上一档案
-- 清除全部学习数据
-- 具体 token 数、近似 token 数、K 数、阈值或百分比
-- Codex / CLI / API / 其他 AI 网站
-- 云同步、服务器、OpenAI API Key
-- 自动代用户发消息或创建新对话
-- 使用 OpenAI / ChatGPT 官方 logo、六结标志或暗示官方关系
+- 当前会话长度趋势：只显示“正常范围 / 偏长 / 建议整理 / 接近风险区”等模糊状态，不展示 token 数、百分比或所谓官方额度。
+- 本地个体校准：根据本机历史使用情况学习风险边界。
+- 长会话预警：接近已学习风险区域时提醒整理或续接。
+- 续接提示词：一键复制固定的续接提示词。
+- 重新学习：环境变化时开启新的本地学习代际。
+- 本会话暂不提醒：避免重复打扰。
+- 轻量交互：点击页面其他位置或按 `Esc` 即可收起面板。
+- 首次隐私确认：用户主动同意之前，不读取或处理 ChatGPT 会话正文。
 
-## 开发前必读
+## 隐私与权限
 
-1. [PRODUCT_BASELINE.md](./PRODUCT_BASELINE.md)
-2. [ARCHITECTURE.md](./ARCHITECTURE.md)
-3. [ACCEPTANCE.md](./ACCEPTANCE.md)
-4. [AGENTS.md](./AGENTS.md)
+LongChat Guard 没有服务器、账号系统、云同步或 OpenAI API Key。
 
-## 本地验证
+首次启用监测前，扩展会明确说明数据处理方式。只有用户点击“同意并开始”后，内容脚本才会在浏览器内瞬时读取当前 ChatGPT 页面可见内容，用于本地趋势估算与本地加盐指纹计算。
 
-```text
+不会持久化：
+
+- 用户聊天正文
+- Assistant 回答正文
+- Composer 草稿正文
+- 附件正文
+- 姓名、邮箱或 API Key
+
+不会把聊天内容上传给开发者、第三方或扩展服务器。
+
+Manifest V3 权限保持最小化：
+
+- `storage`：保存本地匿名学习数据、校准信息和提醒设置。
+- `https://chatgpt.com/*`：仅在 ChatGPT 网页端运行。
+
+完整说明见 [PRIVACY.md](./PRIVACY.md)。
+
+## 安装
+
+### 从源码构建
+
+```bash
+npm install
 npm run typecheck
 npm test
 npm run build
 ```
 
-构建产物位于 `dist/`。`npm run build` 会额外校验 content script 打包形式和扩展权限。
+构建产物位于 `dist/`。
 
-## 隐私承诺
+### Chrome / Edge 本地加载
 
-V1 无服务器、无账号系统、无 OpenAI API Key。首次使用时会先显示本地处理说明；只有用户主动同意后，插件才会在浏览器内瞬时读取当前 ChatGPT 页面内容用于趋势判断。聊天内容不会上传给开发者或第三方，也不会持久化聊天正文、assistant 正文、composer 草稿正文、附件正文、姓名、邮箱或 API Key。
+1. 打开扩展管理页。
+2. 开启“开发人员模式”。
+3. 选择“加载已解压的扩展”。
+4. 选择项目的 `dist/` 目录。
+5. 打开 `https://chatgpt.com/`，完成首次隐私确认后开始使用。
 
-用户界面仅作本地趋势判断，不代表 OpenAI 官方额度或上限。后台会保留内部估算和校准边界用于风险判断，但不在 V1 界面展示具体数值。
+## 开发
 
-用户可以在首次提示中选择“暂不开启”；卸载扩展会删除扩展本地数据，也可通过浏览器的扩展存储/开发者工具清除本地存储。由于没有服务器端副本，开发者无法持有或恢复用户聊天数据。
+推荐 Node.js 20+。
 
-## 品牌说明
+```bash
+npm install
+npm run typecheck
+npm test
+npm run build
+```
 
-扩展图标是原创几何图形：深青绿圆角方形底板、白色聊天气泡、四段橙黄到橙红趋势条。`ChatGPT` 仅用于说明适用网页，本项目不宣称与 OpenAI 存在官方关系。
+构建流程会额外检查：
+
+- content script 为可直接加载的 classic bundle
+- Manifest V3 权限没有意外扩大
+- 必需图标与构建产物完整
+
+更多开发约束：
+
+- [PRODUCT_BASELINE.md](./PRODUCT_BASELINE.md)
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
+- [ACCEPTANCE.md](./ACCEPTANCE.md)
+- [CONTRIBUTING.md](./CONTRIBUTING.md)
+
+## 项目边界
+
+V1 只面向 `chatgpt.com` 网页端，不包含：
+
+- 下一轮 token 预测
+- 精确 token / K 值 / 百分比 / 官方剩余额度
+- Codex、CLI、API 或其他 AI 网站适配
+- 云账号、云同步或服务端
+- 自动代用户发送消息
+- OpenAI / ChatGPT 官方 Logo 或任何暗示官方关系的品牌处理
+
+## 品牌
+
+公开品牌名为 **LongChat Guard**。图标使用原创高对比几何构图：深青绿底板、白色聊天气泡、橙色守护盾牌与白色对勾，专门针对浏览器工具栏 16px / 32px 小尺寸优化。
+
+`ChatGPT` 仅用于说明本项目当前支持的网站。本项目与 OpenAI 没有隶属、赞助、认可或维护关系。
+
+## 开源
+
+MIT License。欢迎提交 Issue 和 Pull Request。提交代码前请运行：
+
+```bash
+npm run typecheck
+npm test
+npm run build
+```
+
+安全问题请先阅读 [SECURITY.md](./SECURITY.md)，不要在公开 Issue 中粘贴真实聊天内容、账号标识、API Key 或附件正文。
