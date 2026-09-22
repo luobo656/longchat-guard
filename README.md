@@ -4,6 +4,9 @@
 
 [![CI](https://github.com/luobo656/longchat-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/luobo656/longchat-guard/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![Website](https://img.shields.io/badge/Website-LongChat_Guard-23b69d)](https://luobo656.github.io/longchat-guard/)
+
+**Official project site:** https://luobo656.github.io/longchat-guard/ · [中文页面](https://luobo656.github.io/longchat-guard/zh/)
 
 LongChat Guard 是一个面向 Chrome / Edge 的 Manifest V3 浏览器扩展，用于 **ChatGPT 长会话预警、对话长度趋势监控、上下文风险提醒（context window warning）和长聊天整理/续接**。它不会读取 OpenAI 官方“剩余额度”，也不宣称知道精确会话上限；它只在浏览器本地判断当前 ChatGPT 会话的长度趋势，并结合本机历史校准，在会话逐渐接近风险区时给出低打扰提醒。
 

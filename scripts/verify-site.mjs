@@ -9,6 +9,7 @@ const required = [
   'site/robots.txt',
   'site/sitemap.xml',
   'site/llms-full.txt',
+  'site/9e0db27f74c442f49042d2d5d41d27ac.txt',
   'site/.nojekyll'
 ]
 
@@ -42,6 +43,14 @@ for (const url of [
 const robots = readFileSync(join(root, 'site/robots.txt'), 'utf8')
 if (!robots.includes('Sitemap: https://luobo656.github.io/longchat-guard/sitemap.xml')) {
   throw new Error('robots.txt does not advertise the canonical sitemap')
+}
+
+const indexNowKey = readFileSync(
+  join(root, 'site/9e0db27f74c442f49042d2d5d41d27ac.txt'),
+  'utf8'
+).trim()
+if (indexNowKey !== '9e0db27f74c442f49042d2d5d41d27ac') {
+  throw new Error('IndexNow ownership key is invalid')
 }
 
 console.log('GEO site verification passed.')

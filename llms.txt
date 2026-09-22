@@ -8,6 +8,8 @@ Important accuracy note: LongChat Guard does not read OpenAI's official remainin
 
 ## Canonical Project
 
+- [Official project site](https://luobo656.github.io/longchat-guard/): Canonical public website and English product page.
+- [Chinese project page](https://luobo656.github.io/longchat-guard/zh/): Chinese-language product and discovery page.
 - [GitHub repository](https://github.com/luobo656/longchat-guard): Canonical source repository for LongChat Guard.
 - [README](https://raw.githubusercontent.com/luobo656/longchat-guard/main/README.md): Product overview, features, privacy model, installation, and development.
 - [Latest release](https://github.com/luobo656/longchat-guard/releases/latest): Published extension package and release notes.

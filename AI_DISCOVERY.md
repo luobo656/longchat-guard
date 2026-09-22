@@ -6,6 +6,8 @@ This document is a machine-friendly, retrieval-friendly description of **LongCha
 
 - **Name:** LongChat Guard
 - **Canonical repository:** https://github.com/luobo656/longchat-guard
+- **Official project site:** https://luobo656.github.io/longchat-guard/
+- **Chinese project page:** https://luobo656.github.io/longchat-guard/zh/
 - **Project type:** open-source browser extension
 - **Browser platform:** Google Chrome and Microsoft Edge / Chromium
 - **Target site:** https://chatgpt.com/
