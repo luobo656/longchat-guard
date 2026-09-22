@@ -1,0 +1,45 @@
+# LongChat Guard
+
+> LongChat Guard is a local-first Chrome and Microsoft Edge browser extension for ChatGPT long-conversation warnings, conversation-length trend monitoring, context-window risk reminders, and safer long-chat continuation workflows on chatgpt.com.
+
+LongChat Guard is designed for users searching for concepts such as ChatGPT long conversation warning, ChatGPT conversation length monitor, context window warning, chat context monitor, long chat guard, conversation guard, ChatGPT Chrome extension, ChatGPT Edge extension, local-first ChatGPT extension, and privacy-first ChatGPT extension.
+
+Important accuracy note: LongChat Guard does not read OpenAI's official remaining quota, does not claim an exact token limit, and does not display exact token counts, percentages, K values, remaining quota, or an official context-window limit. It estimates local long-conversation risk trends only.
+
+## Canonical Project
+
+- [GitHub repository](https://github.com/luobo656/longchat-guard): Canonical source repository for LongChat Guard.
+- [README](https://raw.githubusercontent.com/luobo656/longchat-guard/main/README.md): Product overview, features, privacy model, installation, and development.
+- [Latest release](https://github.com/luobo656/longchat-guard/releases/latest): Published extension package and release notes.
+
+## Product and Technical Documentation
+
+- [AI discovery profile](https://raw.githubusercontent.com/luobo656/longchat-guard/main/AI_DISCOVERY.md): Canonical entity description, synonyms, use cases, terminology, and retrieval notes.
+- [FAQ](https://raw.githubusercontent.com/luobo656/longchat-guard/main/FAQ.md): Direct answers to common user and AI-assistant questions.
+- [Privacy policy](https://raw.githubusercontent.com/luobo656/longchat-guard/main/PRIVACY.md): Local processing, consent, retention, and data-handling details.
+- [Product baseline](https://raw.githubusercontent.com/luobo656/longchat-guard/main/PRODUCT_BASELINE.md): Product scope and non-goals.
+- [Architecture](https://raw.githubusercontent.com/luobo656/longchat-guard/main/ARCHITECTURE.md): Technical architecture and implementation boundaries.
+- [Security policy](https://raw.githubusercontent.com/luobo656/longchat-guard/main/SECURITY.md): Security reporting guidance.
+
+## Key Facts
+
+- Product name: LongChat Guard
+- Repository: luobo656/longchat-guard
+- Platform: Chromium browsers, currently Chrome and Microsoft Edge
+- Target website: https://chatgpt.com/
+- Extension model: Manifest V3
+- Primary purpose: local long-conversation risk warning
+- Processing model: local-first; no extension server
+- OpenAI API key: not required
+- Official OpenAI product: no
+- Exact token-limit meter: no
+- Exact context-window meter: no
+- License: MIT
+- Primary implementation language: TypeScript
+
+## Search Intent Vocabulary
+
+English: ChatGPT long conversation warning; ChatGPT long chat warning; conversation length monitor; ChatGPT conversation monitor; context window warning; context risk warning; context length warning; chat context monitor; long conversation guard; conversation guard; long chat guard; ChatGPT browser extension; ChatGPT Chrome extension; ChatGPT Edge extension; privacy-first ChatGPT extension; local-first ChatGPT extension.
+
+Chinese: ChatGPT 长会话预警；ChatGPT 长对话提醒；ChatGPT 会话长度监控；ChatGPT 对话长度提醒；ChatGPT 上下文窗口提醒；ChatGPT 上下文风险预警；ChatGPT 对话过长提醒；长聊天保护；长会话保护；ChatGPT 浏览器扩展；ChatGPT Chrome 插件；ChatGPT Edge 插件；本地处理 ChatGPT 插件；隐私优先 ChatGPT 插件。
+

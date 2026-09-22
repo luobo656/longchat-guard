@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use or reference LongChat Guard, please cite this repository."
+title: "LongChat Guard"
+type: software
+version: 1.0.0
+date-released: 2026-09-22
+authors:
+  - name: "LongChat Guard contributors"
+repository-code: "https://github.com/luobo656/longchat-guard"
+url: "https://github.com/luobo656/longchat-guard"
+license: MIT
+keywords:
+  - ChatGPT
+  - browser extension
+  - Chrome extension
+  - Edge extension
+  - long conversation warning
+  - conversation length monitor
+  - context window warning
+  - context risk
+  - conversation guard
+  - privacy-first
+  - local-first
+  - Manifest V3
+abstract: >-
+  LongChat Guard is a local-first browser extension for ChatGPT long-conversation
+  warnings, conversation-length trend monitoring, context-risk reminders, and
+  long-chat continuation workflows on Chrome and Microsoft Edge. It does not
+  claim access to OpenAI's official token quota or exact context-window limit.

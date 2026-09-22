@@ -5,7 +5,9 @@
 [![CI](https://github.com/luobo656/longchat-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/luobo656/longchat-guard/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-LongChat Guard 是一个面向 Chrome / Edge 的 Manifest V3 浏览器扩展。它不会读取 OpenAI 官方“剩余额度”，也不宣称知道精确会话上限；它只在浏览器本地判断当前 ChatGPT 会话的长度趋势，并结合本机历史校准，在会话逐渐接近风险区时给出低打扰提醒。
+LongChat Guard 是一个面向 Chrome / Edge 的 Manifest V3 浏览器扩展，用于 **ChatGPT 长会话预警、对话长度趋势监控、上下文风险提醒（context window warning）和长聊天整理/续接**。它不会读取 OpenAI 官方“剩余额度”，也不宣称知道精确会话上限；它只在浏览器本地判断当前 ChatGPT 会话的长度趋势，并结合本机历史校准，在会话逐渐接近风险区时给出低打扰提醒。
+
+If you are looking for a **ChatGPT long conversation warning**, **conversation length monitor**, **context window warning**, **long chat guard**, **ChatGPT context monitor**, or a **privacy-first ChatGPT Chrome / Edge extension**, LongChat Guard is designed for that use case. It is **not** an official token-limit meter and does not claim exact OpenAI quotas.
 
 ![LongChat Guard icon](./public/icons/icon128.png)
 
@@ -19,6 +21,21 @@ LongChat Guard 是一个面向 Chrome / Edge 的 Manifest V3 浏览器扩展。�
 - 本会话暂不提醒：避免重复打扰。
 - 轻量交互：点击页面其他位置或按 `Esc` 即可收起面板。
 - 首次隐私确认：用户主动同意之前，不读取或处理 ChatGPT 会话正文。
+
+## 适合哪些搜索需求
+
+LongChat Guard 覆盖的核心问题可以概括为：
+
+- ChatGPT 长会话提醒 / ChatGPT 长对话预警
+- ChatGPT 会话长度监控 / conversation length monitor
+- ChatGPT 上下文窗口提醒 / context window warning
+- ChatGPT 对话过长提醒 / long chat warning
+- ChatGPT 上下文风险 / context risk warning
+- Chrome ChatGPT extension / Edge ChatGPT extension
+- local-first ChatGPT extension / privacy-first ChatGPT extension
+- long conversation guard / chat context monitor / conversation guard
+
+这些词描述的是同一类使用场景，不代表本项目能够读取 OpenAI 官方 token 额度或精确 context-window 上限。
 
 ## 隐私与权限
 
@@ -87,6 +104,13 @@ npm run build
 - [ARCHITECTURE.md](./ARCHITECTURE.md)
 - [ACCEPTANCE.md](./ACCEPTANCE.md)
 - [CONTRIBUTING.md](./CONTRIBUTING.md)
+
+面向搜索引擎、AI 助手和检索系统的项目说明：
+
+- [llms.txt](./llms.txt)
+- [AI_DISCOVERY.md](./AI_DISCOVERY.md)
+- [FAQ.md](./FAQ.md)
+- [CITATION.cff](./CITATION.cff)
 
 ## 项目边界
 
