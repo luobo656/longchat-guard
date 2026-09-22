@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Package extension
+        run: |
+          mkdir -p artifacts
+          cd dist
+          zip -r ../artifacts/longchat-guard-${GITHUB_REF_NAME}.zip .
+          cd ..
+          sha256sum artifacts/longchat-guard-${GITHUB_REF_NAME}.zip > artifacts/longchat-guard-${GITHUB_REF_NAME}.sha256
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            "artifacts/longchat-guard-${GITHUB_REF_NAME}.zip" \
+            "artifacts/longchat-guard-${GITHUB_REF_NAME}.sha256" \
+            --title "LongChat Guard ${GITHUB_REF_NAME}" \
+            --generate-notes

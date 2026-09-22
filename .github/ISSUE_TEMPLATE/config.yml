@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security policy
+    url: https://github.com/luobo656/longchat-guard/blob/main/SECURITY.md
+    about: Read the security policy before reporting sensitive issues.
