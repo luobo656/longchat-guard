@@ -57,18 +57,25 @@ jobs:
       - name: Notify IndexNow
         run: |
           sleep 5
-          curl --fail-with-body --retry 3 --retry-delay 3 +            -H "Content-Type: application/json; charset=utf-8" +            -d '{
+          curl --fail-with-body --retry 3 --retry-delay 3 \
+            -H "Content-Type: application/json; charset=utf-8" \
+            -d '{
               "host": "luobo656.github.io",
               "key": "9e0db27f74c442f49042d2d5d41d27ac",
               "keyLocation": "https://luobo656.github.io/longchat-guard/9e0db27f74c442f49042d2d5d41d27ac.txt",
               "urlList": [
                 "https://luobo656.github.io/longchat-guard/",
                 "https://luobo656.github.io/longchat-guard/zh/",
+                "https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-warning/",
+                "https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-long-conversation-warning/",
+                "https://luobo656.github.io/longchat-guard/guides/chatgpt-context-window-warning/",
+                "https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-context-window-warning/",
                 "https://luobo656.github.io/longchat-guard/llms.txt",
                 "https://luobo656.github.io/longchat-guard/llms-full.txt",
                 "https://luobo656.github.io/longchat-guard/AI_DISCOVERY.md",
                 "https://luobo656.github.io/longchat-guard/FAQ.md",
                 "https://luobo656.github.io/longchat-guard/PRIVACY.md"
               ]
-            }' +            https://api.indexnow.org/indexnow
+            }' \
+            https://api.indexnow.org/indexnow
 

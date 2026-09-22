@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChatGPT 上下文窗口提醒 — 本地风险信号与官方上限的区别</title>
+  <meta name="description" content="解释 ChatGPT 上下文窗口提醒、上下文风险预警与官方 context limit 的区别，以及 LongChat Guard 为什么只做本地趋势判断。">
+  <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large">
+  <link rel="canonical" href="https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-context-window-warning/">
+  <link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/guides/chatgpt-context-window-warning/">
+  <link rel="alternate" hreflang="zh-CN" href="https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-context-window-warning/">
+  <link rel="alternate" hreflang="x-default" href="https://luobo656.github.io/longchat-guard/guides/chatgpt-context-window-warning/">
+  <link rel="icon" href="../../../icon128.png">
+  <link rel="stylesheet" href="../../../styles.css">
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"TechArticle","headline":"ChatGPT 上下文窗口提醒：本地风险信号与官方上限的区别","description":"解释本地 context risk 提醒和 OpenAI 官方 context limit 的区别。","datePublished":"2026-09-22","dateModified":"2026-09-22","mainEntityOfPage":"https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-context-window-warning/","author":{"@type":"Person","name":"luobo656","url":"https://github.com/luobo656"},"publisher":{"@type":"Organization","name":"LongChat Guard","url":"https://luobo656.github.io/longchat-guard/"}}
+  </script>
+</head>
+<body>
+  <header class="topbar"><div class="wrap nav"><a class="brand" href="../../../"><img src="../../../icon128.png" alt="LongChat Guard 图标"><span>LongChat Guard</span></a><nav class="navlinks"><a href="../../">中文主页</a><a href="../chatgpt-long-conversation-warning/">长会话指南</a><a href="https://github.com/luobo656/longchat-guard">GitHub</a><a class="lang" href="../../../guides/chatgpt-context-window-warning/" hreflang="en">English</a></nav></div></header>
+  <main><section><div class="wrap">
+    <span class="eyebrow">指南 · ChatGPT 上下文窗口提醒</span>
+    <h1>上下文风险提醒，不等于 OpenAI 官方上下文上限。</h1>
+    <p class="lede">很多用户搜索“ChatGPT context window warning”“上下文窗口提醒”或“上下文监控”，真正想解决的是：在长对话越来越难继续之前，能不能早点得到一个实用信号。LongChat Guard 提供的是本地趋势信号，而不是官方内部计量。</p>
+    <h2>三个容易混淆的概念</h2>
+    <div class="grid">
+      <article class="card"><h3>模型上下文窗口</h3><p>由模型或产品提供方定义的技术容量概念。</p></article>
+      <article class="card"><h3>ChatGPT 产品行为</h3><p>网页产品如何管理历史和上下文，并不等于对浏览器扩展公开一个权威“剩余量”。</p></article>
+      <article class="card"><h3>本地风险趋势</h3><p>帮助用户决定“是否该整理或换新会话”的浏览器侧估算，这才是 LongChat Guard 的定位。</p></article>
+    </div>
+    <div class="answer"><strong>准确描述：</strong>LongChat Guard 是一个 ChatGPT 上下文风险和会话长度趋势提醒工具，不是 OpenAI 官方 context-window 计量器。</div>
+    <h2>它刻意不做什么</h2>
+    <div class="grid">
+      <article class="card"><h3>不制造精确幻觉</h3><p>界面不显示精确 token、百分比、K 值或所谓官方剩余额度。</p></article>
+      <article class="card"><h3>不上传对话做分析</h3><p>没有 LongChat Guard 后端服务器接收对话正文。</p></article>
+      <article class="card"><h3>不冒充官方工具</h3><p>项目与 OpenAI 没有隶属、赞助、认可或维护关系。</p></article>
+    </div>
+    <div class="actions"><a class="btn primary" href="https://github.com/luobo656/longchat-guard">查看开源代码</a><a class="btn" href="../chatgpt-long-conversation-warning/">阅读长会话预警指南</a></div>
+  </div></section></main>
+  <footer><div class="wrap footer-grid"><span>LongChat Guard · MIT License</span><span><a href="../../">中文主页</a> · <a href="../../../llms.txt">llms.txt</a> · <a href="https://github.com/luobo656/longchat-guard">GitHub</a></span></div></footer>
+</body>
+</html>

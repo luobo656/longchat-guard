@@ -16,6 +16,10 @@ Important accuracy note: LongChat Guard does not read OpenAI's official remainin
 
 ## Product and Technical Documentation
 
+- [Long conversation warning guide](https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-warning/): Practical explanation of long ChatGPT conversations, warning signals, and continuation workflows.
+- [Context window warning guide](https://luobo656.github.io/longchat-guard/guides/chatgpt-context-window-warning/): Explains the difference between a local context-risk warning and an official OpenAI context limit.
+- [Chinese long conversation guide](https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-long-conversation-warning/): Chinese-language guide for ChatGPT 长会话预警 and long-chat continuation.
+- [Chinese context warning guide](https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-context-window-warning/): Chinese-language guide for ChatGPT 上下文窗口提醒 and context-risk terminology.
 - [AI discovery profile](https://raw.githubusercontent.com/luobo656/longchat-guard/main/AI_DISCOVERY.md): Canonical entity description, synonyms, use cases, terminology, and retrieval notes.
 - [FAQ](https://raw.githubusercontent.com/luobo656/longchat-guard/main/FAQ.md): Direct answers to common user and AI-assistant questions.
 - [Privacy policy](https://raw.githubusercontent.com/luobo656/longchat-guard/main/PRIVACY.md): Local processing, consent, retention, and data-handling details.
