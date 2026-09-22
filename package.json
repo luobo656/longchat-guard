@@ -41,7 +41,7 @@
   "devDependencies": {
     "@types/chrome": "^0.0.320",
     "typescript": "^5.9.2",
-    "vite": "^7.1.7",
+    "vite": "^8.3.0",
     "vitest": "^4.1.11"
   }
 }
