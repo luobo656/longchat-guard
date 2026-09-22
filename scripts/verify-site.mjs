@@ -7,8 +7,12 @@ const required = [
   'site/zh/index.html',
   'site/guides/chatgpt-long-conversation-warning/index.html',
   'site/guides/chatgpt-context-window-warning/index.html',
+  'site/guides/when-to-start-new-chatgpt-conversation/index.html',
+  'site/guides/how-to-continue-long-chatgpt-conversation/index.html',
   'site/zh/guides/chatgpt-long-conversation-warning/index.html',
   'site/zh/guides/chatgpt-context-window-warning/index.html',
+  'site/zh/guides/when-to-start-new-chatgpt-conversation/index.html',
+  'site/zh/guides/how-to-continue-long-chatgpt-conversation/index.html',
   'site/styles.css',
   'site/robots.txt',
   'site/sitemap.xml',
@@ -30,8 +34,12 @@ for (const relative of [
   'site/zh/index.html',
   'site/guides/chatgpt-long-conversation-warning/index.html',
   'site/guides/chatgpt-context-window-warning/index.html',
+  'site/guides/when-to-start-new-chatgpt-conversation/index.html',
+  'site/guides/how-to-continue-long-chatgpt-conversation/index.html',
   'site/zh/guides/chatgpt-long-conversation-warning/index.html',
-  'site/zh/guides/chatgpt-context-window-warning/index.html'
+  'site/zh/guides/chatgpt-context-window-warning/index.html',
+  'site/zh/guides/when-to-start-new-chatgpt-conversation/index.html',
+  'site/zh/guides/how-to-continue-long-chatgpt-conversation/index.html'
 ]) {
   const html = readFileSync(join(root, relative), 'utf8')
   if (!html.includes('rel="canonical"')) throw new Error(`${relative} is missing canonical URL`)
@@ -52,7 +60,11 @@ for (const url of [
   'https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-warning/',
   'https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-long-conversation-warning/',
   'https://luobo656.github.io/longchat-guard/guides/chatgpt-context-window-warning/',
-  'https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-context-window-warning/'
+  'https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-context-window-warning/',
+  'https://luobo656.github.io/longchat-guard/guides/when-to-start-new-chatgpt-conversation/',
+  'https://luobo656.github.io/longchat-guard/zh/guides/when-to-start-new-chatgpt-conversation/',
+  'https://luobo656.github.io/longchat-guard/guides/how-to-continue-long-chatgpt-conversation/',
+  'https://luobo656.github.io/longchat-guard/zh/guides/how-to-continue-long-chatgpt-conversation/'
 ]) {
   if (!sitemap.includes(url)) throw new Error(`Sitemap is missing ${url}`)
 }

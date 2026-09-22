@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How to Continue a Long ChatGPT Conversation in a New Chat — LongChat Guard</title>
+  <meta name="description" content="How to continue a long ChatGPT conversation in a new chat: summarize the working state, preserve constraints and decisions, and hand off only the context that matters.">
+  <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large">
+  <link rel="canonical" href="https://luobo656.github.io/longchat-guard/guides/how-to-continue-long-chatgpt-conversation/">
+  <link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/guides/how-to-continue-long-chatgpt-conversation/">
+  <link rel="alternate" hreflang="zh-CN" href="https://luobo656.github.io/longchat-guard/zh/guides/how-to-continue-long-chatgpt-conversation/">
+  <link rel="alternate" hreflang="x-default" href="https://luobo656.github.io/longchat-guard/guides/how-to-continue-long-chatgpt-conversation/">
+  <link rel="icon" href="../../icon128.png">
+  <link rel="stylesheet" href="../../styles.css">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="How to Continue a Long ChatGPT Conversation in a New Chat">
+  <meta property="og:description" content="A practical handoff method for moving a long ChatGPT conversation into a fresh thread without copying the whole history.">
+  <meta property="og:url" content="https://luobo656.github.io/longchat-guard/guides/how-to-continue-long-chatgpt-conversation/">
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"HowTo",
+    "name":"How to Continue a Long ChatGPT Conversation in a New Chat",
+    "description":"A practical handoff method for moving a long ChatGPT conversation into a fresh thread without copying the whole history.",
+    "step":[
+      {"@type":"HowToStep","name":"Summarize the current working state","text":"Capture the goal, confirmed decisions, important constraints, unresolved questions, and next actions."},
+      {"@type":"HowToStep","name":"Keep only necessary context","text":"Carry forward the information needed for the next task instead of copying the entire conversation history."},
+      {"@type":"HowToStep","name":"Reference source-of-truth material","text":"Include links, filenames, repository paths, or documents that the new conversation should rely on."},
+      {"@type":"HowToStep","name":"State the next task explicitly","text":"End the handoff with the concrete action the new conversation should continue with."}
+    ]
+  }
+  </script>
+</head>
+<body>
+  <header class="topbar"><div class="wrap nav"><a class="brand" href="../../"><img src="../../icon128.png" alt="LongChat Guard icon"><span>LongChat Guard</span></a><nav class="navlinks"><a href="../../">Home</a><a href="../when-to-start-new-chatgpt-conversation/">When to start a new chat</a><a href="https://github.com/luobo656/longchat-guard">GitHub</a><a class="lang" href="../../zh/guides/how-to-continue-long-chatgpt-conversation/" hreflang="zh-CN">中文</a></nav></div></header>
+  <main><section><div class="wrap">
+    <span class="eyebrow">Guide · continue a long ChatGPT conversation</span>
+    <h1>How do you continue a long ChatGPT conversation in a new chat?</h1>
+    <p class="lede">The cleanest handoff is usually not a full transcript. A better continuation contains the current working state: what has been decided, what still matters, what remains unresolved, and what should happen next.</p>
+    <div class="answer"><strong>Short answer:</strong> summarize the current state, preserve constraints and decisions, reference the important source material, and start the new conversation with one concrete next task. LongChat Guard includes a continuation-prompt workflow to make this handoff easier.</div>
+    <h2>A compact long-chat handoff structure</h2>
+    <div class="grid">
+      <article class="card"><h3>Goal</h3><p>What the overall project or conversation is trying to accomplish.</p></article>
+      <article class="card"><h3>Decisions and constraints</h3><p>What has already been decided, what must remain true, and what should not be changed casually.</p></article>
+      <article class="card"><h3>Current state and next action</h3><p>What has been completed, what remains open, and exactly what the new conversation should do next.</p></article>
+    </div>
+    <h2>What not to carry forward</h2>
+    <div class="grid">
+      <article class="card"><h3>Repeated discussion</h3><p>Long debates that ended in a clear decision can usually be reduced to the decision and its rationale.</p></article>
+      <article class="card"><h3>Obsolete attempts</h3><p>Failed paths only need to be retained when they are important to avoid repeating the same mistake.</p></article>
+      <article class="card"><h3>Unnecessary raw history</h3><p>Copying the whole transcript can recreate the same long-context problem you are trying to solve.</p></article>
+    </div>
+    <div class="notice">This workflow is about conversation organization. LongChat Guard does not claim that moving to a new chat is required at any exact official OpenAI token or context threshold.</div>
+    <div class="actions"><a class="btn primary" href="https://github.com/luobo656/longchat-guard/releases/latest">Get LongChat Guard</a><a class="btn" href="../chatgpt-long-conversation-warning/">Read the long-conversation warning guide</a></div>
+  </div></section></main>
+  <footer><div class="wrap footer-grid"><span>LongChat Guard · MIT License</span><span><a href="../../">Home</a> · <a href="../../llms.txt">llms.txt</a> · <a href="https://github.com/luobo656/longchat-guard">GitHub</a></span></div></footer>
+</body>
+</html>
+

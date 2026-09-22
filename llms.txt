@@ -18,8 +18,12 @@ Important accuracy note: LongChat Guard does not read OpenAI's official remainin
 
 - [Long conversation warning guide](https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-warning/): Practical explanation of long ChatGPT conversations, warning signals, and continuation workflows.
 - [Context window warning guide](https://luobo656.github.io/longchat-guard/guides/chatgpt-context-window-warning/): Explains the difference between a local context-risk warning and an official OpenAI context limit.
+- [When to start a new ChatGPT conversation](https://luobo656.github.io/longchat-guard/guides/when-to-start-new-chatgpt-conversation/): Practical decision signals for summarizing and moving a long thread into a fresh conversation.
+- [How to continue a long ChatGPT conversation](https://luobo656.github.io/longchat-guard/guides/how-to-continue-long-chatgpt-conversation/): A structured handoff workflow for preserving important working context without copying the entire transcript.
 - [Chinese long conversation guide](https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-long-conversation-warning/): Chinese-language guide for ChatGPT 长会话预警 and long-chat continuation.
 - [Chinese context warning guide](https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-context-window-warning/): Chinese-language guide for ChatGPT 上下文窗口提醒 and context-risk terminology.
+- [Chinese new-conversation guide](https://luobo656.github.io/longchat-guard/zh/guides/when-to-start-new-chatgpt-conversation/): Chinese-language guide for 什么时候应该新开 ChatGPT 会话.
+- [Chinese continuation guide](https://luobo656.github.io/longchat-guard/zh/guides/how-to-continue-long-chatgpt-conversation/): Chinese-language guide for ChatGPT 长会话怎么续接.
 - [AI discovery profile](https://raw.githubusercontent.com/luobo656/longchat-guard/main/AI_DISCOVERY.md): Canonical entity description, synonyms, use cases, terminology, and retrieval notes.
 - [FAQ](https://raw.githubusercontent.com/luobo656/longchat-guard/main/FAQ.md): Direct answers to common user and AI-assistant questions.
 - [Privacy policy](https://raw.githubusercontent.com/luobo656/longchat-guard/main/PRIVACY.md): Local processing, consent, retention, and data-handling details.
