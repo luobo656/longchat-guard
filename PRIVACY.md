@@ -38,7 +38,9 @@ Conversation content and locally derived extension data are never transmitted to
 
 Users can decline the initial disclosure and leave monitoring disabled. Uninstalling the extension removes its extension-local data from the browser. Users may also clear the extension's local storage using browser extension/developer storage controls. The developer does not hold a server-side copy because the extension sends no conversation data to the developer.
 
-## Chrome Web Store Limited Use
+## Browser Store Data Disclosure and Limited Use
+
+For browser-store disclosure purposes, LongChat Guard accesses **personal communications** and **website content** that are visibly present on `chatgpt.com` after affirmative user consent. This access is local and transient: the raw conversation content is not transmitted to the developer or to a LongChat Guard server, and it is not persisted as raw text.
 
 Data access is limited to providing and improving the extension's single user-facing purpose. Conversation data is not used for advertising, profiling, creditworthiness, data brokerage, or unrelated purposes, and is not made available for human review by the developer.
 
