@@ -18,6 +18,7 @@ const required = [
   'site/sitemap.xml',
   'site/llms-full.txt',
   'site/google69dd1f05e0ac8faa.html',
+  'site/google9fc4b5693d3525c2.html',
   'site/BingSiteAuth.xml',
   'site/9e0db27f74c442f49042d2d5d41d27ac.txt',
   'site/.nojekyll'
@@ -88,6 +89,14 @@ const googleVerification = readFileSync(
 ).trim()
 if (googleVerification !== 'google-site-verification: google69dd1f05e0ac8faa.html') {
   throw new Error('Google Search Console verification file is invalid')
+}
+
+const googlePublisherVerification = readFileSync(
+  join(root, 'site/google9fc4b5693d3525c2.html'),
+  'utf8'
+).trim()
+if (googlePublisherVerification !== 'google-site-verification: google9fc4b5693d3525c2.html') {
+  throw new Error('Google publisher account verification file is invalid')
 }
 
 const bingVerification = readFileSync(join(root, 'site/BingSiteAuth.xml'), 'utf8')
