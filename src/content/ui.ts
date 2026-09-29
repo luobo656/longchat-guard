@@ -29,8 +29,14 @@ const LABELS: Record<RiskLevel, string> = {
   long: '会话较长',
   organize: '建议整理',
   high: '高风险',
-  unreliable: '无法可靠监测'
+  unreliable: '学习中'
 }
+
+export const LEARNING_EXPLANATION =
+  '熟悉你的使用习惯后，会更准确地提前提醒长会话风险。不用着急，正常使用即可。'
+
+export const RECOVERING_EXPLANATION =
+  '页面有变化，正在自动恢复监测，之前的学习不会丢。'
 
 export const PANEL_VISIBLE_LABELS = [
   '当前会话长度',
@@ -127,18 +133,36 @@ export class GuardUi {
     this.monitorPanel.hidden = false
     this.consentPanel.hidden = true
     this.root.dataset.risk = model.riskLevel
-    this.statusText.textContent = LABELS[model.riskLevel]
+    this.statusText.textContent = statusLabel(model)
     this.statusDot.dataset.risk = model.riskLevel
     const trend = requireElement<HTMLElement>(this.shadow, '[data-role="trend"]')
     trend.dataset.risk = model.riskLevel
 
-    setText(this.shadow, 'current-load', currentLengthLabel(model.riskLevel))
+    setText(
+      this.shadow,
+      'current-load',
+      currentLengthLabel(model.riskLevel, model.learningMode)
+    )
     setText(this.shadow, 'learning', learningLabel(model.learningMode))
+
+    const learningNote = requireElement<HTMLElement>(
+      this.shadow,
+      '[data-role="learning-note"]'
+    )
+    const isLearning =
+      model.learningMode !== 'calibrated' || model.riskLevel === 'unreliable'
+    learningNote.hidden = !isLearning
+    learningNote.textContent =
+      model.riskLevel === 'unreliable' && model.learningMode === 'calibrated'
+        ? RECOVERING_EXPLANATION
+        : isLearning
+          ? LEARNING_EXPLANATION
+          : ''
 
     const note = requireElement<HTMLElement>(this.shadow, '[data-role="coverage-note"]')
     note.hidden = !model.showIncompleteHistoryNote
     note.textContent = model.showIncompleteHistoryNote
-      ? '旧会话历史可能不完整，实际长度可能高于当前估算。'
+      ? '这是之前的会话，我可能看不到完整历史。正常使用即可，新开的会话会判断得更准。'
       : ''
 
     const pending = requireElement<HTMLElement>(this.shadow, '[data-role="pending-confirm"]')
@@ -170,16 +194,16 @@ export class GuardUi {
     }, 1800)
   }
 
-  showUnavailable(): void {
+  showUnavailable(learningMode: GuardUiModel['learningMode'] = 'cold'): void {
     this.update({
       riskLevel: 'unreliable',
       riskScore: 100,
       estimatedLoad: 0,
       coverage: 'unknown',
-      learningMode: 'cold',
+      learningMode,
       muted: false,
       pendingFailureConfirmation: false,
-      showIncompleteHistoryNote: true
+      showIncompleteHistoryNote: false
     })
   }
 
@@ -250,8 +274,9 @@ function template(): string {
       .trend[data-risk="unreliable"] .track { background:#eeeeee; }
       .trend[data-risk="unreliable"] .fill { width:100%; background:#9a9a9a; opacity:.45; }
       .notice { margin-top:10px; border-radius:8px; padding:9px 10px; background:#fff7ed; color:#8a4b12; border:1px solid #fed7aa; }
+      .learning-note { margin-top:8px; border-radius:8px; padding:8px 9px; background:#f5f7f7; color:#5f6664; border:1px solid #e6e9e8; font-size:11px; }
       .pending { margin-top:10px; border-radius:8px; padding:10px; background:#fff8e6; border:1px solid #f4d58d; }
-      .pending[hidden], .notice[hidden] { display:none; }
+      .pending[hidden], .notice[hidden], .learning-note[hidden] { display:none; }
       .section[hidden] { display:none; }
       .consent-copy { margin:0; padding-left:18px; color:#444; }
       .consent-copy li { margin:6px 0; }
@@ -280,9 +305,10 @@ function template(): string {
       <div class="panel" data-role="panel" hidden>
         <div class="section" data-role="monitor-panel">
           <div class="title">LongChat Guard</div>
-          <div class="metric"><span>当前会话长度</span><strong data-value="current-load">暂时无法判断</strong></div>
+          <div class="metric"><span>当前会话长度</span><strong data-value="current-load">学习中</strong></div>
           <div class="trend" data-role="trend"><span>本地风险趋势</span><div class="track"><div class="fill"></div></div></div>
           <div class="metric"><span>学习状态</span><strong data-value="learning">学习中</strong></div>
+          <div class="learning-note" data-role="learning-note"></div>
           <div class="notice" data-role="coverage-note" hidden></div>
           <div class="pending" data-role="pending-confirm" hidden>
             <strong>刚才可能触发了当前会话长度上限。</strong>
@@ -321,17 +347,27 @@ function template(): string {
 }
 
 function learningLabel(mode: GuardUiModel['learningMode']): string {
-  if (mode === 'warm') return '重新学习中'
-  if (mode === 'calibrated') return '已结合本地历史边界'
+  if (mode === 'calibrated') return '已学习'
   return '学习中'
 }
 
-function currentLengthLabel(level: RiskLevel): string {
+function statusLabel(model: GuardUiModel): string {
+  if (model.riskLevel === 'unreliable' && model.learningMode === 'calibrated') {
+    return '正在恢复监测'
+  }
+  return LABELS[model.riskLevel]
+}
+
+function currentLengthLabel(
+  level: RiskLevel,
+  learningMode: GuardUiModel['learningMode']
+): string {
   if (level === 'normal') return '正常范围'
   if (level === 'long') return '偏长'
   if (level === 'organize') return '建议整理'
   if (level === 'high') return '接近风险区'
-  return '暂时无法判断'
+  if (learningMode === 'calibrated') return '正在识别'
+  return '学习中'
 }
 
 export function shouldClosePanelForPointerPath(

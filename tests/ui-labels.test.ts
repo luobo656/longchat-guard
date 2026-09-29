@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  LEARNING_EXPLANATION,
   PANEL_FORBIDDEN_VALUE_PATTERNS,
   PANEL_VISIBLE_LABELS,
-  PRIVACY_CONSENT_COPY
+  PRIVACY_CONSENT_COPY,
+  RECOVERING_EXPLANATION
 } from '../src/content/ui'
 
 describe('guard UI labels', () => {
@@ -67,5 +69,14 @@ describe('guard UI labels', () => {
       '同意并开始',
       '暂不开启'
     ])
+  })
+
+  it('frames cold start as background learning instead of a dead-end failure state', () => {
+    expect(LEARNING_EXPLANATION).toContain('提前提醒长会话风险')
+    expect(LEARNING_EXPLANATION).toContain('不用着急')
+    expect(LEARNING_EXPLANATION).toContain('正常使用即可')
+    expect(LEARNING_EXPLANATION).not.toContain('无法可靠')
+    expect(RECOVERING_EXPLANATION).toContain('自动恢复监测')
+    expect(RECOVERING_EXPLANATION).toContain('不会丢')
   })
 })

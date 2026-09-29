@@ -95,7 +95,7 @@
 - [ ] manifest name 与 `action.default_title` 均为“LongChat Guard”
 - [ ] name/description 不暗示 OpenAI 官方关系
 - [ ] MV3 权限最小，仅 `storage` 与 `https://chatgpt.com/*`
-- [ ] manifest version 为 `1.0.0`
+- [ ] manifest version 为 `1.0.1`
 
 ## H. 发布阻断
 

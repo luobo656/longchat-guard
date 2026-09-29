@@ -49,6 +49,18 @@ export async function startGuard(): Promise<void> {
 
   const refresh = () => scheduleRun?.()
 
+  const currentLearningMode = (): 'cold' | 'warm' | 'calibrated' => {
+    const generation = latestState.generations.find(
+      (item) => item.id === latestState.settings.generationId
+    )
+    if (!generation) return 'cold'
+    const summary = summarizeGeneration(generation)
+    if (summary.usingWarmStartPrior) return 'warm'
+    return summary.failureCeiling !== undefined || summary.safeFloorEvidenceReady
+      ? 'calibrated'
+      : 'cold'
+  }
+
   const runAction = async (
     action: () => Promise<Extract<BackgroundResponse, { ok: true }>>,
     successMessage: string
@@ -170,7 +182,7 @@ export async function startGuard(): Promise<void> {
 
       if (!conversationKey || adapterResult.health === 'unreliable') {
         latestConversationKey = undefined
-        ui.showUnavailable()
+        ui.showUnavailable(currentLearningMode())
         return
       }
 
@@ -306,7 +318,7 @@ export async function startGuard(): Promise<void> {
         (item) => item.id === latestState.settings.generationId
       )
       if (!generation || !latestRisk) {
-        ui.showUnavailable()
+        ui.showUnavailable(currentLearningMode())
         return
       }
 
@@ -360,7 +372,7 @@ export async function startGuard(): Promise<void> {
 
       if (attention) ui.drawAttention()
     } catch {
-      ui.showUnavailable()
+      ui.showUnavailable(currentLearningMode())
     }
   }
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LongChat Guard",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Local long-conversation trend warning for chatgpt.com. Not affiliated with OpenAI.",
   "permissions": ["storage"],
   "host_permissions": ["https://chatgpt.com/*"],

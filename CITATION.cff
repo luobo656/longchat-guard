@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use or reference LongChat Guard, please cite this repository."
 title: "LongChat Guard"
 type: software
-version: 1.0.0
-date-released: 2026-09-22
+version: 1.0.1
+date-released: 2026-09-29
 authors:
   - name: "LongChat Guard contributors"
 repository-code: "https://github.com/luobo656/longchat-guard"

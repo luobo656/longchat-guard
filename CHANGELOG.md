@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1 - 2026-09-29
+
+- Reframed first-run uncertainty as a friendly local learning state instead of an error-like "unreliable" message.
+- Added a short plain-language explanation that monitoring improves automatically while the user continues normal conversations.
+- Separated cold-start learning from temporary page-detection recovery so learned calibration is not presented as lost.
+
 ## 1.0.0 - 2026-09-22
 
 - Public release candidate.
