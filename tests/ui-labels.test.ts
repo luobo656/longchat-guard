@@ -72,9 +72,10 @@ describe('guard UI labels', () => {
   })
 
   it('frames cold start as background learning instead of a dead-end failure state', () => {
-    expect(LEARNING_EXPLANATION).toContain('提前提醒长会话风险')
-    expect(LEARNING_EXPLANATION).toContain('不用着急')
-    expect(LEARNING_EXPLANATION).toContain('正常使用即可')
+    expect(LEARNING_EXPLANATION).toContain('正在学习你的会话长度范围')
+    expect(LEARNING_EXPLANATION).toContain('完成后会自动提前提醒')
+    expect(LEARNING_EXPLANATION).toContain('请正常使用')
+    expect(LEARNING_EXPLANATION).toContain('给插件一点学习时间')
     expect(LEARNING_EXPLANATION).not.toContain('无法可靠')
     expect(RECOVERING_EXPLANATION).toContain('自动恢复监测')
     expect(RECOVERING_EXPLANATION).toContain('不会丢')

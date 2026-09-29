@@ -33,7 +33,7 @@ const LABELS: Record<RiskLevel, string> = {
 }
 
 export const LEARNING_EXPLANATION =
-  '熟悉你的使用习惯后，会更准确地提前提醒长会话风险。不用着急，正常使用即可。'
+  '正在学习你的会话长度范围，完成后会自动提前提醒。请正常使用，给插件一点学习时间即可。'
 
 export const RECOVERING_EXPLANATION =
   '页面有变化，正在自动恢复监测，之前的学习不会丢。'
