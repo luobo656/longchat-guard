@@ -413,9 +413,17 @@ export async function startGuard(): Promise<void> {
 
   async function runHistoryScan(): Promise<void> {
     if (historyScanInProgress) return
-    const conversationId = parseConversationIdFromUrl(location.href)
-    if (!conversationId) {
-      ui.showToast('请先打开一个具体的历史会话')
+    const currentSnapshot = readPageSnapshot(document, location.href, 'none')
+    const currentAdapter = analyzePageSnapshot(currentSnapshot)
+    const conversationKey =
+      currentAdapter.conversationKey ??
+      latestConversationKey ??
+      (() => {
+        const conversationId = parseConversationIdFromUrl(location.href)
+        return conversationId ? `chatgpt:${conversationId}` : undefined
+      })()
+    if (!conversationKey) {
+      ui.showToast('当前会话已打开，但暂未识别到会话信息。请刷新页面后重试')
       return
     }
 
@@ -429,7 +437,6 @@ export async function startGuard(): Promise<void> {
       }
 
       const now = Date.now()
-      const conversationKey = `chatgpt:${conversationId}`
       const parserHealthy = result.unknownRoleCount === 0
       const strongCoverage = parserHealthy && result.attachmentCount === 0
       const messages = result.observedMessages.map((message, index) => {

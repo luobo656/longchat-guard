@@ -61,6 +61,29 @@ describe('chatgpt.com page adapter', () => {
     expect(result.coverageState).toBe('incomplete')
   })
 
+  it('extracts conversation ids from nested ChatGPT routes', () => {
+    const result = analyzePageSnapshot({
+      url: 'https://chatgpt.com/g/g-example/c/nested123456',
+      conversationIdHints: [],
+      messages: [
+        {
+          role: 'assistant',
+          text: 'Existing conversation.',
+          ordinalHint: 0,
+          semanticScore: 0.9,
+          hasCode: false,
+          attachmentCount: 0
+        }
+      ],
+      visibleErrors: [],
+      coverageEvidence: 'none',
+      generationState: 'idle',
+      tailEvidence: 'unknown'
+    })
+
+    expect(result.conversationKey).toBe('chatgpt:nested123456')
+  })
+
   it('fails closed when conversation identity is not reliable', () => {
     const result = analyzePageSnapshot({
       url: 'https://example.com/c/abc',

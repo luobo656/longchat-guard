@@ -89,7 +89,7 @@ export function analyzePageSnapshot(snapshot: PageAdapterSnapshot): PageAdapterR
 
 function deriveConversationKey(snapshot: PageAdapterSnapshot): string | undefined {
   const url = new URL(snapshot.url)
-  const conversationPath = url.pathname.match(/^\/c\/([^/?#]+)/)
+  const conversationPath = url.pathname.match(/(?:^|\/)c\/([^/?#]+)/)
   if (conversationPath?.[1]) return `chatgpt:${conversationPath[1]}`
 
   for (const hint of snapshot.conversationIdHints) {
@@ -105,7 +105,7 @@ function deriveConversationKey(snapshot: PageAdapterSnapshot): string | undefine
 export function parseConversationIdFromUrl(value: string): string | undefined {
   try {
     const url = new URL(value, 'https://chatgpt.com')
-    const match = url.pathname.match(/^\/c\/([^/?#]+)/)
+    const match = url.pathname.match(/(?:^|\/)c\/([^/?#]+)/)
     return match?.[1]
   } catch {
     return undefined
