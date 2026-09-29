@@ -2,6 +2,7 @@ import type { BackgroundRequest, BackgroundResponse } from '../background/coordi
 import { summarizeGeneration } from '../core/calibration'
 import { WebCryptoFingerprinter } from '../core/fingerprinter'
 import { parseConversationIdFromUrl, analyzePageSnapshot } from '../core/page-adapter'
+import type { PageMessageSnapshot } from '../core/page-adapter'
 import {
   DEFAULT_COMPLETION_STABILITY_MS,
   ResponseCompletionTracker
@@ -24,6 +25,7 @@ import {
 } from '../core/warning-controller'
 import { createCoalescedAsyncRunner } from './coalesced-runner'
 import { readPageSnapshot } from './dom-reader'
+import { scanConversationHistory } from './history-scanner'
 import { GuardUi } from './ui'
 
 const estimator = new HeuristicTokenEstimator()
@@ -44,6 +46,7 @@ export async function startGuard(): Promise<void> {
   let initializedUserBaseline = false
   let observedNewUserDuringRun = false
   let monitoringStarted = false
+  let historyScanInProgress = false
   const seenUserKeys = new Set<string>()
   let completionTracker = new ResponseCompletionTracker()
 
@@ -77,11 +80,42 @@ export async function startGuard(): Promise<void> {
     }
   }
 
+  const observePageMessages = async (
+    messages: PageMessageSnapshot[]
+  ): Promise<ObservedMessageRecord[]> => {
+    const now = Date.now()
+    const observedMessages: ObservedMessageRecord[] = []
+    for (const [index, message] of messages.entries()) {
+      const contentFingerprint = await fingerprinter.fingerprint(
+        `${message.role}\u001f${message.text}`
+      )
+      const stableHintHash = message.stableHint
+        ? await fingerprinter.fingerprint(`stable\u001f${message.stableHint}`)
+        : undefined
+      const observedMessage: ObservedMessageRecord = {
+        contentFingerprint,
+        role: message.role,
+        tokenEstimate: estimator.estimate(message.text),
+        charCount: message.text.length,
+        observedAt: now,
+        ordinalHint: index,
+        hasCode: message.hasCode,
+        attachmentCount: message.attachmentCount
+      }
+      if (stableHintHash) observedMessage.stableHintHash = stableHintHash
+      observedMessages.push(observedMessage)
+    }
+    return observedMessages
+  }
+
   const ui = new GuardUi({
     onCopyContinuation: () => {
       void copyText(CONTINUATION_PROMPT)
         .then(() => ui.showToast('续接提示词已复制'))
         .catch(() => ui.showToast('复制失败，请手动重试'))
+    },
+    onScanHistory: () => {
+      void runHistoryScan()
     },
     onRecalibrate: () => {
       void runAction(
@@ -151,6 +185,7 @@ export async function startGuard(): Promise<void> {
   })
 
   const processPage = async (): Promise<void> => {
+    if (historyScanInProgress) return
     try {
       const isRoot = isRootChatUrl(location.href)
       const preliminarySnapshot = readPageSnapshot(document, location.href, 'none')
@@ -373,6 +408,86 @@ export async function startGuard(): Promise<void> {
       if (attention) ui.drawAttention()
     } catch {
       ui.showUnavailable(currentLearningMode())
+    }
+  }
+
+  async function runHistoryScan(): Promise<void> {
+    if (historyScanInProgress) return
+    const conversationId = parseConversationIdFromUrl(location.href)
+    if (!conversationId) {
+      ui.showToast('请先打开一个具体的历史会话')
+      return
+    }
+
+    historyScanInProgress = true
+    ui.setHistoryScanBusy(true)
+    try {
+      const result = await scanConversationHistory(document, observePageMessages)
+      if (!result.complete) {
+        ui.showToast('未确认完整历史，本次不会作为完整学习样本')
+        return
+      }
+
+      const now = Date.now()
+      const conversationKey = `chatgpt:${conversationId}`
+      const parserHealthy = result.unknownRoleCount === 0
+      const strongCoverage = parserHealthy && result.attachmentCount === 0
+      const messages = result.observedMessages.map((message, index) => {
+        const fingerprint = message.stableHintHash
+          ? `stable:${message.stableHintHash}`
+          : `scan:${index}:${message.contentFingerprint.slice(0, 16)}`
+        return {
+          fingerprint,
+          contentFingerprint: message.contentFingerprint,
+          ...(message.stableHintHash ? { stableHintHash: message.stableHintHash } : {}),
+          role: message.role,
+          tokenEstimate: message.tokenEstimate,
+          charCount: message.charCount,
+          observedAt: now + index,
+          localBranchId: 'active',
+          ordinalHint: index,
+          ...(message.hasCode !== undefined ? { hasCode: message.hasCode } : {}),
+          ...(message.attachmentCount !== undefined
+            ? { attachmentCount: message.attachmentCount }
+            : {})
+        }
+      })
+      const activeFingerprints = messages.map((message) => message.fingerprint)
+      const currentEstimatedLoad = messages.reduce(
+        (total, message) => total + message.tokenEstimate,
+        0
+      )
+      const generationId = latestState.settings.generationId
+      const response = await sendBackground({
+        type: 'guard.upsertLedger',
+        snapshot: {
+          conversationKey,
+          generationId,
+          coverageState: strongCoverage ? 'complete' : 'mostly_complete',
+          parserHealth: parserHealthy ? 'healthy' : 'degraded',
+          messages,
+          activeFingerprints,
+          sequenceReliability: 'reliable',
+          currentEstimatedLoad,
+          updatedAt: now
+        }
+      })
+      latestState = response.state
+      latestConversationKey = conversationKey
+
+      if (result.attachmentCount > 0) {
+        ui.showToast('扫描完成，但含附件内容，暂不作为强校准样本')
+      } else if (!parserHealthy) {
+        ui.showToast('扫描完成，但部分消息角色未确认，已降低学习权重')
+      } else {
+        ui.showToast('完整扫描完成，已确认当前会话历史')
+      }
+    } catch {
+      ui.showToast('完整扫描未完成，请保持会话页面打开后重试')
+    } finally {
+      historyScanInProgress = false
+      ui.setHistoryScanBusy(false)
+      refresh()
     }
   }
 

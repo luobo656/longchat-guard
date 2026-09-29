@@ -14,6 +14,7 @@ export interface GuardUiModel {
 
 export interface GuardUiCallbacks {
   onCopyContinuation(): void
+  onScanHistory(): void
   onRecalibrate(): void
   onToggleMute(): void
   onConfirmFailure(accepted: boolean): void
@@ -43,6 +44,7 @@ export const PANEL_VISIBLE_LABELS = [
   '本地风险趋势',
   '学习状态',
   '复制续接提示词',
+  '完整扫描当前会话',
   '重新学习',
   '本会话暂不提醒'
 ] as const
@@ -116,6 +118,7 @@ export class GuardUi {
       this.setOpen(!this.open)
     })
     this.bindButton('copy', callbacks.onCopyContinuation)
+    this.bindButton('scan-history', callbacks.onScanHistory)
     this.bindButton('learn', callbacks.onRecalibrate)
     this.bindButton('mute', callbacks.onToggleMute)
     this.bindButton('confirm-yes', () => callbacks.onConfirmFailure(true))
@@ -162,7 +165,7 @@ export class GuardUi {
     const note = requireElement<HTMLElement>(this.shadow, '[data-role="coverage-note"]')
     note.hidden = !model.showIncompleteHistoryNote
     note.textContent = model.showIncompleteHistoryNote
-      ? '这是之前的会话，我可能看不到完整历史。正常使用即可，新开的会话会判断得更准。'
+      ? '这是之前的会话，当前可能只读取到部分历史。需要用于学习时，可先完整扫描当前会话。'
       : ''
 
     const pending = requireElement<HTMLElement>(this.shadow, '[data-role="pending-confirm"]')
@@ -192,6 +195,12 @@ export class GuardUi {
     window.setTimeout(() => {
       this.toast.hidden = true
     }, 1800)
+  }
+
+  setHistoryScanBusy(busy: boolean): void {
+    const scan = button(this.shadow, 'scan-history')
+    scan.disabled = busy
+    scan.textContent = busy ? '正在完整扫描…' : '完整扫描当前会话'
   }
 
   showUnavailable(learningMode: GuardUiModel['learningMode'] = 'cold'): void {
@@ -319,6 +328,7 @@ function template(): string {
           </div>
           <div class="actions">
             <button class="action primary" data-action="copy">复制续接提示词</button>
+            <button class="action" data-action="scan-history">完整扫描当前会话</button>
             <button class="action" data-action="learn">重新学习</button>
             <button class="action" data-action="mute">本会话暂不提醒</button>
           </div>

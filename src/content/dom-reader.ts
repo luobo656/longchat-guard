@@ -121,6 +121,28 @@ export function readTailEvidence(doc: Document): 'at_tail' | 'not_tail' | 'unkno
   return tailEvidenceFromMessageRoot(lastMessage)
 }
 
+export function findConversationScrollContainer(doc: Document): HTMLElement | undefined {
+  const messages = messageRootElements(doc)
+  const first = messages[0]
+  const last = messages.at(-1)
+  if (first && last) {
+    const firstScroller = findScrollableAncestor(first)
+    const lastScroller = findScrollableAncestor(last)
+    if (firstScroller && lastScroller && firstScroller === lastScroller) return firstScroller
+    if (lastScroller) return lastScroller
+    if (firstScroller) return firstScroller
+  }
+
+  const scrollingElement = doc.scrollingElement
+  if (
+    scrollingElement instanceof HTMLElement &&
+    scrollingElement.scrollHeight - scrollingElement.clientHeight > 48
+  ) {
+    return scrollingElement
+  }
+  return undefined
+}
+
 export function tailEvidenceFromMessageRoot(messageRoot: HTMLElement): 'at_tail' | 'not_tail' | 'unknown' {
   const scrolling = findScrollableAncestor(messageRoot)
   if (!scrolling) return 'unknown'

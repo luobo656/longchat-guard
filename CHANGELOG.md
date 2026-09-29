@@ -5,6 +5,8 @@
 - Reframed first-run uncertainty as a friendly local learning state instead of an error-like "unreliable" message.
 - Added a short plain-language explanation that monitoring improves automatically while the user continues normal conversations.
 - Separated cold-start learning from temporary page-detection recovery so learned calibration is not presented as lost.
+- Added a user-triggered full-history scan for old conversations. The scan walks from the verified head to the verified tail, stitches virtualized message windows, rechecks the head, and refuses strong calibration when completeness cannot be proven.
+- Old conversations containing attachments or ambiguous message roles are downgraded instead of being treated as strong calibration samples.
 
 ## 1.0.0 - 2026-09-22
 
