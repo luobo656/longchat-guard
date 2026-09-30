@@ -67,7 +67,7 @@ export async function scanHistorySource(
 ): Promise<HistoryScanResult> {
   const maxHeadRounds = options.maxHeadRounds ?? 30
   const maxSweepSteps = options.maxSweepSteps ?? 500
-  const requiredStableRounds = options.requiredStableRounds ?? 3
+  const requiredStableRounds = options.requiredStableRounds ?? 4
   const stepRatio = options.stepRatio ?? 0.42
   const settle = options.settle ?? defaultSettle
   const originalTop = source.surface.scrollTop
@@ -108,7 +108,6 @@ export async function scanHistorySource(
   try {
     let headStableRounds = 0
     let previousHeadIdentity = ''
-    let previousHeadHeight = -1
     for (let round = 0; round < maxHeadRounds; round += 1) {
       source.surface.scrollTop = 0
       await settle()
@@ -116,12 +115,9 @@ export async function scanHistorySource(
       if (!captured.ok) return resultFailure(captured.reason, messages, activeFingerprints, attachmentCount)
 
       const atTop = source.surface.scrollTop <= TOP_BOTTOM_TOLERANCE
-      const sameHead =
-        captured.firstVisible === previousHeadIdentity &&
-        Math.abs(source.surface.scrollHeight - previousHeadHeight) <= TOP_BOTTOM_TOLERANCE
+      const sameHead = captured.firstVisible === previousHeadIdentity
       headStableRounds = atTop && sameHead ? headStableRounds + 1 : 0
       previousHeadIdentity = captured.firstVisible
-      previousHeadHeight = source.surface.scrollHeight
       if (headStableRounds >= requiredStableRounds) break
     }
     if (headStableRounds < requiredStableRounds) {
@@ -131,21 +127,28 @@ export async function scanHistorySource(
 
     let tailStableRounds = 0
     let previousTailIdentity = ''
-    let previousTailHeight = -1
+    let lastSuccessfulTop = source.surface.scrollTop
     for (let step = 0; step < maxSweepSteps; step += 1) {
       const maxTop = Math.max(0, source.surface.scrollHeight - source.surface.clientHeight)
       const remaining = maxTop - source.surface.scrollTop
       const atBottom = remaining <= TOP_BOTTOM_TOLERANCE
       const captured = await capture(atBottom ? 'at_tail' : 'not_tail')
-      if (!captured.ok) return resultFailure(captured.reason, messages, activeFingerprints, attachmentCount)
+      if (!captured.ok) {
+        const failedTop = source.surface.scrollTop
+        const gap = failedTop - lastSuccessfulTop
+        if (gap > 24) {
+          source.surface.scrollTop = lastSuccessfulTop + Math.max(12, Math.floor(gap / 2))
+          await settle()
+          continue
+        }
+        return resultFailure(captured.reason, messages, activeFingerprints, attachmentCount)
+      }
+      lastSuccessfulTop = source.surface.scrollTop
 
       if (atBottom) {
-        const sameTail =
-          captured.lastVisible === previousTailIdentity &&
-          Math.abs(source.surface.scrollHeight - previousTailHeight) <= TOP_BOTTOM_TOLERANCE
+        const sameTail = captured.lastVisible === previousTailIdentity
         tailStableRounds = sameTail ? tailStableRounds + 1 : 0
         previousTailIdentity = captured.lastVisible
-        previousTailHeight = source.surface.scrollHeight
         if (tailStableRounds >= requiredStableRounds) {
           source.surface.scrollTop = 0
           await settle()
@@ -275,6 +278,6 @@ function scanMetrics(
 }
 
 async function defaultSettle(): Promise<void> {
-  await new Promise<void>((resolve) => window.setTimeout(resolve, 220))
+  await new Promise<void>((resolve) => window.setTimeout(resolve, 240))
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 }

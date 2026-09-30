@@ -115,6 +115,16 @@ describe('chatgpt DOM reader', () => {
 
     expect(readTailEvidence(doc as unknown as Document)).toBe('not_tail')
   })
+
+  it('uses a conversation-turn ancestor as a stable message hint', () => {
+    const message = el('div', { 'data-message-author-role': 'assistant' }, [], 'hello')
+    const turn = el('article', { 'data-testid': 'conversation-turn-42' }, [message])
+    const doc = fakeDocument([turn])
+
+    expect(readMessages(doc as unknown as Document)[0]?.stableHint).toBe(
+      'conversation-turn:conversation-turn-42'
+    )
+  })
 })
 
 class FakeElement {

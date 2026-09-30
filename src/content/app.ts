@@ -432,7 +432,7 @@ export async function startGuard(): Promise<void> {
     try {
       const result = await scanConversationHistory(document, observePageMessages)
       if (!result.complete) {
-        ui.showToast('未确认完整历史，本次不会作为完整学习样本')
+        ui.showToast(historyScanFailureMessage(result.reason))
         return
       }
 
@@ -496,6 +496,20 @@ export async function startGuard(): Promise<void> {
       ui.setHistoryScanBusy(false)
       refresh()
     }
+  }
+
+  function historyScanFailureMessage(
+    reason: import('./history-scanner').HistoryScanFailureReason | undefined
+  ): string {
+    if (reason === 'no_scroll_container') return '没有找到会话滚动区域，请刷新页面后再试'
+    if (reason === 'no_messages') return '暂时没有读取到会话消息，请等待页面加载完成后再试'
+    if (reason === 'head_not_stable') return '最早的历史消息还在加载，请稍等几秒后再试'
+    if (reason === 'tail_not_stable') return '会话末尾仍在变化，请等待页面稳定后再试'
+    if (reason === 'window_alignment_failed') {
+      return '部分历史消息没有连续读到，已停止本次学习以避免误差'
+    }
+    if (reason === 'scan_limit_reached') return '会话很长，本次扫描未完成，请再试一次'
+    return '未确认完整历史，本次不会作为完整学习样本'
   }
 
   const markNewChatSend = (target: EventTarget | null): void => {

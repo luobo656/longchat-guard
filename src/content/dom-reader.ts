@@ -216,6 +216,19 @@ function readStableMessageHint(element: HTMLElement): string | undefined {
 
   const id = element.id.trim()
   if (/message/i.test(id) && !/conversation-turn/i.test(id)) return `id:${id}`
+
+  let current = element.parentElement
+  for (let depth = 0; current && depth < 5; depth += 1, current = current.parentElement) {
+    const ancestorMessageId =
+      current.getAttribute('data-message-id') ??
+      current.getAttribute('data-message-id-anon')
+    if (ancestorMessageId?.trim()) return `ancestor-message-id:${ancestorMessageId.trim()}`
+
+    const testId = current.getAttribute('data-testid')?.trim()
+    if (testId && /conversation-turn-/i.test(testId)) {
+      return `conversation-turn:${testId}`
+    }
+  }
   return undefined
 }
 

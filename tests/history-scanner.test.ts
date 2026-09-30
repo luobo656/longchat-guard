@@ -80,6 +80,34 @@ describe('history scanner', () => {
     expect(result.complete).toBe(false)
     expect(['head_not_stable', 'window_alignment_failed']).toContain(result.reason)
   })
+
+  it('does not reject a stable conversation only because scroll height changes slightly', async () => {
+    const surface = {
+      scrollTop: 0,
+      scrollHeight: 900,
+      clientHeight: 300
+    }
+    let reads = 0
+    const all = ['m1', 'm2', 'm3', 'm4']
+    const source = {
+      surface,
+      readWindow: () => {
+        reads += 1
+        if (reads < 5) surface.scrollHeight += 8
+        const index = surface.scrollTop < 250 ? 0 : 1
+        return all.slice(index, index + 3).map(message)
+      }
+    }
+
+    const result = await scanHistorySource(source, observe, {
+      settle: async () => {},
+      requiredStableRounds: 1,
+      stepRatio: 0.5
+    })
+
+    expect(result.complete).toBe(true)
+    expect(result.observedMessages.map((item) => item.contentFingerprint)).toEqual(all)
+  })
 })
 
 function message(text: string): PageMessageSnapshot {
