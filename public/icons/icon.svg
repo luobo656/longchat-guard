@@ -1,22 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Conversation guard icon">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="LongChat Guard icon">
   <defs>
-    <linearGradient id="base" x1="18" y1="12" x2="112" y2="118" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0b806f"/>
-      <stop offset="1" stop-color="#05584f"/>
+    <linearGradient id="bubble" x1="18" y1="8" x2="108" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#31d1bc"/>
+      <stop offset="0.5" stop-color="#12a28f"/>
+      <stop offset="1" stop-color="#087467"/>
     </linearGradient>
-    <linearGradient id="shield" x1="74" y1="64" x2="112" y2="120" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#ff7a18"/>
-      <stop offset="1" stop-color="#ff4b12"/>
+    <linearGradient id="shield" x1="84" y1="70" x2="108" y2="124" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffb423"/>
+      <stop offset="1" stop-color="#ff6514"/>
     </linearGradient>
   </defs>
 
-  <rect x="10" y="10" width="108" height="108" rx="25" fill="url(#base)"/>
+  <!-- The chat bubble is the icon itself: no outer app-tile/backplate. -->
+  <path d="M38 10h52c18 0 32 14 32 32v29c0 18-14 32-32 32H55l-28 16 7-20C20 96 10 85 10 71V42c0-18 14-32 32-32Z"
+        fill="url(#bubble)" stroke="#076d62" stroke-width="1.5" stroke-linejoin="round"/>
 
-  <path d="M28 31h67c8 0 14 6 14 14v30c0 8-6 14-14 14H60L40 103l4-14H28c-8 0-14-6-14-14V45c0-8 6-14 14-14Z" fill="#fff"/>
-  <circle cx="39" cy="60" r="6" fill="#087265"/>
-  <circle cx="61" cy="60" r="6" fill="#087265"/>
-  <circle cx="83" cy="60" r="6" fill="#087265"/>
+  <path d="M39 43h52M39 62h39M39 81h27"
+        fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round"/>
 
-  <path d="M91 62 113 72v18c0 15-8 26-22 33-14-7-22-18-22-33V72l22-10Z" fill="url(#shield)" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
-  <path d="m79 91 9 9 16-18" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M96 68 119 79v15c0 14-8 25-23 31-15-6-23-17-23-31V79l23-11Z"
+        fill="url(#shield)" stroke="#fff" stroke-width="5" stroke-linejoin="round"/>
 </svg>

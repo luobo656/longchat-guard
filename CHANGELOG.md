@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.2 - 2026-10-01
+
+- Finalized the LongChat Guard icon: transparent background, green chat-bubble main shape, white conversation lines, and an orange shield accent.
+- Removed the old external rounded-square backplate and shield checkmark for better 16px/32px recognition and a cleaner browser-toolbar silhouette.
+- Updated website icon presentation so the transparent icon is not clipped by rounded-image masks.
+- Regenerated Chrome/Edge icon assets at 16, 32, 48, and 128 px and refreshed release documentation.
+- No new permissions and no risk-algorithm changes.
+
 ## 2.0.1 - 2026-09-30
 
 - Added official Manifest V3 localization for English, Simplified Chinese, and Traditional Chinese.

@@ -111,14 +111,14 @@
 
 ## H. 品牌图标与 manifest
 
-- [ ] `public/icons/icon.svg` 存在并为深青绿底板、白色气泡、橙色守护盾牌的原创高对比构图
+- [ ] `public/icons/icon.svg` 存在并为透明背景、绿色聊天气泡主形、白色对话线、右下橙色守护盾牌的原创高对比构图；无外部方形底板、无盾牌对勾
 - [ ] `public/icons/icon16.png`、`icon32.png`、`icon48.png`、`icon128.png` 存在
 - [ ] 图标不含 ChatGPT/OpenAI logo、六结标志、字母或文字
 - [ ] `manifest.icons` 与 `action.default_icon` 指向存在的图标路径
 - [ ] manifest name / description / action title 使用 i18n message placeholder；各 locale 解析后品牌规则符合 G 节，action title 始终为 `LongChat Guard`
 - [ ] name/description 不暗示 OpenAI 官方关系
 - [ ] MV3 权限最小，仅 `storage` 与 `https://chatgpt.com/*`
-- [ ] manifest version 为 `2.0.1`
+- [ ] manifest version 为 `2.0.2`
 
 ## I. 发布阻断
 

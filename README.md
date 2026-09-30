@@ -121,7 +121,7 @@ LongChat Guard 2.x 只面向 `chatgpt.com` 网页端，不包含：
 
 ## 品牌
 
-canonical brand 始终是 **LongChat Guard**，品牌本身不翻译。英文展示名为 **LongChat Guard**，简体中文为 **LongChat Guard · 长会话预警**，繁体中文为 **LongChat Guard · 長對話預警**。图标使用原创高对比几何构图：深青绿底板、白色聊天气泡、橙色守护盾牌与白色对勾。
+canonical brand 始终是 **LongChat Guard**，品牌本身不翻译。英文展示名为 **LongChat Guard**，简体中文为 **LongChat Guard · 长会话预警**，繁体中文为 **LongChat Guard · 長對話預警**。图标使用最终原创构图：透明背景、绿色聊天气泡作为主体、三条白色对话线、右下橙色守护盾牌；不使用外部方形底板或盾牌对勾。
 
 `ChatGPT` 仅用于说明本项目当前支持的网站和使用场景。本项目与 OpenAI 没有隶属、赞助、认可或维护关系。
 

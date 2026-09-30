@@ -67,7 +67,7 @@ for (const [label, html] of [
   ['zh-CN', simplifiedHome],
   ['zh-TW', traditionalHome]
 ]) {
-  if (!html.includes('"softwareVersion": "2.0.1"')) {
+  if (!html.includes('"softwareVersion": "2.0.2"')) {
     throw new Error(`${label} home page has a stale SoftwareApplication version`)
   }
   if (!html.includes(chromeStoreUrl)) {
@@ -91,7 +91,7 @@ for (const [label, content] of [
   ['AI discovery profile', discovery],
   ['llms-full.txt', llmsFull]
 ]) {
-  if (!content.includes('2.0.1')) throw new Error(`${label} has a stale product version`)
+  if (!content.includes('2.0.2')) throw new Error(`${label} has a stale product version`)
   if (!content.includes(chromeStoreUrl)) {
     throw new Error(`${label} is missing the canonical Chrome Web Store source`)
   }

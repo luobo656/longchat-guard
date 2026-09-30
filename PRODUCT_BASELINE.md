@@ -131,7 +131,7 @@ composer 草稿、固定预计 assistant 增长、主观“太早/太晚”反�
 
 ## 8. 品牌与图标
 
-2.0 延续用户选定的原创图标方案：深青绿圆角方形底板、白色聊天气泡、右下角高对比橙色守护盾牌与白色对勾。优先保证 16px / 32px 浏览器工具栏尺寸下的辨识度。
+2.x 使用用户最终选定的原创图标方案：透明背景、绿色聊天气泡作为完整主形，气泡内使用三条白色对话线，右下角叠加高对比橙色守护盾牌；不再使用外部方形底板，也不再在盾牌中加入对勾。优先保证 16px / 32px 浏览器工具栏尺寸下仍然一眼可辨。
 
 图标不得：
 
@@ -139,4 +139,4 @@ composer 草稿、固定预计 assistant 增长、主观“太早/太晚”反�
 - 包含“ChatGPT”文字或字母品牌标记
 - 暗示官方、授权或从属关系
 
-公开品牌名、manifest name 与 `action.default_title` 统一使用“LongChat Guard”。`ChatGPT` 仅用于说明适用网页，不表示官方关系。
+canonical brand 与 `action.default_title` 始终使用“LongChat Guard”；manifest display name 按 locale 使用既定英文 / 简中 / 繁中展示名，但品牌词本身不得翻译。`ChatGPT` 仅用于说明适用网页，不表示官方关系。

@@ -1,4 +1,4 @@
-# LongChat Guard 2.0.1 — Existing Store Listing Update
+# LongChat Guard 2.0.2 — Existing Store Listing Update
 
 This is an update to the existing Chrome Web Store and Microsoft Edge Add-ons listings. Do not create a new extension listing.
 
@@ -6,11 +6,11 @@ This is an update to the existing Chrome Web Store and Microsoft Edge Add-ons li
 
 Use the same package for both stores:
 
-`release/LongChat-Guard-2.0.1-store.zip`
+`release/LongChat-Guard-2.0.2-store.zip`
 
 ## Version
 
-`2.0.1`
+`2.0.2`
 
 ## Languages to maintain
 
@@ -46,15 +46,15 @@ The canonical brand is always **LongChat Guard**. Do not translate it to “龙�
 
 ### English
 
-Version 2.0.1 adds official extension localization for English, Simplified Chinese, and Traditional Chinese; keeps the LongChat Guard brand consistent across locales; updates the in-product UI localization; and refines local-first long-conversation risk learning. No new permissions were added.
+Version 2.0.2 finalizes the LongChat Guard brand icon with a transparent green chat-bubble main shape and orange shield, while retaining the 2.0 local-risk model and official English, Simplified Chinese, and Traditional Chinese localization. No new permissions were added.
 
 ### 简体中文
 
-2.0.1 新增英文、简体中文和繁体中文的正式本地化，统一 LongChat Guard 品牌显示，完善插件内部多语言界面，并优化本地长会话风险学习。没有新增权限。
+2.0.2 定稿 LongChat Guard 品牌图标：透明背景、绿色聊天气泡主形与橙色盾牌，并保留 2.0 本地风险模型及英文、简体中文、繁体中文正式本地化。没有新增权限。
 
 ### 繁體中文
 
-2.0.1 新增英文、簡體中文和繁體中文的正式本地化，統一 LongChat Guard 品牌顯示，完善擴充功能內的多語言介面，並優化本機長對話風險學習。沒有新增權限。
+2.0.2 定稿 LongChat Guard 品牌圖示：透明背景、綠色聊天氣泡主形與橙色盾牌，並保留 2.0 本機風險模型及英文、簡體中文、繁體中文正式本地化。沒有新增權限。
 
 ## Permissions unchanged
 

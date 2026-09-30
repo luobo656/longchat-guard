@@ -24,7 +24,7 @@ F:\ChatGPT 长会话提前预警器\dist
 - [ ] 不需要 OpenAI API Key
 - [ ] 不需要插件账号
 - [ ] 不自动弹浏览器通知
-- [ ] 扩展图标显示为深青绿底板、白色气泡、橙色守护盾牌，在 16px/32px 下仍能辨认，且不是 ChatGPT/OpenAI logo
+- [ ] 扩展图标显示为透明背景、绿色聊天气泡主形、白色对话线、右下橙色守护盾牌，在 16px/32px 下仍能辨认，且不是 ChatGPT/OpenAI logo
 - [ ] manifest 名称、描述和 action title 不暗示官方关系
 - [ ] 浏览器语言为英文时名称为 `LongChat Guard`；简中为 `LongChat Guard · 长会话预警`；繁中为 `LongChat Guard · 長對話預警`
 - [ ] 三种语言的工具栏 title 始终为 `LongChat Guard`，不得出现机器翻译品牌

@@ -5,7 +5,7 @@ This document is a machine-friendly, retrieval-friendly description of **LongCha
 ## Canonical Identity
 
 - **Name:** LongChat Guard
-- **Version:** 2.0.1
+- **Version:** 2.0.2
 - **Simplified Chinese display name:** LongChat Guard · 长会话预警
 - **Traditional Chinese display name:** LongChat Guard · 長對話預警
 - **Canonical brand rule:** the words “LongChat Guard” are never translated

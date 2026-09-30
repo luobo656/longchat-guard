@@ -57,7 +57,7 @@ a { color: inherit; }
   letter-spacing: -.02em;
 }
 
-.brand img { width: 34px; height: 34px; border-radius: 9px; }
+.brand img { width: 34px; height: 34px; object-fit: contain; }
 
 .navlinks { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
 .navlinks a { color: var(--muted); text-decoration: none; font-size: 14px; }
@@ -129,7 +129,7 @@ h1 {
   background: linear-gradient(180deg, rgba(18, 48, 40, .86), rgba(13, 32, 28, .9));
   box-shadow: 0 24px 80px rgba(0, 0, 0, .25);
 }
-.hero-card img { width: 92px; height: 92px; border-radius: 22px; }
+.hero-card img { width: 92px; height: 92px; object-fit: contain; }
 .hero-card h2 { margin: 18px 0 8px; font-size: 24px; }
 .hero-card p { margin: 0; font-size: 15px; }
 .status-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 24px; }

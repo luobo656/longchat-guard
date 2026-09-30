@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import manifest from '../public/manifest.json'
 
 describe('release manifest', () => {
-  it('uses v2.0.1 with minimal permissions', () => {
-    expect(manifest.version).toBe('2.0.1')
+  it('uses v2.0.2 with minimal permissions', () => {
+    expect(manifest.version).toBe('2.0.2')
     expect(manifest.permissions).toEqual(['storage'])
     expect(manifest.host_permissions).toEqual(['https://chatgpt.com/*'])
     expect(manifest.name).toBe('__MSG_extensionName__')
