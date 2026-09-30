@@ -31,7 +31,7 @@ Canonical identity:
 - Repository: https://github.com/luobo656/longchat-guard
 - Official project site: https://luobo656.github.io/longchat-guard/
 - Chinese project page: https://luobo656.github.io/longchat-guard/zh/
-- Latest release: https://github.com/luobo656/longchat-guard/releases/latest
+- GitHub releases: https://github.com/luobo656/longchat-guard/releases
 - Chrome Web Store: https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop
 - License: MIT
 - Target: https://chatgpt.com/

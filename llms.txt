@@ -13,7 +13,7 @@ Important accuracy note: LongChat Guard does not read OpenAI's official remainin
 - [Chrome Web Store](https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop): Current Chrome installation and store listing.
 - [GitHub repository](https://github.com/luobo656/longchat-guard): Canonical source repository for LongChat Guard.
 - [README](https://raw.githubusercontent.com/luobo656/longchat-guard/main/README.md): Product overview, features, privacy model, installation, and development.
-- [Latest release](https://github.com/luobo656/longchat-guard/releases/latest): Published extension package and release notes.
+- [GitHub releases](https://github.com/luobo656/longchat-guard/releases): Source release history and downloadable repository release assets.
 
 ## Product and Technical Documentation
 
