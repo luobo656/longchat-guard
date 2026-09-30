@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  findConversationScrollContainer,
   readComposerText,
   readConversationHints,
   readGenerationState,
@@ -114,6 +115,18 @@ describe('chatgpt DOM reader', () => {
     const doc = fakeDocument([scroll])
 
     expect(readTailEvidence(doc as unknown as Document)).toBe('not_tail')
+  })
+
+  it('can use a message ancestor with scroll range even when overflow style is nonstandard', () => {
+    const message = el('div', { 'data-message-author-role': 'assistant' }, [], 'tail')
+    const scroll = el('div', {}, [message])
+    scroll.scrollHeight = 1800
+    scroll.clientHeight = 600
+    scroll.scrollTop = 600
+    scroll.style.overflowY = 'visible'
+    const doc = fakeDocument([scroll])
+
+    expect(findConversationScrollContainer(doc as unknown as Document)).toBe(scroll)
   })
 
   it('uses a conversation-turn ancestor as a stable message hint', () => {

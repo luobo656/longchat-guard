@@ -126,19 +126,14 @@ export function findConversationScrollContainer(doc: Document): HTMLElement | un
   const first = messages[0]
   const last = messages.at(-1)
   if (first && last) {
-    const firstScroller = findScrollableAncestor(first)
-    const lastScroller = findScrollableAncestor(last)
-    if (firstScroller && lastScroller && firstScroller === lastScroller) return firstScroller
-    if (lastScroller) return lastScroller
-    if (firstScroller) return firstScroller
+    const candidates = collectScrollCandidates(first, last)
+    if (candidates.length > 0) return candidates[0]
   }
 
-  const scrollingElement = doc.scrollingElement
-  if (
-    scrollingElement instanceof HTMLElement &&
-    scrollingElement.scrollHeight - scrollingElement.clientHeight > 48
-  ) {
-    return scrollingElement
+  for (const candidate of [doc.scrollingElement, doc.documentElement, doc.body]) {
+    if (isScrollSurface(candidate) && scrollRange(candidate) > 48) {
+      return candidate
+    }
   }
   return undefined
 }
@@ -153,12 +148,72 @@ export function tailEvidenceFromMessageRoot(messageRoot: HTMLElement): 'at_tail'
 
 export function findScrollableAncestor(element: HTMLElement): HTMLElement | undefined {
   let current = element.parentElement
+  let fallback: HTMLElement | undefined
   while (current) {
-    const scrollRange = current.scrollHeight - current.clientHeight
-    if (scrollRange > 48 && isPotentiallyScrollable(current)) return current
+    const range = scrollRange(current)
+    if (range > 48) {
+      if (isPotentiallyScrollable(current)) return current
+      fallback ??= current
+    }
     current = current.parentElement
   }
-  return undefined
+  return fallback
+}
+
+function collectScrollCandidates(first: HTMLElement, last: HTMLElement): HTMLElement[] {
+  const candidates = new Map<HTMLElement, number>()
+  let depth = 0
+  let current: HTMLElement | null = last.parentElement
+  while (current) {
+    const range = scrollRange(current)
+    if (range > 48) {
+      let score = Math.min(range, 1_000_000)
+      if (current.contains(first) && current.contains(last)) score += 2_000_000
+      if (isPotentiallyScrollable(current)) score += 1_000_000
+      if (current.tagName.toLowerCase() === 'main' || current.getAttribute('role') === 'main') {
+        score += 250_000
+      }
+      score += Math.max(0, 50_000 - depth * 2_000)
+      candidates.set(current, Math.max(candidates.get(current) ?? 0, score))
+    }
+    current = current.parentElement
+    depth += 1
+  }
+
+  depth = 0
+  current = first.parentElement
+  while (current) {
+    const range = scrollRange(current)
+    if (range > 48) {
+      let score = Math.min(range, 1_000_000)
+      if (current.contains(first) && current.contains(last)) score += 2_000_000
+      if (isPotentiallyScrollable(current)) score += 1_000_000
+      if (current.tagName.toLowerCase() === 'main' || current.getAttribute('role') === 'main') {
+        score += 250_000
+      }
+      score += Math.max(0, 50_000 - depth * 2_000)
+      candidates.set(current, Math.max(candidates.get(current) ?? 0, score))
+    }
+    current = current.parentElement
+    depth += 1
+  }
+
+  return Array.from(candidates.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([element]) => element)
+}
+
+function scrollRange(element: { scrollHeight: number; clientHeight: number }): number {
+  return Math.max(0, element.scrollHeight - element.clientHeight)
+}
+
+function isScrollSurface(element: Element | null | undefined): element is HTMLElement {
+  return Boolean(
+    element &&
+      typeof (element as HTMLElement).scrollTop === 'number' &&
+      typeof (element as HTMLElement).scrollHeight === 'number' &&
+      typeof (element as HTMLElement).clientHeight === 'number'
+  )
 }
 
 function messageRootElements(doc: Document): HTMLElement[] {
