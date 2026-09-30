@@ -1,8 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "LongChat Guard",
-  "version": "1.0.1",
-  "description": "Local long-conversation trend warning for chatgpt.com. Not affiliated with OpenAI.",
+  "name": "__MSG_extensionName__",
+  "short_name": "LongChat Guard",
+  "version": "2.0.1",
+  "description": "__MSG_extensionDescription__",
+  "default_locale": "en",
   "permissions": ["storage"],
   "host_permissions": ["https://chatgpt.com/*"],
   "icons": {
@@ -12,7 +14,7 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "LongChat Guard",
+    "default_title": "__MSG_actionTitle__",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

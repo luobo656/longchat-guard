@@ -10,6 +10,7 @@ function risk(level: RiskAssessment['level'], score: number): RiskAssessment {
   return {
     level,
     score,
+    trendScore: score,
     predictedNextTurnLoad: 100,
     reasons: []
   }

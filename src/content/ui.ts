@@ -1,15 +1,18 @@
-import type { CoverageState, RiskLevel } from '../core/types'
+import type { RiskLevel } from '../core/types'
+import { t } from './i18n'
+
+export type LearningStage = 'learning' | 'initial' | 'calibrating' | 'stable'
 
 export interface GuardUiModel {
   conversationKey?: string
   riskLevel: RiskLevel
-  riskScore: number
+  trendScore: number
   estimatedLoad: number
-  coverage: CoverageState
   learningMode: 'cold' | 'warm' | 'calibrated'
+  learningStage: LearningStage
+  showScanAction: boolean
   muted: boolean
   pendingFailureConfirmation: boolean
-  showIncompleteHistoryNote: boolean
 }
 
 export interface GuardUiCallbacks {
@@ -25,28 +28,15 @@ export interface GuardUiCallbacks {
 const ROOT_ID = 'conversation-guard-root'
 const DESTROY_KEY = '__conversationGuardUiDestroy'
 
-const LABELS: Record<RiskLevel, string> = {
-  normal: '正常',
-  long: '会话较长',
-  organize: '建议整理',
-  high: '高风险',
-  unreliable: '学习中'
-}
-
-export const LEARNING_EXPLANATION =
-  '正在学习你的会话长度范围，完成后会自动提前提醒。请正常使用，给插件一点学习时间即可。'
-
-export const RECOVERING_EXPLANATION =
-  '页面有变化，正在自动恢复监测，之前的学习不会丢。'
-
 export const PANEL_VISIBLE_LABELS = [
-  '当前会话长度',
-  '本地风险趋势',
-  '学习状态',
-  '复制续接提示词',
-  '完整扫描当前会话',
-  '重新学习',
-  '本会话暂不提醒'
+  'Risk',
+  'Safe',
+  'High risk',
+  'Learning',
+  'Copy continuation prompt',
+  'Scan current chat',
+  'Relearn',
+  'Mute this chat'
 ] as const
 
 export const PANEL_FORBIDDEN_VALUE_PATTERNS = [
@@ -58,12 +48,12 @@ export const PANEL_FORBIDDEN_VALUE_PATTERNS = [
 ] as const
 
 export const PRIVACY_CONSENT_COPY = [
-  '仅在本机读取当前 ChatGPT 页面内容用于长会话趋势判断。',
-  '不上传。',
-  '不保存聊天正文。',
-  '可通过卸载扩展/清除扩展数据删除本地数据。',
-  '同意并开始',
-  '暂不开启'
+  'Reads visible ChatGPT content locally to estimate long-chat risk.',
+  'Does not upload chat content.',
+  'Does not save raw chat text.',
+  'Uninstall or clear extension data to remove local data.',
+  'Agree and start',
+  'Not now'
 ] as const
 
 export class GuardUi {
@@ -140,39 +130,25 @@ export class GuardUi {
     this.statusDot.dataset.risk = model.riskLevel
     const trend = requireElement<HTMLElement>(this.shadow, '[data-role="trend"]')
     trend.dataset.risk = model.riskLevel
+    const riskTrack = requireElement<HTMLElement>(this.shadow, '[data-role="risk-track"]')
+    riskTrack.style.setProperty('--risk-position', `${clampTrendScore(model.trendScore)}%`)
 
     setText(
       this.shadow,
       'current-load',
       currentLengthLabel(model.riskLevel, model.learningMode)
     )
-    setText(this.shadow, 'learning', learningLabel(model.learningMode))
+    setText(this.shadow, 'learning', learningLabel(model.learningStage))
 
-    const learningNote = requireElement<HTMLElement>(
-      this.shadow,
-      '[data-role="learning-note"]'
-    )
-    const isLearning =
-      model.learningMode !== 'calibrated' || model.riskLevel === 'unreliable'
-    learningNote.hidden = !isLearning
-    learningNote.textContent =
-      model.riskLevel === 'unreliable' && model.learningMode === 'calibrated'
-        ? RECOVERING_EXPLANATION
-        : isLearning
-          ? LEARNING_EXPLANATION
-          : ''
-
-    const note = requireElement<HTMLElement>(this.shadow, '[data-role="coverage-note"]')
-    note.hidden = !model.showIncompleteHistoryNote
-    note.textContent = model.showIncompleteHistoryNote
-      ? '这是之前的会话，当前可能只读取到部分历史。需要用于学习时，可先完整扫描当前会话。'
-      : ''
+    button(this.shadow, 'scan-history').hidden = !model.showScanAction
 
     const pending = requireElement<HTMLElement>(this.shadow, '[data-role="pending-confirm"]')
     pending.hidden = !model.pendingFailureConfirmation
 
     const mute = button(this.shadow, 'mute')
-    mute.textContent = model.muted ? '恢复本会话提醒' : '本会话暂不提醒'
+    mute.textContent = model.muted
+      ? t('actionRestore', 'Restore alerts')
+      : t('actionMute', 'Mute this chat')
     mute.disabled = !model.conversationKey
   }
 
@@ -200,26 +176,39 @@ export class GuardUi {
   setHistoryScanBusy(busy: boolean): void {
     const scan = button(this.shadow, 'scan-history')
     scan.disabled = busy
-    scan.textContent = busy ? '正在完整扫描…' : '完整扫描当前会话'
+    scan.textContent = busy
+      ? t('actionScanning', 'Scanning…')
+      : t('actionScanCurrent', 'Scan current chat')
+  }
+
+  focusPendingConfirmation(): void {
+    const pending = requireElement<HTMLElement>(this.shadow, '[data-role="pending-confirm"]')
+    if (pending.hidden) return
+    this.setOpen(true)
+    pending.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    button(this.shadow, 'confirm-yes').focus({ preventScroll: true })
+    this.root.classList.remove('guard-attention')
+    void this.root.offsetWidth
+    this.root.classList.add('guard-attention')
   }
 
   showUnavailable(learningMode: GuardUiModel['learningMode'] = 'cold'): void {
     this.update({
       riskLevel: 'unreliable',
-      riskScore: 100,
+      trendScore: 0,
       estimatedLoad: 0,
-      coverage: 'unknown',
       learningMode,
+      learningStage: learningMode === 'calibrated' ? 'initial' : 'learning',
+      showScanAction: true,
       muted: false,
-      pendingFailureConfirmation: false,
-      showIncompleteHistoryNote: false
+      pendingFailureConfirmation: false
     })
   }
 
   showConsentCard(): void {
     this.mode = 'consent'
     this.root.dataset.risk = 'unreliable'
-    this.statusText.textContent = '需要同意'
+    this.statusText.textContent = t('pillConsentRequired', 'Consent required')
     this.statusDot.dataset.risk = 'unreliable'
     this.monitorPanel.hidden = true
     this.consentPanel.hidden = false
@@ -229,7 +218,7 @@ export class GuardUi {
   showDisabled(): void {
     this.mode = 'disabled'
     this.root.dataset.risk = 'unreliable'
-    this.statusText.textContent = '未启用'
+    this.statusText.textContent = t('pillDisabled', 'Disabled')
     this.statusDot.dataset.risk = 'unreliable'
     this.monitorPanel.hidden = true
     this.consentPanel.hidden = false
@@ -267,34 +256,35 @@ function template(): string {
       .dot[data-risk="organize"] { background:#e87924; box-shadow:0 0 0 3px rgba(232,121,36,.14); }
       .dot[data-risk="high"] { background:#d14343; box-shadow:0 0 0 3px rgba(209,67,67,.14); }
       .dot[data-risk="unreliable"] { background:#9a9a9a; box-shadow:0 0 0 3px rgba(154,154,154,.14); }
-      .panel { width:320px; max-width:calc(100vw - 24px); max-height:min(520px,calc(100vh - 96px)); overflow:auto; border:1px solid rgba(0,0,0,.12); border-radius:8px; background:rgba(255,255,255,.97); backdrop-filter:blur(20px); box-shadow:0 18px 60px rgba(0,0,0,.18); padding:14px; font-size:12px; line-height:1.45; }
+      .panel { width:320px; max-width:calc(100vw - 24px); max-height:min(520px,calc(100vh - 96px)); overflow:auto; border:1px solid rgba(0,0,0,.1); border-radius:10px; background:rgba(255,255,255,.975); backdrop-filter:blur(20px); box-shadow:0 16px 48px rgba(0,0,0,.16); padding:12px; font-size:12px; line-height:1.4; }
       .panel[hidden] { display:none; }
-      .title { font-size:14px; font-weight:750; margin-bottom:10px; }
-      .metric { border:1px solid #ececec; border-radius:8px; padding:9px; background:#fafafa; margin-top:8px; }
-      .metric span { display:block; color:#737373; font-size:10px; margin-bottom:3px; }
-      .metric strong { display:block; font-size:13px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-      .trend { margin-top:8px; border:1px solid #ececec; border-radius:8px; padding:9px; background:#fafafa; }
-      .trend span { display:block; color:#737373; font-size:10px; margin-bottom:7px; }
-      .track { height:7px; border-radius:999px; background:#e6e6e6; overflow:hidden; }
-      .fill { height:100%; border-radius:999px; background:#22a06b; width:24%; transition:width .18s ease, background-color .18s ease; }
-      .trend[data-risk="long"] .fill { width:46%; background:#d69e2e; }
-      .trend[data-risk="organize"] .fill { width:70%; background:#e87924; }
-      .trend[data-risk="high"] .fill { width:88%; background:#d14343; }
-      .trend[data-risk="unreliable"] .track { background:#eeeeee; }
-      .trend[data-risk="unreliable"] .fill { width:100%; background:#9a9a9a; opacity:.45; }
-      .notice { margin-top:10px; border-radius:8px; padding:9px 10px; background:#fff7ed; color:#8a4b12; border:1px solid #fed7aa; }
-      .learning-note { margin-top:8px; border-radius:8px; padding:8px 9px; background:#f5f7f7; color:#5f6664; border:1px solid #e6e9e8; font-size:11px; }
-      .pending { margin-top:10px; border-radius:8px; padding:10px; background:#fff8e6; border:1px solid #f4d58d; }
-      .pending[hidden], .notice[hidden], .learning-note[hidden] { display:none; }
+      .title { font-size:14px; font-weight:760; margin:1px 2px 8px; letter-spacing:-.01em; }
+      .metric { border:1px solid #ececec; border-radius:9px; padding:8px 10px; background:#fafafa; margin-top:7px; display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:38px; }
+      .metric span { color:#777; font-size:10px; }
+      .metric strong { font-size:13px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .trend { margin-top:7px; border-radius:13px; padding:9px 11px 8px; background:linear-gradient(180deg,#252527,#222224); color:#fff; box-shadow:inset 0 0 0 1px rgba(255,255,255,.045),0 7px 18px rgba(0,0,0,.1); }
+      .risk-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+      .risk-head span { color:rgba(255,255,255,.6); font-size:10px; }
+      .risk-head strong { color:#fff; font-size:13px; font-weight:700; }
+      .track { --risk-position:0%; position:relative; height:20px; border-radius:999px; background:linear-gradient(90deg,#38ad70 0%,#82bf60 28%,#d8bd51 55%,#e58b49 77%,#cf5961 100%); box-shadow:inset 0 1px 2px rgba(0,0,0,.18),inset 0 0 0 1px rgba(255,255,255,.07); }
+      .track::after { content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none; background:linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,0) 58%,rgba(0,0,0,.035)); }
+      .thumb { position:absolute; z-index:2; top:50%; left:clamp(11px,var(--risk-position),calc(100% - 11px)); width:22px; height:22px; border-radius:50%; transform:translate(-50%,-50%); background:#fff; border:1px solid rgba(0,0,0,.06); box-shadow:0 2px 6px rgba(0,0,0,.24),0 0 0 1px rgba(255,255,255,.3); transition:left .28s cubic-bezier(.2,.75,.25,1); }
+      .risk-scale { display:flex; justify-content:space-between; margin-top:5px; padding:0 1px; color:rgba(255,255,255,.46); font-size:9px; }
+      .trend[data-risk="unreliable"] .track { filter:grayscale(1); opacity:.45; }
+      .trend[data-risk="unreliable"] .thumb { background:#d8d8d8; }
+      .pending { margin-top:10px; border-radius:10px; padding:10px; background:#fff8e6; border:1px solid #f4d58d; }
+      .pending[hidden] { display:none; }
       .section[hidden] { display:none; }
       .consent-copy { margin:0; padding-left:18px; color:#444; }
       .consent-copy li { margin:6px 0; }
-      .actions { display:grid; grid-template-columns:1fr; gap:7px; margin-top:10px; }
-      button.action { min-height:34px; border:1px solid #dedede; background:#fff; border-radius:8px; padding:7px 9px; font:600 11px/1.25 Inter,ui-sans-serif,system-ui; color:#282828; cursor:pointer; text-align:center; }
-      button.action:hover:not(:disabled) { background:#f5f5f5; }
+      .actions { display:grid; grid-template-columns:1fr; gap:6px; margin-top:9px; }
+      button.action { min-height:32px; border:1px solid #e0e0e0; background:#fff; border-radius:8px; padding:6px 9px; font:600 11px/1.25 Inter,ui-sans-serif,system-ui; color:#303030; cursor:pointer; text-align:center; transition:background .14s ease,border-color .14s ease,transform .08s ease; }
+      button.action:hover:not(:disabled) { background:#f7f7f7; border-color:#d7d7d7; }
+      button.action:active:not(:disabled) { transform:translateY(1px); }
       button.action:disabled { opacity:.45; cursor:not-allowed; }
-      button.primary { background:#171717; color:#fff; border-color:#171717; }
-      button.primary:hover:not(:disabled) { background:#2b2b2b; }
+      button.action[hidden] { display:none; }
+      button.primary { min-height:34px; background:#181818; color:#fff; border-color:#181818; }
+      button.primary:hover:not(:disabled) { background:#242424; border-color:#242424; }
       .footer { margin-top:10px; color:#858585; font-size:10px; }
       .toast { max-width:320px; border-radius:8px; padding:7px 10px; background:#171717; color:#fff; font:600 11px system-ui; box-shadow:0 8px 25px rgba(0,0,0,.2); }
       .toast[hidden] { display:none; }
@@ -314,70 +304,77 @@ function template(): string {
       <div class="panel" data-role="panel" hidden>
         <div class="section" data-role="monitor-panel">
           <div class="title">LongChat Guard</div>
-          <div class="metric"><span>当前会话长度</span><strong data-value="current-load">学习中</strong></div>
-          <div class="trend" data-role="trend"><span>本地风险趋势</span><div class="track"><div class="fill"></div></div></div>
-          <div class="metric"><span>学习状态</span><strong data-value="learning">学习中</strong></div>
-          <div class="learning-note" data-role="learning-note"></div>
-          <div class="notice" data-role="coverage-note" hidden></div>
+          <div class="trend" data-role="trend"><div class="risk-head"><span>${t('labelRisk', 'Risk')}</span><strong data-value="current-load">${t('riskLearning', 'Learning')}</strong></div><div class="track" data-role="risk-track"><div class="thumb"></div></div><div class="risk-scale"><span>${t('labelSafe', 'Safe')}</span><span>${t('labelHighRisk', 'High risk')}</span></div></div>
+          <div class="metric"><span>${t('labelLearning', 'Learning')}</span><strong data-value="learning">${t('learningLearning', 'Learning')}</strong></div>
           <div class="pending" data-role="pending-confirm" hidden>
-            <strong>刚才可能触发了当前会话长度上限。</strong>
+            <strong>${t('limitQuestion', 'Did this chat reach the limit?')}</strong>
             <div class="actions">
-              <button class="action primary" data-action="confirm-yes">是，会话长度上限</button>
-              <button class="action" data-action="confirm-no">不是</button>
+              <button class="action primary" data-action="confirm-yes">${t('limitYes', 'Yes')}</button>
+              <button class="action" data-action="confirm-no">${t('limitNo', 'No')}</button>
             </div>
           </div>
           <div class="actions">
-            <button class="action primary" data-action="copy">复制续接提示词</button>
-            <button class="action" data-action="scan-history">完整扫描当前会话</button>
-            <button class="action" data-action="learn">重新学习</button>
-            <button class="action" data-action="mute">本会话暂不提醒</button>
+            <button class="action primary" data-action="copy">${t('actionCopyContinuation', 'Copy continuation prompt')}</button>
+            <button class="action" data-action="scan-history">${t('actionScanCurrent', 'Scan current chat')}</button>
+            <button class="action" data-action="learn">${t('actionRelearn', 'Relearn')}</button>
+            <button class="action" data-action="mute">${t('actionMute', 'Mute this chat')}</button>
           </div>
-          <div class="footer">仅作本地趋势判断，不代表 OpenAI 官方额度或上限。</div>
         </div>
         <div class="section" data-role="consent-panel" hidden>
-          <div class="title">启用本地长会话预警</div>
+          <div class="title">${t('consentTitle', 'Enable local long-chat alerts')}</div>
           <ul class="consent-copy">
-            <li>${PRIVACY_CONSENT_COPY[0]}</li>
-            <li>${PRIVACY_CONSENT_COPY[1]}</li>
-            <li>${PRIVACY_CONSENT_COPY[2]}</li>
-            <li>${PRIVACY_CONSENT_COPY[3]}</li>
+            <li>${t('consentLocalRead', PRIVACY_CONSENT_COPY[0])}</li>
+            <li>${t('consentNoUpload', PRIVACY_CONSENT_COPY[1])}</li>
+            <li>${t('consentNoRawPersist', PRIVACY_CONSENT_COPY[2])}</li>
+            <li>${t('consentDeleteLocal', PRIVACY_CONSENT_COPY[3])}</li>
           </ul>
           <div class="actions">
-            <button class="action primary" data-action="consent-accept">${PRIVACY_CONSENT_COPY[4]}</button>
-            <button class="action" data-action="consent-decline">${PRIVACY_CONSENT_COPY[5]}</button>
+            <button class="action primary" data-action="consent-accept">${t('consentAccept', PRIVACY_CONSENT_COPY[4])}</button>
+            <button class="action" data-action="consent-decline">${t('consentDecline', PRIVACY_CONSENT_COPY[5])}</button>
           </div>
         </div>
       </div>
-      <button class="pill" data-role="pill" aria-expanded="false" aria-label="打开 ChatGPT 长会话提醒">
+      <button class="pill" data-role="pill" aria-expanded="false" aria-label="${t('pillAria', 'Open LongChat Guard')}">
         <span class="dot" data-role="status-dot"></span>
-        <span data-role="status-text">正在监测</span>
+        <span data-role="status-text">${t('pillMonitoring', 'Monitoring')}</span>
       </button>
     </div>
   `
 }
 
-function learningLabel(mode: GuardUiModel['learningMode']): string {
-  if (mode === 'calibrated') return '已学习'
-  return '学习中'
+function learningLabel(stage: LearningStage): string {
+  if (stage === 'initial') return t('learningInitial', 'Initial setup')
+  if (stage === 'calibrating') return t('learningCalibrating', 'Calibrating')
+  if (stage === 'stable') return t('learningStable', 'Stable')
+  return t('learningLearning', 'Learning')
+}
+
+function clampTrendScore(score: number): number {
+  if (!Number.isFinite(score)) return 0
+  return Math.max(0, Math.min(100, score))
 }
 
 function statusLabel(model: GuardUiModel): string {
   if (model.riskLevel === 'unreliable' && model.learningMode === 'calibrated') {
-    return '正在恢复监测'
+    return t('riskRecognizing', 'Checking')
   }
-  return LABELS[model.riskLevel]
+  if (model.riskLevel === 'normal') return t('riskNormal', 'Normal')
+  if (model.riskLevel === 'long') return t('riskLong', 'Long')
+  if (model.riskLevel === 'organize') return t('riskOrganize', 'Near risk')
+  if (model.riskLevel === 'high') return t('riskHigh', 'High risk')
+  return t('riskLearning', 'Learning')
 }
 
 function currentLengthLabel(
   level: RiskLevel,
   learningMode: GuardUiModel['learningMode']
 ): string {
-  if (level === 'normal') return '正常范围'
-  if (level === 'long') return '偏长'
-  if (level === 'organize') return '建议整理'
-  if (level === 'high') return '接近风险区'
-  if (learningMode === 'calibrated') return '正在识别'
-  return '学习中'
+  if (level === 'normal') return t('riskNormal', 'Normal')
+  if (level === 'long') return t('riskLong', 'Long')
+  if (level === 'organize') return t('riskOrganize', 'Near risk')
+  if (level === 'high') return t('riskHigh', 'High risk')
+  if (learningMode === 'calibrated') return t('riskRecognizing', 'Checking')
+  return t('riskLearning', 'Learning')
 }
 
 export function shouldClosePanelForPointerPath(

@@ -1,5 +1,5 @@
 import type { BackgroundRequest, BackgroundResponse } from '../background/coordinator'
-import { summarizeGeneration } from '../core/calibration'
+import { CALIBRATION_DEFAULTS, summarizeGeneration } from '../core/calibration'
 import { WebCryptoFingerprinter } from '../core/fingerprinter'
 import { parseConversationIdFromUrl, analyzePageSnapshot } from '../core/page-adapter'
 import type { PageMessageSnapshot } from '../core/page-adapter'
@@ -25,13 +25,62 @@ import {
 } from '../core/warning-controller'
 import { createCoalescedAsyncRunner } from './coalesced-runner'
 import { readPageSnapshot } from './dom-reader'
-import { scanConversationHistory } from './history-scanner'
-import { GuardUi } from './ui'
+import {
+  scanConversationHistory,
+  type HistoryScanFailureReason,
+  type HistoryScanResult
+} from './history-scanner'
+import { GuardUi, type LearningStage } from './ui'
+import { t } from './i18n'
 
 const estimator = new HeuristicTokenEstimator()
 
-const CONTINUATION_PROMPT =
-  '请总结当前对话，以便我在一个新的 ChatGPT 对话中无缝继续。请保留：当前目标、已完成工作、已经确认的决定、重要约束、关键数据/文件/代码状态、尚未解决的问题、容易踩坑的地方，以及下一步建议。不要省略会影响后续继续工作的上下文。'
+const CONTINUATION_PROMPT = t(
+  'continuationPrompt',
+  'Summarize the current conversation so I can continue seamlessly in a new ChatGPT chat. Preserve: the current goal, completed work, confirmed decisions, important constraints, key data/files/code state, unresolved issues, pitfalls, and next steps. Do not omit context that would affect continuation.'
+)
+
+const SCAN_DIAGNOSTICS_KEY = 'longChatGuardLastScanDiagnostics'
+const SCAN_DIAGNOSTICS_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+export interface StoredScanDiagnostics {
+  version: 2
+  recordedAt: number
+  reason: HistoryScanFailureReason
+  stages: Array<Pick<HistoryScanResult['diagnostics'][number],
+    'phase' | 'scrollTop' | 'scrollHeight' | 'clientHeight' | 'logicalTop' |
+    'scrollMode' | 'pageMessageCount' | 'observedCount' | 'totalMessageCount' | 'reason'
+  >>
+  exception?: string
+}
+
+export function buildStoredScanDiagnostics(
+  result: HistoryScanResult,
+  recordedAt: number,
+  exception?: string
+): StoredScanDiagnostics | undefined {
+  if (result.complete) return undefined
+  return {
+    version: 2,
+    recordedAt,
+    reason: result.reason ?? 'scan_limit_reached',
+    stages: result.diagnostics.slice(-6),
+    ...(exception ? { exception: exception.slice(0, 160) } : {})
+  }
+}
+
+export function shouldDiscardStoredScanDiagnostics(
+  value: unknown,
+  now: number
+): boolean {
+  if (!value || typeof value !== 'object') return true
+  const saved = value as { version?: unknown; recordedAt?: unknown }
+  return (
+    saved.version !== 2 ||
+    typeof saved.recordedAt !== 'number' ||
+    now - saved.recordedAt > SCAN_DIAGNOSTICS_TTL_MS
+  )
+}
 
 export async function startGuard(): Promise<void> {
   if (location.hostname !== 'chatgpt.com') return
@@ -47,6 +96,7 @@ export async function startGuard(): Promise<void> {
   let observedNewUserDuringRun = false
   let monitoringStarted = false
   let historyScanInProgress = false
+  let focusPendingConfirmationAfterRender = false
   const seenUserKeys = new Set<string>()
   let completionTracker = new ResponseCompletionTracker()
 
@@ -59,9 +109,7 @@ export async function startGuard(): Promise<void> {
     if (!generation) return 'cold'
     const summary = summarizeGeneration(generation)
     if (summary.usingWarmStartPrior) return 'warm'
-    return summary.failureCeiling !== undefined || summary.safeFloorEvidenceReady
-      ? 'calibrated'
-      : 'cold'
+    return summary.independentConversations > 0 ? 'calibrated' : 'cold'
   }
 
   const runAction = async (
@@ -75,7 +123,7 @@ export async function startGuard(): Promise<void> {
       refresh()
       return true
     } catch {
-      ui.showToast('操作失败，请稍后重试')
+      ui.showToast(t('toastActionFailed', 'Action failed. Please try again.'))
       return false
     }
   }
@@ -111,8 +159,8 @@ export async function startGuard(): Promise<void> {
   const ui = new GuardUi({
     onCopyContinuation: () => {
       void copyText(CONTINUATION_PROMPT)
-        .then(() => ui.showToast('续接提示词已复制'))
-        .catch(() => ui.showToast('复制失败，请手动重试'))
+        .then(() => ui.showToast(t('toastContinuationCopied', 'Continuation prompt copied')))
+        .catch(() => ui.showToast(t('toastCopyFailed', 'Copy failed. Please try again.')))
     },
     onScanHistory: () => {
       void runHistoryScan()
@@ -125,7 +173,7 @@ export async function startGuard(): Promise<void> {
             reason: 'recalibrate',
             observedAt: Date.now()
           }),
-        '已重新学习当前环境'
+        t('toastRelearned', 'Learning restarted for the current environment')
       )
     },
     onToggleMute: () => {
@@ -139,7 +187,9 @@ export async function startGuard(): Promise<void> {
             conversationKey: key,
             patch: { muted: !control.muted }
           }),
-        control.muted ? '已恢复本会话提醒' : '本会话已静音'
+        control.muted
+          ? t('toastRemindersRestored', 'Alerts restored for this chat')
+          : t('toastConversationMuted', 'Alerts muted for this chat')
       )
     },
     onConfirmFailure: (accepted) => {
@@ -153,7 +203,9 @@ export async function startGuard(): Promise<void> {
             accepted,
             observedAt: Date.now()
           }),
-        accepted ? '已作为会话长度样本学习' : '已忽略这次错误'
+        accepted
+          ? t('toastFailureLearned', 'Conversation-limit sample learned')
+          : t('toastFailureIgnored', 'This error was ignored')
       )
     },
     onAcceptPrivacyConsent: () => {
@@ -164,7 +216,7 @@ export async function startGuard(): Promise<void> {
             accepted: true,
             observedAt: Date.now()
           }),
-        '已启用本地长会话预警'
+        t('toastMonitoringEnabled', 'Local long-chat alerts enabled')
       ).then((saved) => {
         if (saved) startMonitoring()
       })
@@ -177,12 +229,38 @@ export async function startGuard(): Promise<void> {
             accepted: false,
             observedAt: Date.now()
           }),
-        '暂不开启'
+        t('toastMonitoringDeferred', 'Not enabled')
       ).then((saved) => {
         if (saved) ui.showDisabled()
       })
     }
   })
+
+  const storeScanDiagnostics = async (
+    result: HistoryScanResult,
+    exception?: string
+  ): Promise<void> => {
+    try {
+      const payload = buildStoredScanDiagnostics(result, Date.now(), exception)
+      if (!payload) {
+        await chrome.storage.local.remove(SCAN_DIAGNOSTICS_KEY)
+        return
+      }
+      await chrome.storage.local.set({ [SCAN_DIAGNOSTICS_KEY]: payload })
+    } catch {
+      // Diagnostics are optional and must never block the user flow.
+    }
+  }
+
+  try {
+    const savedDiagnostics = await chrome.storage.local.get(SCAN_DIAGNOSTICS_KEY)
+    const saved = savedDiagnostics[SCAN_DIAGNOSTICS_KEY]
+    if (saved && shouldDiscardStoredScanDiagnostics(saved, Date.now())) {
+      await chrome.storage.local.remove(SCAN_DIAGNOSTICS_KEY)
+    }
+  } catch {
+    // Diagnostics are optional and must never block monitoring startup.
+  }
 
   const processPage = async (): Promise<void> => {
     if (historyScanInProgress) return
@@ -261,7 +339,7 @@ export async function startGuard(): Promise<void> {
       }
       initializedUserBaseline = true
 
-      // V1 intentionally ignores unsent composer drafts for risk/calibration.
+      // 2.x intentionally ignores unsent composer drafts for risk/calibration.
       const composerTokenEstimate = 0
       let response = await sendBackground({
         type: 'guard.observeWindow',
@@ -358,6 +436,7 @@ export async function startGuard(): Promise<void> {
       }
 
       const summary = summarizeGeneration(generation)
+      const learningStage = deriveLearningStage(summary)
       const control = latestState.conversationControls[conversationKey] ?? {}
       const userTurn = countActiveUserTurns(persistedSnapshot)
       const displayedLevel = stabilizeRiskLevel(
@@ -392,20 +471,25 @@ export async function startGuard(): Promise<void> {
       ui.update({
         conversationKey,
         riskLevel: displayedLevel,
-        riskScore: latestRisk.score,
+        trendScore: latestRisk.trendScore,
         estimatedLoad: persistedSnapshot.currentEstimatedLoad,
-        coverage: persistedSnapshot.coverageState,
         learningMode: summary.usingWarmStartPrior
           ? 'warm'
-          : summary.failureCeiling !== undefined || summary.safeFloorEvidenceReady
+          : summary.independentConversations > 0
             ? 'calibrated'
             : 'cold',
+        learningStage,
+        showScanAction: shouldShowScanAction(summary),
         muted: effectiveControl.muted ?? false,
-        pendingFailureConfirmation,
-        showIncompleteHistoryNote: persistedSnapshot.coverageState !== 'complete'
+        pendingFailureConfirmation
       })
 
-      if (attention) ui.drawAttention()
+      if (pendingFailureConfirmation && focusPendingConfirmationAfterRender) {
+        focusPendingConfirmationAfterRender = false
+        ui.focusPendingConfirmation()
+      } else if (attention) {
+        ui.drawAttention()
+      }
     } catch {
       ui.showUnavailable(currentLearningMode())
     }
@@ -423,14 +507,21 @@ export async function startGuard(): Promise<void> {
         return conversationId ? `chatgpt:${conversationId}` : undefined
       })()
     if (!conversationKey) {
-      ui.showToast('当前会话已打开，但暂未识别到会话信息。请刷新页面后重试')
+      ui.showToast(
+        t(
+          'toastNoConversation',
+          'Chat is open, but its conversation information is not available yet. Refresh and try again.'
+        )
+      )
       return
     }
 
     historyScanInProgress = true
+    focusPendingConfirmationAfterRender = false
     ui.setHistoryScanBusy(true)
     try {
       const result = await scanConversationHistory(document, observePageMessages)
+      await storeScanDiagnostics(result)
       if (!result.complete) {
         ui.showToast(historyScanFailureMessage(result.reason))
         return
@@ -482,15 +573,71 @@ export async function startGuard(): Promise<void> {
       latestState = response.state
       latestConversationKey = conversationKey
 
-      if (result.attachmentCount > 0) {
-        ui.showToast('扫描完成，但含附件内容，暂不作为强校准样本')
-      } else if (!parserHealthy) {
-        ui.showToast('扫描完成，但部分消息角色未确认，已降低学习权重')
-      } else {
-        ui.showToast('完整扫描完成，已确认当前会话历史')
+      const assistantGrowthHistory = result.observedMessages
+        .filter((message) => message.role === 'assistant' && message.tokenEstimate > 0)
+        .map((message) => message.tokenEstimate)
+        .slice(-24)
+      if (assistantGrowthHistory.length > 0) {
+        const growthResponse = await sendBackground({
+          type: 'guard.seedGrowthHistory',
+          event: {
+            conversationKey,
+            tokenCounts: assistantGrowthHistory,
+            observedAt: now
+          }
+        })
+        latestState = growthResponse.state
       }
-    } catch {
-      ui.showToast('完整扫描未完成，请保持会话页面打开后重试')
+
+      const failureResponse = await sendBackground({
+        type: 'guard.recordFailure',
+        event: {
+          conversationKey,
+          errorKind: 'conversation_length_limit',
+          confidence: 'medium',
+          composerTokenEstimate: 0,
+          observedAt: now
+        }
+      })
+      latestState = failureResponse.state
+      const activeGeneration = latestState.generations.find(
+        (item) => item.id === latestState.settings.generationId
+      )
+      const awaitingLimitConfirmation =
+        activeGeneration?.pendingFailureConfirmations?.some(
+          (item) => item.conversationKey === conversationKey
+        ) ?? false
+
+      if (awaitingLimitConfirmation) {
+        focusPendingConfirmationAfterRender = true
+        ui.showToast(
+          t('toastScanConfirm', 'Scan complete. Confirm whether this chat reached the length limit.')
+        )
+      } else if (result.attachmentCount > 0) {
+        ui.showToast(
+          t('toastScanAttachments', 'Scan complete. Attachment-related data was kept with lower weight.')
+        )
+      } else if (!parserHealthy) {
+        ui.showToast(
+          t('toastScanRoleUncertain', 'Scan complete. Some message roles were uncertain, so learning weight was reduced.')
+        )
+      } else {
+        ui.showToast(t('toastScanComplete', 'Full scan complete'))
+      }
+    } catch (error) {
+      const exception = error instanceof Error ? error.message : String(error)
+      await storeScanDiagnostics({
+        complete: false,
+        reason: 'scan_limit_reached',
+        observedMessages: [],
+        messageCount: 0,
+        attachmentCount: 0,
+        unknownRoleCount: 0,
+        diagnostics: []
+      }, exception)
+      ui.showToast(
+        t('toastScanFailed', 'Full scan did not finish. Please try again later.')
+      )
     } finally {
       historyScanInProgress = false
       ui.setHistoryScanBusy(false)
@@ -501,15 +648,37 @@ export async function startGuard(): Promise<void> {
   function historyScanFailureMessage(
     reason: import('./history-scanner').HistoryScanFailureReason | undefined
   ): string {
-    if (reason === 'no_scroll_container') return '没有找到会话滚动区域，请刷新页面后再试'
-    if (reason === 'no_messages') return '暂时没有读取到会话消息，请等待页面加载完成后再试'
-    if (reason === 'head_not_stable') return '最早的历史消息还在加载，请稍等几秒后再试'
-    if (reason === 'tail_not_stable') return '会话末尾仍在变化，请等待页面稳定后再试'
-    if (reason === 'window_alignment_failed') {
-      return '部分历史消息没有连续读到，已停止本次学习以避免误差'
+    if (reason === 'no_scroll_container') {
+      return t('scanNoScroll', 'Conversation scroll area was not found. Refresh and try again.')
     }
-    if (reason === 'scan_limit_reached') return '会话很长，本次扫描未完成，请再试一次'
-    return '未确认完整历史，本次不会作为完整学习样本'
+    if (reason === 'no_messages') {
+      return t(
+        'scanNoMessages',
+        'No conversation messages are available yet. Wait for the page to finish loading.'
+      )
+    }
+    if (reason === 'head_not_stable') {
+      return t('scanHeadLoading', 'Older messages are still loading. Wait a few seconds and try again.')
+    }
+    if (reason === 'tail_not_stable') {
+      return t(
+        'scanTailChanging',
+        'The end of the conversation is still changing. Wait for the page to settle.'
+      )
+    }
+    if (reason === 'window_alignment_failed') {
+      return t(
+        'scanAlignmentFailed',
+        'Part of the history could not be read continuously, so this learning pass was stopped.'
+      )
+    }
+    if (reason === 'scan_limit_reached') {
+      return t('scanLimitReached', 'This chat is very long and the scan did not finish. Try once more.')
+    }
+    return t(
+      'scanIncomplete',
+      'Complete history was not confirmed, so this scan will not be used as a complete learning sample.'
+    )
   }
 
   const markNewChatSend = (target: EventTarget | null): void => {
@@ -589,6 +758,28 @@ export function canStartMonitoring(settings: {
     generationId: 'test',
     ...settings
   })
+}
+
+export function deriveLearningStage(
+  summary: ReturnType<typeof summarizeGeneration>
+): LearningStage {
+  if (summary.independentConversations <= 0) return 'learning'
+  if (summary.independentConversations === 1) return 'initial'
+  const stable =
+    summary.safeBoundary !== undefined &&
+    summary.failureBoundary !== undefined &&
+    summary.turnBuffer > 0 &&
+    summary.confirmedSafeConversations >=
+      CALIBRATION_DEFAULTS.minConfirmedSafeConversationsForStable &&
+    summary.independentConversations >=
+      CALIBRATION_DEFAULTS.minIndependentBoundaryConversationsForStable
+  return stable ? 'stable' : 'calibrating'
+}
+
+export function shouldShowScanAction(
+  summary: ReturnType<typeof summarizeGeneration>
+): boolean {
+  return summary.confirmedFailureConversations === 0
 }
 
 async function sendBackground(

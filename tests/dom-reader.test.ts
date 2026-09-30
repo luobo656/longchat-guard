@@ -24,6 +24,53 @@ describe('chatgpt DOM reader', () => {
     expect(messages.map((message) => message.text)).toEqual(['hello', 'world'])
   })
 
+  it('reads current data-turn sections when author-role attributes are absent', () => {
+    const doc = fakeDocument([
+      el('section', { 'data-turn': 'user' }, [], 'hello'),
+      el('section', { 'data-turn': 'assistant' }, [], 'world')
+    ])
+
+    const messages = readMessages(doc as unknown as Document)
+
+    expect(messages.map((message) => [message.role, message.text])).toEqual([
+      ['user', 'hello'],
+      ['assistant', 'world']
+    ])
+  })
+
+  it('reads the grouped data-turn-key renderer without mixing user and assistant text', () => {
+    const user = el('div', { 'data-user-message-bubble': '' }, [], 'hello')
+    const assistant = el(
+      'div',
+      { 'data-markdown-text-style': 'assistant-message' },
+      [],
+      'world'
+    )
+    const marker = el('h4', { 'data-conversation-role': 'assistant' })
+    const answer = el('div', { 'data-content-search-unit-key': 'answer' }, [marker, assistant])
+    const group = el('div', { 'data-turn-key': 'turn-abc' }, [user, answer])
+    const doc = fakeDocument([group])
+
+    const messages = readMessages(doc as unknown as Document)
+
+    expect(messages.map((message) => [message.role, message.text, message.stableHint])).toEqual([
+      ['user', 'hello', 'turn-key:turn-abc:user'],
+      ['assistant', 'world', 'turn-key:turn-abc:assistant']
+    ])
+  })
+
+  it('uses an assistant content unit when the grouped renderer has only a role marker', () => {
+    const marker = el('h4', { 'data-conversation-role': 'assistant' })
+    const paragraph = el('p', {}, [], 'answer text')
+    const answer = el('div', { 'data-content-search-unit-key': 'answer' }, [marker, paragraph])
+    const group = el('div', { 'data-turn-key': 'turn-only-assistant' }, [answer])
+    const doc = fakeDocument([group])
+
+    expect(readMessages(doc as unknown as Document).map((message) => [message.role, message.text])).toEqual([
+      ['assistant', 'answer text']
+    ])
+  })
+
   it('does not treat conversation-turn data-testid as a conversation id', () => {
     const doc = fakeDocument([
       el('div', { 'data-testid': 'conversation-turn-3' }, [], 'message')
@@ -127,6 +174,45 @@ describe('chatgpt DOM reader', () => {
     const doc = fakeDocument([scroll])
 
     expect(findConversationScrollContainer(doc as unknown as Document)).toBe(scroll)
+  })
+
+  it('does not select an unrelated scrollable sidebar when it is not an ancestor of messages', () => {
+    const message = el('div', { 'data-message-author-role': 'assistant' }, [], 'tail')
+    const messageLayer = el('div', {}, [message])
+    const sidebar = el('nav', { class: 'overflow-y-auto' }, [])
+    sidebar.scrollHeight = 3200
+    sidebar.clientHeight = 800
+    sidebar.scrollTop = 1200
+    const main = el('main', {}, [messageLayer])
+    const doc = fakeDocument([sidebar, main])
+
+    expect(findConversationScrollContainer(doc as unknown as Document)).toBeUndefined()
+    expect(sidebar.scrollTop).toBe(1200)
+  })
+
+  it('prefers the explicit ChatGPT timeline scroll root over unrelated scrollable regions', () => {
+    const turn = el('div', { 'data-turn-key': 'turn-1' }, [], 'hello')
+    const timeline = el('div', { 'data-app-action-timeline-scroll': '' }, [turn])
+    timeline.scrollHeight = 2600
+    timeline.clientHeight = 800
+    timeline.scrollTop = 0
+    const sidebar = el('nav', { class: 'overflow-y-auto' }, [])
+    sidebar.scrollHeight = 5000
+    sidebar.clientHeight = 800
+    sidebar.scrollTop = 1500
+    const doc = fakeDocument([sidebar, timeline])
+
+    expect(findConversationScrollContainer(doc as unknown as Document)).toBe(timeline)
+    expect(sidebar.scrollTop).toBe(1500)
+  })
+
+  it('uses a conversation-turn test id on the message element as a stable hint', () => {
+    const turn = el('article', { 'data-testid': 'conversation-turn-17' }, [], 'hello')
+    const doc = fakeDocument([turn])
+
+    expect(readMessages(doc as unknown as Document)[0]?.stableHint).toBe(
+      'conversation-turn:conversation-turn-17'
+    )
   })
 
   it('uses a conversation-turn ancestor as a stable message hint', () => {

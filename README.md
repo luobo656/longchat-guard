@@ -1,44 +1,37 @@
 # LongChat Guard
 
-> ChatGPT 长会话本地风险预警器 · Local long-conversation warning for `chatgpt.com`
+> **LongChat Guard · 长会话预警** — local, privacy-first long-conversation risk warnings for `chatgpt.com`
 
 [![CI](https://github.com/luobo656/longchat-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/luobo656/longchat-guard/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Website](https://img.shields.io/badge/Website-LongChat_Guard-23b69d)](https://luobo656.github.io/longchat-guard/)
+[![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Install-4285F4)](https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop)
 
 **Official project site:** https://luobo656.github.io/longchat-guard/ · [中文页面](https://luobo656.github.io/longchat-guard/zh/)
+**Install:** [Chrome Web Store](https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop) · **Source:** https://github.com/luobo656/longchat-guard
 
-LongChat Guard 是一个面向 Chrome / Edge 的 Manifest V3 浏览器扩展，用于 **ChatGPT 长会话预警、对话长度趋势监控、上下文风险提醒（context window warning）和长聊天整理/续接**。它不会读取 OpenAI 官方“剩余额度”，也不宣称知道精确会话上限；它只在浏览器本地判断当前 ChatGPT 会话的长度趋势，并结合本机历史校准，在会话逐渐接近风险区时给出低打扰提醒。
+LongChat Guard 是一个面向 Chrome / Edge 的开源 Manifest V3 扩展，用于 **ChatGPT 长会话预警、长对话风险提醒和续接**。2.0 采用本地经验模型：根据已确认安全的会话、已确认达到长度上限的会话，以及你平时 Assistant 单轮回复的增长情况，判断当前长会话离本机经验风险区域还有多远。它不会读取 OpenAI 官方“剩余额度”，也不宣称知道精确会话上限。
 
-If you are looking for a **ChatGPT long conversation warning**, **conversation length monitor**, **context window warning**, **long chat guard**, **ChatGPT context monitor**, or a **privacy-first ChatGPT Chrome / Edge extension**, LongChat Guard is designed for that use case. It is **not** an official token-limit meter and does not claim exact OpenAI quotas.
+LongChat Guard is an open-source, local-first Chrome/Edge extension for **ChatGPT long-conversation warnings**. It learns empirical browser-side safe/failure boundaries and typical assistant-reply growth, then gives simple risk states and a continuation workflow. It is **not** an official OpenAI quota or token-limit meter.
 
 ![LongChat Guard icon](./public/icons/icon128.png)
 
 ## 核心功能
 
-- 当前会话长度趋势：只显示“正常范围 / 偏长 / 建议整理 / 接近风险区”等模糊状态，不展示 token 数、百分比或所谓官方额度。
-- 本地个体校准：根据本机历史使用情况学习风险边界。
-- 长会话预警：接近已学习风险区域时提醒整理或续接。
-- 续接提示词：一键复制固定的续接提示词。
-- 重新学习：环境变化时开启新的本地学习代际。
-- 本会话暂不提醒：避免重复打扰。
-- 轻量交互：点击页面其他位置或按 `Esc` 即可收起面板。
-- 首次隐私确认：用户主动同意之前，不读取或处理 ChatGPT 会话正文。
+- **一眼看懂的风险位置**：完整彩色风险轨道 + 当前位置圆点，只显示正常、偏长、接近风险、高风险等简短状态。
+- **本地自动学习**：从已确认安全边界、已确认失败边界和典型回复增长中持续校准，不依赖固定“魔法阈值”。
+- **长会话续接**：一键复制结构化续接提示词，把目标、决定、约束、代码/文件状态和待办带到新会话。
+- **旧会话辅助学习**：尚未建立失败边界时，可完整扫描一个已达到上限的历史会话并由用户确认。
+- **自动适应环境变化**：出现多个独立矛盾证据时开启新的学习代际，而不是永久相信旧边界。
+- **低打扰控制**：支持重新学习和本会话静音。
+- **三语本地化**：English / 简体中文 / 繁體中文；canonical brand 始终是 **LongChat Guard**。
+- **明确隐私同意**：用户主动同意前，不读取或处理 ChatGPT 会话正文。
 
-## 适合哪些搜索需求
+## 它解决什么问题？
 
-LongChat Guard 覆盖的核心问题可以概括为：
+当 ChatGPT 对话持续很久时，用户通常真正想知道的不是一个未经证实的 token 数，而是：**现在是否值得整理、总结或开启新会话？** LongChat Guard 给这个决策提供本地经验信号。
 
-- ChatGPT 长会话提醒 / ChatGPT 长对话预警
-- ChatGPT 会话长度监控 / conversation length monitor
-- ChatGPT 上下文窗口提醒 / context window warning
-- ChatGPT 对话过长提醒 / long chat warning
-- ChatGPT 上下文风险 / context risk warning
-- Chrome ChatGPT extension / Edge ChatGPT extension
-- local-first ChatGPT extension / privacy-first ChatGPT extension
-- long conversation guard / chat context monitor / conversation guard
-
-这些词描述的是同一类使用场景，不代表本项目能够读取 OpenAI 官方 token 额度或精确 context-window 上限。
+常见表达包括 ChatGPT 长会话预警、长对话提醒、conversation length monitor、context window warning、long chat guard 和 privacy-first ChatGPT extension。这些都是使用场景描述，不代表本项目能够读取 OpenAI 官方 token 额度或精确 context-window 上限。
 
 ## 隐私与权限
 
@@ -117,7 +110,7 @@ npm run build
 
 ## 项目边界
 
-V1 只面向 `chatgpt.com` 网页端，不包含：
+LongChat Guard 2.x 只面向 `chatgpt.com` 网页端，不包含：
 
 - 下一轮 token 预测
 - 精确 token / K 值 / 百分比 / 官方剩余额度
@@ -128,9 +121,9 @@ V1 只面向 `chatgpt.com` 网页端，不包含：
 
 ## 品牌
 
-公开品牌名为 **LongChat Guard**。图标使用原创高对比几何构图：深青绿底板、白色聊天气泡、橙色守护盾牌与白色对勾，专门针对浏览器工具栏 16px / 32px 小尺寸优化。
+canonical brand 始终是 **LongChat Guard**，品牌本身不翻译。英文展示名为 **LongChat Guard**，简体中文为 **LongChat Guard · 长会话预警**，繁体中文为 **LongChat Guard · 長對話預警**。图标使用原创高对比几何构图：深青绿底板、白色聊天气泡、橙色守护盾牌与白色对勾。
 
-`ChatGPT` 仅用于说明本项目当前支持的网站。本项目与 OpenAI 没有隶属、赞助、认可或维护关系。
+`ChatGPT` 仅用于说明本项目当前支持的网站和使用场景。本项目与 OpenAI 没有隶属、赞助、认可或维护关系。
 
 ## 开源
 

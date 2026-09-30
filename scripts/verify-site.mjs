@@ -5,6 +5,7 @@ const root = process.cwd()
 const required = [
   'site/index.html',
   'site/zh/index.html',
+  'site/zh-tw/index.html',
   'site/guides/chatgpt-long-conversation-warning/index.html',
   'site/guides/chatgpt-context-window-warning/index.html',
   'site/guides/when-to-start-new-chatgpt-conversation/index.html',
@@ -33,6 +34,7 @@ for (const relative of required) {
 for (const relative of [
   'site/index.html',
   'site/zh/index.html',
+  'site/zh-tw/index.html',
   'site/guides/chatgpt-long-conversation-warning/index.html',
   'site/guides/chatgpt-context-window-warning/index.html',
   'site/guides/when-to-start-new-chatgpt-conversation/index.html',
@@ -54,10 +56,52 @@ for (const relative of [
   for (const script of scripts) JSON.parse(script[1])
 }
 
+const chromeStoreUrl =
+  'https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop'
+const englishHome = readFileSync(join(root, 'site/index.html'), 'utf8')
+const simplifiedHome = readFileSync(join(root, 'site/zh/index.html'), 'utf8')
+const traditionalHome = readFileSync(join(root, 'site/zh-tw/index.html'), 'utf8')
+
+for (const [label, html] of [
+  ['en', englishHome],
+  ['zh-CN', simplifiedHome],
+  ['zh-TW', traditionalHome]
+]) {
+  if (!html.includes('"softwareVersion": "2.0.1"')) {
+    throw new Error(`${label} home page has a stale SoftwareApplication version`)
+  }
+  if (!html.includes(chromeStoreUrl)) {
+    throw new Error(`${label} home page is missing the canonical Chrome Web Store source`)
+  }
+}
+
+if (!simplifiedHome.includes('LongChat Guard · 长会话预警')) {
+  throw new Error('Simplified Chinese home page is missing the approved localized display name')
+}
+if (!traditionalHome.includes('LongChat Guard · 長對話預警')) {
+  throw new Error('Traditional Chinese home page is missing the approved localized display name')
+}
+if (simplifiedHome.includes('龙查卫队') || traditionalHome.includes('龍查衛隊')) {
+  throw new Error('Machine-translated brand name found in public product page')
+}
+
+const discovery = readFileSync(join(root, 'AI_DISCOVERY.md'), 'utf8')
+const llmsFull = readFileSync(join(root, 'site/llms-full.txt'), 'utf8')
+for (const [label, content] of [
+  ['AI discovery profile', discovery],
+  ['llms-full.txt', llmsFull]
+]) {
+  if (!content.includes('2.0.1')) throw new Error(`${label} has a stale product version`)
+  if (!content.includes(chromeStoreUrl)) {
+    throw new Error(`${label} is missing the canonical Chrome Web Store source`)
+  }
+}
+
 const sitemap = readFileSync(join(root, 'site/sitemap.xml'), 'utf8')
 for (const url of [
   'https://luobo656.github.io/longchat-guard/',
   'https://luobo656.github.io/longchat-guard/zh/',
+  'https://luobo656.github.io/longchat-guard/zh-tw/',
   'https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-warning/',
   'https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-long-conversation-warning/',
   'https://luobo656.github.io/longchat-guard/guides/chatgpt-context-window-warning/',

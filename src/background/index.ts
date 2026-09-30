@@ -57,6 +57,16 @@ chrome.runtime.onMessage.addListener((request: BackgroundRequest, _sender, sendR
     return true
   }
 
+  if (request.type === 'guard.seedGrowthHistory') {
+    coordinator
+      .seedGrowthHistory(request.event)
+      .then(({ state, risk }) => sendResponse({ ok: true, state, risk }))
+      .catch((error: unknown) => {
+        sendResponse({ ok: false, error: error instanceof Error ? error.message : 'unknown_error' })
+      })
+    return true
+  }
+
   if (request.type === 'guard.startGeneration') {
     coordinator
       .startGeneration(request.reason, request.observedAt)
@@ -100,16 +110,6 @@ chrome.runtime.onMessage.addListener((request: BackgroundRequest, _sender, sendR
   if (request.type === 'guard.updateControl') {
     coordinator
       .updateControl(request.conversationKey, request.patch)
-      .then((state) => sendResponse({ ok: true, state }))
-      .catch((error: unknown) => {
-        sendResponse({ ok: false, error: error instanceof Error ? error.message : 'unknown_error' })
-      })
-    return true
-  }
-
-  if (request.type === 'guard.recordFeedback') {
-    coordinator
-      .recordFeedback(request.feedback)
       .then((state) => sendResponse({ ok: true, state }))
       .catch((error: unknown) => {
         sendResponse({ ok: false, error: error instanceof Error ? error.message : 'unknown_error' })

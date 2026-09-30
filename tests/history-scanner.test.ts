@@ -27,6 +27,128 @@ describe('history scanner', () => {
     expect(result.messageCount).toBe(6)
     expect(result.observedMessages.map((item) => item.contentFingerprint)).toEqual(all)
     expect(surface.scrollTop).toBe(500)
+    expect(result.diagnostics.length).toBeGreaterThan(0)
+    expect(JSON.stringify(result.diagnostics)).not.toContain('m1')
+  })
+
+  it('scans a reversed ChatGPT timeline where raw scrollTop is zero at the bottom', async () => {
+    const surface = {
+      scrollTop: 0,
+      scrollHeight: 900,
+      clientHeight: 300
+    }
+    const all = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6']
+    const source = {
+      surface,
+      scrollMode: 'reversed' as const,
+      readWindow: () => {
+        const max = surface.scrollHeight - surface.clientHeight
+        const logicalTop = surface.scrollTop + max
+        const index = Math.min(3, Math.floor(logicalTop / 150))
+        return all.slice(index, index + 3).map(message)
+      }
+    }
+
+    const result = await scanHistorySource(source, observe, {
+      settle: async () => {},
+      requiredStableRounds: 1,
+      stepRatio: 0.5
+    })
+
+    expect(result.complete).toBe(true)
+    expect(result.observedMessages.map((item) => item.contentFingerprint)).toEqual(all)
+    expect(surface.scrollTop).toBe(0)
+    expect(result.diagnostics.some((item) => item.scrollMode === 'reversed')).toBe(true)
+    expect(result.diagnostics.some((item) => (item.scrollTop ?? 0) < 0)).toBe(true)
+  })
+
+  it('waits through a transient empty virtualized window before scanning', async () => {
+    const surface = {
+      scrollTop: 500,
+      scrollHeight: 900,
+      clientHeight: 300
+    }
+    const all = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6']
+    let reads = 0
+    const source = {
+      surface,
+      readWindow: () => {
+        reads += 1
+        if (reads === 1) return []
+        const index = Math.min(3, Math.floor(surface.scrollTop / 150))
+        return all.slice(index, index + 3).map(message)
+      }
+    }
+    const result = await scanHistorySource(source, observe, {
+      settle: async () => {},
+      requiredStableRounds: 1,
+      maxEmptyWindowRetries: 2,
+      stepRatio: 0.5
+    })
+
+    expect(result.complete).toBe(true)
+    expect(result.messageCount).toBe(6)
+    expect(reads).toBeGreaterThan(1)
+  })
+
+  it('allows a slower head-loading phase before deciding there are no messages', async () => {
+    const surface = {
+      scrollTop: 500,
+      scrollHeight: 900,
+      clientHeight: 300
+    }
+    const all = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6']
+    let headWaits = 0
+    const source = {
+      surface,
+      readWindow: () => {
+        if (surface.scrollTop <= 4 && headWaits < 3) return []
+        const index = Math.min(3, Math.floor(surface.scrollTop / 150))
+        return all.slice(index, index + 3).map(message)
+      }
+    }
+
+    const result = await scanHistorySource(source, observe, {
+      settle: async () => {},
+      headSettle: async () => {
+        headWaits += 1
+      },
+      requiredStableRounds: 1,
+      maxEmptyWindowRetries: 4,
+      stepRatio: 0.5
+    })
+
+    expect(result.complete).toBe(true)
+    expect(result.messageCount).toBe(6)
+    expect(headWaits).toBeGreaterThanOrEqual(3)
+  })
+
+  it('fails closed when an empty virtualized window never resolves', async () => {
+    const surface = {
+      scrollTop: 0,
+      scrollHeight: 900,
+      clientHeight: 300
+    }
+    let reads = 0
+    const result = await scanHistorySource(
+      {
+        surface,
+        readWindow: () => {
+          reads += 1
+          return []
+        }
+      },
+      observe,
+      {
+        settle: async () => {},
+        requiredStableRounds: 1,
+        maxEmptyWindowRetries: 2
+      }
+    )
+
+    expect(result.complete).toBe(false)
+    expect(result.reason).toBe('no_messages')
+    expect(reads).toBe(3)
   })
 
   it('refuses to claim completeness when consecutive windows cannot align', async () => {
@@ -52,20 +174,19 @@ describe('history scanner', () => {
     expect(result.reason).toBe('window_alignment_failed')
   })
 
-  it('rejects a scan when older messages appear during the final head verification', async () => {
+  it('keeps probing the top and incorporates older messages that appear late', async () => {
     const surface = {
       scrollTop: 0,
       scrollHeight: 900,
       clientHeight: 300
     }
-    let reachedBottom = false
+    let topReads = 0
     const source = {
       surface,
       readWindow: () => {
-        const maxTop = surface.scrollHeight - surface.clientHeight
-        if (surface.scrollTop >= maxTop) reachedBottom = true
         if (surface.scrollTop <= 4) {
-          return (reachedBottom ? ['m1', 'm2', 'm3'] : ['m2', 'm3']).map(message)
+          topReads += 1
+          return (topReads < 3 ? ['m2', 'm3'] : ['m1', 'm2', 'm3']).map(message)
         }
         if (surface.scrollTop < 350) return ['m2', 'm3', 'm4'].map(message)
         return ['m4', 'm5', 'm6'].map(message)
@@ -77,8 +198,45 @@ describe('history scanner', () => {
       stepRatio: 0.5
     })
 
+    expect(result.complete).toBe(true)
+    expect(result.observedMessages.map((item) => item.contentFingerprint)).toEqual([
+      'm1',
+      'm2',
+      'm3',
+      'm4',
+      'm5',
+      'm6'
+    ])
+    expect(topReads).toBeGreaterThanOrEqual(3)
+  })
+
+  it('fails closed when older messages keep appearing and the top never stabilizes', async () => {
+    const surface = {
+      scrollTop: 0,
+      scrollHeight: 900,
+      clientHeight: 300
+    }
+    let topReads = 0
+    const source = {
+      surface,
+      readWindow: () => {
+        if (surface.scrollTop <= 4) {
+          topReads += 1
+          return [`older-${topReads}`, 'm1', 'm2'].map(message)
+        }
+        if (surface.scrollTop < 350) return ['m1', 'm2', 'm3'].map(message)
+        return ['m3', 'm4', 'm5'].map(message)
+      }
+    }
+    const result = await scanHistorySource(source, observe, {
+      settle: async () => {},
+      requiredStableRounds: 1,
+      maxSweepSteps: 8,
+      stepRatio: 0.5
+    })
+
     expect(result.complete).toBe(false)
-    expect(['head_not_stable', 'window_alignment_failed']).toContain(result.reason)
+    expect(['scan_limit_reached', 'head_not_stable', 'window_alignment_failed']).toContain(result.reason)
   })
 
   it('does not reject a stable conversation only because scroll height changes slightly', async () => {

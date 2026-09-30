@@ -10,19 +10,19 @@ import type {
 
 // Product defaults only; these are not OpenAI official limits or guarantees.
 export const CALIBRATION_DEFAULTS = {
-  targetIndependentConversations: 6,
-  recentAssistantGrowthLimit: 24,
-  incompleteSampleWeight: 0.45,
-  mostlyCompleteSampleWeight: 0.75,
-  contradictionConfidencePenalty: 0.45,
-  suspiciousEarlyFailureRatio: 0.82,
+  recentAssistantGrowthLimit: 32,
+  minConfirmedSafeConversationsForStable: 2,
+  minIndependentBoundaryConversationsForStable: 4,
   changePointSuggestionThreshold: 2,
-  coldStartRiskStart: 24000,
-  coldStartHighRisk: 36000,
-  minConfirmedSafeConversationsForStrongWarning: 2
+  failureQuantile: 0.2,
+  turnBufferQuantile: 0.9
 } as const
 
 export interface CalibrationSummary {
+  safeBoundary?: number
+  failureBoundary?: number
+  turnBuffer: number
+  // 1.x aliases retained only for migration and compatibility.
   safeFloor?: number
   failureCeiling?: number
   estimatedRiskStart: number
@@ -30,6 +30,7 @@ export interface CalibrationSummary {
   confidence: number
   independentConversations: number
   confirmedSafeConversations: number
+  confirmedFailureConversations: number
   safeFloorEvidenceReady: boolean
   contradictory: boolean
   suspiciousChangeCount: number
@@ -89,27 +90,67 @@ export function recordSuccessfulAssistantCompletion(
   generation: CalibrationGeneration,
   observation: SuccessObservation
 ): CalibrationGeneration {
+  const before = summarizeGeneration(generation)
   const confirmedSafe =
     observation.coverageState === 'complete' && observation.parserHealth === 'healthy'
-  const next = upsertConversationSample(generation, {
-    conversationKey: observation.conversationKey,
-    generationId: observation.generationId,
-    ...(confirmedSafe ? { highestConfirmedSafeLoad: observation.estimatedLoad } : {}),
-    coverageState: observation.coverageState,
-    parserHealth: observation.parserHealth,
-    successEvidenceQuality: confirmedSafe ? 'complete' : 'partial',
-    firstObservedAt: observation.observedAt,
-    lastObservedAt: observation.observedAt,
-    updatedAt: observation.observedAt
-  })
+  const conflict =
+    confirmedSafe &&
+    before.failureBoundary !== undefined &&
+    before.turnBuffer > 0 &&
+    observation.estimatedLoad > before.failureBoundary + before.turnBuffer
+  const environmentConflictKeys = conflict
+    ? unique([...(generation.environmentConflictKeys ?? []), `safe:${observation.conversationKey}`])
+    : generation.environmentConflictKeys ?? []
+
+  const next = upsertConversationSample(
+    { ...generation, environmentConflictKeys },
+    {
+      conversationKey: observation.conversationKey,
+      generationId: observation.generationId,
+      ...(confirmedSafe ? { highestConfirmedSafeLoad: observation.estimatedLoad } : {}),
+      coverageState: observation.coverageState,
+      parserHealth: observation.parserHealth,
+      successEvidenceQuality: confirmedSafe ? 'complete' : 'partial',
+      firstObservedAt: observation.observedAt,
+      lastObservedAt: observation.observedAt,
+      updatedAt: observation.observedAt
+    }
+  )
+  const recentAssistantTokenCounts =
+    observation.assistantTokenCount > 0 && Number.isFinite(observation.assistantTokenCount)
+      ? appendLimited(
+          next.recentAssistantTokenCounts ?? [],
+          observation.assistantTokenCount,
+          CALIBRATION_DEFAULTS.recentAssistantGrowthLimit
+        )
+      : next.recentAssistantTokenCounts ?? []
+
   return {
     ...next,
+    recentAssistantTokenCounts,
+    environmentConflictKeys,
+    suspiciousChangeCount: environmentConflictKeys.length,
     verificationFactor: raiseVerificationFactor(next.verificationFactor),
-    recentAssistantTokenCounts: appendLimited(
-      next.recentAssistantTokenCounts ?? [],
-      observation.assistantTokenCount,
-      CALIBRATION_DEFAULTS.recentAssistantGrowthLimit
-    )
+    changePointSuggested:
+      environmentConflictKeys.length >= CALIBRATION_DEFAULTS.changePointSuggestionThreshold
+  }
+}
+
+export function seedGrowthHistory(
+  generation: CalibrationGeneration,
+  conversationKey: string,
+  tokenCounts: number[]
+): CalibrationGeneration {
+  const seeded = generation.growthHistoryConversationKeys ?? []
+  if (seeded.includes(conversationKey)) return generation
+  const valid = tokenCounts.filter((value) => Number.isFinite(value) && value > 0)
+  return {
+    ...generation,
+    growthHistoryConversationKeys: unique([...seeded, conversationKey]),
+    recentAssistantTokenCounts: [
+      ...(generation.recentAssistantTokenCounts ?? []),
+      ...valid
+    ].slice(-CALIBRATION_DEFAULTS.recentAssistantGrowthLimit)
   }
 }
 
@@ -134,12 +175,15 @@ export function recordFailureObservation(
   }
 
   const before = summarizeGeneration(generation)
-  const earlyFailure =
-    before.failureCeiling !== undefined &&
-    observation.estimatedLoad < before.estimatedRiskStart * CALIBRATION_DEFAULTS.suspiciousEarlyFailureRatio
-  const suspiciousChangeCount = generation.suspiciousChangeCount + (earlyFailure ? 1 : 0)
+  const conflict =
+    before.failureBoundary !== undefined &&
+    before.turnBuffer > 0 &&
+    observation.estimatedLoad + before.turnBuffer < before.failureBoundary
+  const environmentConflictKeys = conflict
+    ? unique([...(generation.environmentConflictKeys ?? []), `failure:${observation.conversationKey}`])
+    : generation.environmentConflictKeys ?? []
   const next = upsertConversationSample(
-    { ...generation, suspiciousChangeCount },
+    { ...generation, environmentConflictKeys },
     {
       conversationKey: observation.conversationKey,
       generationId: observation.generationId,
@@ -154,10 +198,11 @@ export function recordFailureObservation(
   )
   return {
     ...next,
-    suspiciousChangeCount,
+    environmentConflictKeys,
+    suspiciousChangeCount: environmentConflictKeys.length,
     verificationFactor: raiseVerificationFactor(next.verificationFactor),
     changePointSuggested:
-      suspiciousChangeCount >= CALIBRATION_DEFAULTS.changePointSuggestionThreshold
+      environmentConflictKeys.length >= CALIBRATION_DEFAULTS.changePointSuggestionThreshold
   }
 }
 
@@ -176,12 +221,48 @@ export function summarizeGeneration(
       value: sample.firstConfirmedFailureLoad!,
       weight: sampleWeight(sample)
     }))
+  const growthValues = (generation.recentAssistantTokenCounts ?? [])
+    .filter((value) => Number.isFinite(value) && value > 0)
+    .map((value) => ({ value, weight: 1 }))
 
-  const safeValues = weightedSafe.map((sample) => sample.value)
-  const failureValues = weightedFailures.map((sample) => sample.value)
-  const safeFloor = safeValues.length ? Math.max(...safeValues) : undefined
-  const failureCeiling = failureValues.length ? Math.min(...failureValues) : undefined
+  const safeBoundaryCurrent = weightedSafe.length
+    ? Math.max(...weightedSafe.map((item) => item.value))
+    : undefined
+  const failureBoundaryCurrent = weightedFailures.length
+    ? robustWeightedQuantile(weightedFailures, CALIBRATION_DEFAULTS.failureQuantile)
+    : undefined
+  const turnBufferCurrent = growthValues.length
+    ? robustWeightedQuantile(growthValues, CALIBRATION_DEFAULTS.turnBufferQuantile)
+    : 0
+
+  const usingWarmStartPrior =
+    safeBoundaryCurrent === undefined &&
+    failureBoundaryCurrent === undefined &&
+    generation.warmStartPrior !== undefined
+
+  const turnBuffer =
+    turnBufferCurrent > 0
+      ? turnBufferCurrent
+      : Math.max(0, generation.warmStartPrior?.turnBuffer ?? 0)
+  const priorSafe = generation.warmStartPrior?.safeBoundary
+  const priorFailure = generation.warmStartPrior?.failureBoundary
+  const warmSafeContradicted =
+    failureBoundaryCurrent !== undefined &&
+    priorSafe !== undefined &&
+    turnBuffer > 0 &&
+    failureBoundaryCurrent + turnBuffer < priorSafe
+  const warmFailureContradicted =
+    safeBoundaryCurrent !== undefined &&
+    priorFailure !== undefined &&
+    turnBuffer > 0 &&
+    safeBoundaryCurrent > priorFailure + turnBuffer
+  const safeBoundary =
+    safeBoundaryCurrent ?? (warmSafeContradicted ? undefined : priorSafe)
+  const failureBoundary =
+    failureBoundaryCurrent ?? (warmFailureContradicted ? undefined : priorFailure)
+
   const confirmedSafeConversations = weightedSafe.length
+  const confirmedFailureConversations = weightedFailures.length
   const boundarySamples = generation.samples.filter(
     (sample) =>
       isConfirmedSafeSample(sample) || sample.firstConfirmedFailureLoad !== undefined
@@ -189,71 +270,51 @@ export function summarizeGeneration(
   const independentConversations = boundarySamples.length
   const safeFloorEvidenceReady =
     confirmedSafeConversations >=
-    CALIBRATION_DEFAULTS.minConfirmedSafeConversationsForStrongWarning
+    CALIBRATION_DEFAULTS.minConfirmedSafeConversationsForStable
   const contradictory =
-    safeFloor !== undefined && failureCeiling !== undefined && safeFloor > failureCeiling
+    safeBoundaryCurrent !== undefined &&
+    failureBoundaryCurrent !== undefined &&
+    safeBoundaryCurrent > failureBoundaryCurrent
+
   const reasons: string[] = []
-  const usingWarmStartPrior =
-    safeFloor === undefined &&
-    failureCeiling === undefined &&
-    generation.warmStartPrior !== undefined
-
-  let estimatedRiskStart =
-    weightedFailures.length > 0
-      ? weightedQuantile(weightedFailures, 0.25)
-      : safeFloor !== undefined
-        ? safeFloor
-        : generation.warmStartPrior?.estimatedRiskStart ??
-          CALIBRATION_DEFAULTS.coldStartRiskStart
-  let estimatedHighRisk =
-    weightedFailures.length > 0
-      ? weightedQuantile(weightedFailures, 0.6)
-      : safeFloor !== undefined
-        ? Math.max(safeFloor * 1.25, safeFloor + 3000)
-        : generation.warmStartPrior?.estimatedHighRisk ??
-          CALIBRATION_DEFAULTS.coldStartHighRisk
-
-  if (failureCeiling !== undefined) {
-    estimatedHighRisk = Math.min(estimatedHighRisk, failureCeiling)
-    estimatedRiskStart = Math.min(estimatedRiskStart, Math.max(0, failureCeiling * 0.85))
-  }
-  if (contradictory) {
-    reasons.push('contradictory_safe_and_failure_bounds')
-    estimatedRiskStart = Math.min(estimatedRiskStart, failureCeiling ?? estimatedRiskStart)
-    estimatedHighRisk = Math.min(estimatedHighRisk, failureCeiling ?? estimatedHighRisk)
-  }
-  if (!safeValues.length && !failureValues.length) {
+  if (contradictory) reasons.push('contradictory_safe_and_failure_bounds')
+  if (safeBoundaryCurrent === undefined && failureBoundaryCurrent === undefined) {
     reasons.push(usingWarmStartPrior ? 'warm-start-prior' : 'cold-start')
   }
 
-  const qualityWeight = boundarySamples.reduce(
-    (total, sample) => total + sampleWeight(sample),
-    0
-  )
-  const evidence =
-    Math.min(qualityWeight / CALIBRATION_DEFAULTS.targetIndependentConversations, 1) * 0.5 +
-    Math.min(weightedFailures.length / 2, 1) * 0.3 +
-    Math.min(weightedSafe.length / 3, 1) * 0.2
+  const estimatedRiskStart =
+    failureBoundary !== undefined && turnBuffer > 0
+      ? Math.max(0, failureBoundary - 3 * turnBuffer)
+      : safeBoundary ?? generation.warmStartPrior?.estimatedRiskStart ?? 0
+  const estimatedHighRisk =
+    failureBoundary !== undefined && turnBuffer > 0
+      ? Math.max(estimatedRiskStart, failureBoundary - turnBuffer)
+      : failureBoundary ??
+        generation.warmStartPrior?.estimatedHighRisk ??
+        safeBoundary ??
+        0
+
+  const evidenceUnits = independentConversations + Math.min(growthValues.length / 4, 2)
   const verificationFactor = clamp(generation.verificationFactor ?? 1, 0.25, 1)
-  const evidenceConfidence =
-    evidence *
-    verificationFactor *
-    (contradictory ? CALIBRATION_DEFAULTS.contradictionConfidencePenalty : 1)
   const confidence = usingWarmStartPrior
     ? clamp(generation.warmStartPrior?.confidence ?? 0.05, 0.05, 0.35)
-    : clamp(evidenceConfidence, 0.05, 0.95)
+    : clamp((evidenceUnits / 6) * verificationFactor, 0.05, 0.95)
 
   return {
-    ...(safeFloor !== undefined ? { safeFloor } : {}),
-    ...(failureCeiling !== undefined ? { failureCeiling } : {}),
+    ...(safeBoundary !== undefined ? { safeBoundary, safeFloor: safeBoundary } : {}),
+    ...(failureBoundary !== undefined
+      ? { failureBoundary, failureCeiling: failureBoundary }
+      : {}),
+    turnBuffer: Math.max(0, Math.round(turnBuffer)),
     estimatedRiskStart: Math.max(0, Math.round(estimatedRiskStart)),
     estimatedHighRisk: Math.max(0, Math.round(estimatedHighRisk)),
     confidence,
     independentConversations,
     confirmedSafeConversations,
+    confirmedFailureConversations,
     safeFloorEvidenceReady,
     contradictory,
-    suspiciousChangeCount: generation.suspiciousChangeCount,
+    suspiciousChangeCount: generation.environmentConflictKeys?.length ?? 0,
     changePointSuggested: generation.changePointSuggested ?? false,
     usingWarmStartPrior,
     reasons
@@ -269,9 +330,18 @@ export function createGeneration(
   const warmStartPrior =
     previous &&
     priorSummary &&
-    (priorSummary.safeFloor !== undefined || priorSummary.failureCeiling !== undefined)
+    (priorSummary.safeBoundary !== undefined || priorSummary.failureBoundary !== undefined)
       ? {
           sourceGenerationId: previous.id,
+          ...(priorSummary.safeBoundary !== undefined
+            ? { safeBoundary: priorSummary.safeBoundary }
+            : {}),
+          ...(priorSummary.failureBoundary !== undefined
+            ? { failureBoundary: priorSummary.failureBoundary }
+            : {}),
+          ...(priorSummary.turnBuffer > 0
+            ? { turnBuffer: priorSummary.turnBuffer }
+            : {}),
           estimatedRiskStart: priorSummary.estimatedRiskStart,
           estimatedHighRisk: priorSummary.estimatedHighRisk,
           confidence: Math.min(priorSummary.confidence * 0.45, 0.3),
@@ -288,7 +358,9 @@ export function createGeneration(
     confidence: warmStartPrior?.confidence ?? 0.05,
     verificationFactor: 1,
     suspiciousChangeCount: 0,
-    recentAssistantTokenCounts: previous?.recentAssistantTokenCounts?.slice(-6) ?? [],
+    recentAssistantTokenCounts: previous?.recentAssistantTokenCounts?.slice(-8) ?? [],
+    growthHistoryConversationKeys: [],
+    environmentConflictKeys: [],
     pendingFailureConfirmations: [],
     changePointSuggested: false
   }
@@ -322,24 +394,49 @@ function isConfirmedSafeSample(sample: ConversationBoundarySample): boolean {
 function sampleWeight(sample: ConversationBoundarySample): number {
   let weight = 1
   if (sample.coverageState === 'incomplete' || sample.coverageState === 'unknown') {
-    weight *= CALIBRATION_DEFAULTS.incompleteSampleWeight
+    weight *= 0.45
   } else if (sample.coverageState === 'mostly_complete') {
-    weight *= CALIBRATION_DEFAULTS.mostlyCompleteSampleWeight
+    weight *= 0.75
   }
   if (sample.parserHealth === 'degraded') weight *= 0.7
   if (sample.parserHealth === 'unreliable') weight *= 0.25
   return weight
 }
 
-function weightedQuantile(values: Array<{ value: number; weight: number }>, q: number): number {
-  const sorted = [...values].sort((a, b) => a.value - b.value)
+function robustWeightedQuantile(
+  values: Array<{ value: number; weight: number }>,
+  q: number
+): number {
+  if (values.length === 0) return 0
+  if (values.length === 1) return values[0]!.value
+
+  const sorted = [...values]
+    .filter((item) => item.weight > 0)
+    .sort((a, b) => a.value - b.value)
+  if (sorted.length === 1) return sorted[0]!.value
+
   const total = sorted.reduce((sum, item) => sum + item.weight, 0)
-  let seen = 0
+  const target = clamp(q, 0, 1)
+  const centers: Array<{ position: number; value: number }> = []
+  let cumulative = 0
   for (const item of sorted) {
-    seen += item.weight
-    if (seen >= total * clamp(q, 0, 1)) return item.value
+    const center = (cumulative + item.weight / 2) / total
+    centers.push({ position: center, value: item.value })
+    cumulative += item.weight
   }
-  return sorted.at(-1)?.value ?? 0
+
+  if (target <= centers[0]!.position) return centers[0]!.value
+  if (target >= centers.at(-1)!.position) return centers.at(-1)!.value
+
+  for (let index = 1; index < centers.length; index += 1) {
+    const left = centers[index - 1]!
+    const right = centers[index]!
+    if (target > right.position) continue
+    const span = Math.max(right.position - left.position, Number.EPSILON)
+    const ratio = (target - left.position) / span
+    return left.value + (right.value - left.value) * ratio
+  }
+  return centers.at(-1)!.value
 }
 
 function appendLimited(values: number[], value: number, limit: number): number[] {
@@ -354,6 +451,10 @@ function upsertPending(
     ...pending.filter((entry) => entry.conversationKey !== item.conversationKey),
     item
   ]
+}
+
+function unique(values: string[]): string[] {
+  return Array.from(new Set(values))
 }
 
 function maxDefined(a?: number, b?: number): number | undefined {

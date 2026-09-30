@@ -1,230 +1,150 @@
 import { describe, expect, it } from 'vitest'
 import { assessRisk } from '../src/core/risk-engine'
 
-describe('risk engine', () => {
+describe('risk engine 2.0', () => {
   it('fails closed when parser health is unreliable', () => {
     const result = assessRisk({
       currentLoad: 1000,
-      composerLoad: 0,
-      expectedAssistantGrowth: 0,
-      safetyMargin: 0,
       coverage: 'complete',
-      parserHealth: 'unreliable',
-      confidence: 1
+      parserHealth: 'unreliable'
     })
     expect(result.level).toBe('unreliable')
+    expect(result.score).toBe(100)
   })
 
-  it('becomes more conservative when coverage is incomplete', () => {
+  it('does not let incomplete coverage or low legacy confidence inflate a short conversation', () => {
     const complete = assessRisk({
-      currentLoad: 70000,
-      composerLoad: 1000,
-      expectedAssistantGrowth: 5000,
-      safetyMargin: 3000,
+      currentLoad: 305,
       coverage: 'complete',
       parserHealth: 'healthy',
-      confidence: 0.8,
-      safeFloor: 90000,
-      failureCeiling: 100000
+      failureBoundary: 77324,
+      turnBuffer: 2000,
+      confidence: 1
     })
     const incomplete = assessRisk({
-      currentLoad: 70000,
-      composerLoad: 1000,
-      expectedAssistantGrowth: 5000,
-      safetyMargin: 3000,
+      currentLoad: 305,
       coverage: 'incomplete',
       parserHealth: 'healthy',
-      confidence: 0.8,
-      safeFloor: 90000,
-      failureCeiling: 100000
+      failureBoundary: 77324,
+      turnBuffer: 2000,
+      confidence: 0.01
     })
-    expect(incomplete.score).toBeGreaterThan(complete.score)
+    expect(complete.level).toBe('normal')
+    expect(incomplete.level).toBe('normal')
+    expect(incomplete.score).toBe(complete.score)
+    expect(incomplete.trendScore).toBeLessThan(5)
   })
 
-  it('does not escalate reliable load below safe floor to organize or high', () => {
+  it('keeps an uncalibrated conversation normal and visually near the left edge', () => {
     const result = assessRisk({
-      currentLoad: 80000,
-      composerLoad: 0,
-      expectedAssistantGrowth: 0,
-      safetyMargin: 0,
+      currentLoad: 300000,
       coverage: 'complete',
-      parserHealth: 'healthy',
-      confidence: 0.9,
-      safeFloor: 90000
-    })
-    expect(['normal', 'long']).toContain(result.level)
-    expect(result.level).not.toBe('organize')
-    expect(result.level).not.toBe('high')
-  })
-
-  it('does not use failure ceiling as a zero-based linear risk ramp', () => {
-    const result = assessRisk({
-      currentLoad: 50000,
-      composerLoad: 0,
-      expectedAssistantGrowth: 0,
-      safetyMargin: 0,
-      coverage: 'complete',
-      parserHealth: 'healthy',
-      confidence: 0.9,
-      failureCeiling: 100000,
-      estimatedRiskStart: 85000,
-      estimatedHighRisk: 95000
+      parserHealth: 'healthy'
     })
     expect(result.level).toBe('normal')
-    expect(result.reasons).toContain('below_calibrated_risk_start')
+    expect(result.trendScore).toBeLessThanOrEqual(2)
   })
 
-  it('is high when predicted load reaches confirmed failure ceiling', () => {
-    const result = assessRisk({
+  it('uses a safe-only boundary as weak evidence and never escalates above long', () => {
+    const within = assessRisk({
+      currentLoad: 50000,
+      coverage: 'complete',
+      parserHealth: 'healthy',
+      safeBoundary: 50000
+    })
+    const above = assessRisk({
       currentLoad: 100000,
-      composerLoad: 0,
-      expectedAssistantGrowth: 0,
-      safetyMargin: 0,
       coverage: 'complete',
       parserHealth: 'healthy',
-      confidence: 0.9,
-      failureCeiling: 100000,
-      estimatedRiskStart: 85000,
-      estimatedHighRisk: 95000
+      safeBoundary: 50000
     })
-    expect(result.level).toBe('high')
+    expect(within.level).toBe('normal')
+    expect(above.level).toBe('long')
+    expect(above.level).not.toBe('organize')
+    expect(above.level).not.toBe('high')
+    expect(above.trendScore).toBeLessThanOrEqual(60)
   })
 
-  it('caps complete cold-start at long even for very large estimated load', () => {
+  it('does not invent warning bands from F until B is learned', () => {
+    const below = assessRisk({
+      currentLoad: 76000,
+      coverage: 'complete',
+      parserHealth: 'healthy',
+      failureBoundary: 77324
+    })
+    const at = assessRisk({
+      currentLoad: 77324,
+      coverage: 'complete',
+      parserHealth: 'healthy',
+      failureBoundary: 77324
+    })
+    expect(below.level).toBe('normal')
+    expect(at.level).toBe('high')
+  })
+
+  it('uses one, two, and three learned turn buffers as the warning bands', () => {
+    const base = {
+      coverage: 'complete' as const,
+      parserHealth: 'healthy' as const,
+      failureBoundary: 77324,
+      turnBuffer: 2000
+    }
+    expect(assessRisk({ ...base, currentLoad: 71323 }).level).toBe('normal')
+    expect(assessRisk({ ...base, currentLoad: 71324 }).level).toBe('long')
+    expect(assessRisk({ ...base, currentLoad: 73324 }).level).toBe('organize')
+    expect(assessRisk({ ...base, currentLoad: 75324 }).level).toBe('high')
+    expect(assessRisk({ ...base, currentLoad: 77324 }).level).toBe('high')
+  })
+
+  it('maps the visible trend directly to the empirical failure boundary', () => {
     const result = assessRisk({
-      currentLoad: 300000,
-      composerLoad: 0,
-      expectedAssistantGrowth: 0,
-      safetyMargin: 0,
-      coverage: 'complete',
-      parserHealth: 'healthy',
-      confidence: 0.05
-    })
-    expect(['normal', 'long']).toContain(result.level)
-  })
-
-  it('keeps incomplete cold-start more conservative but still capped at long', () => {
-    const complete = assessRisk({
-      currentLoad: 300000,
-      composerLoad: 0,
-      expectedAssistantGrowth: 0,
-      safetyMargin: 0,
-      coverage: 'complete',
-      parserHealth: 'healthy',
-      confidence: 0.8
-    })
-    const incomplete = assessRisk({
-      currentLoad: 300000,
-      composerLoad: 0,
-      expectedAssistantGrowth: 0,
-      safetyMargin: 0,
+      currentLoad: 305,
       coverage: 'incomplete',
       parserHealth: 'healthy',
-      confidence: 0.8
+      failureBoundary: 77324,
+      turnBuffer: 2000
     })
-    expect(incomplete.score).toBeGreaterThan(complete.score)
-    expect(['normal', 'long']).toContain(incomplete.level)
+    expect(result.level).toBe('normal')
+    expect(result.trendScore).toBeLessThan(5)
   })
 
-  it('caps a single low safe-floor sample at long even when predicted load doubles it', () => {
-    const result = assessRisk({
-      currentLoad: 3200,
-      composerLoad: 0,
-      expectedAssistantGrowth: 0,
-      safetyMargin: 0,
-      coverage: 'complete',
-      parserHealth: 'healthy',
-      confidence: 0.2,
-      safeFloor: 1600,
-      safeFloorEvidenceReady: false,
-      estimatedRiskStart: 1600,
-      estimatedHighRisk: 4600
-    })
-    expect(['normal', 'long']).toContain(result.level)
-    expect(result.level).not.toBe('organize')
-    expect(result.reasons).toContain('safe_floor_evidence_learning')
-  })
-
-  it('can organize after multiple confirmed safe conversations establish stronger evidence', () => {
-    const result = assessRisk({
-      currentLoad: 4600,
-      composerLoad: 0,
-      expectedAssistantGrowth: 0,
-      safetyMargin: 0,
-      coverage: 'complete',
-      parserHealth: 'healthy',
-      confidence: 0.6,
-      safeFloor: 1600,
-      safeFloorEvidenceReady: true,
-      estimatedRiskStart: 1600,
-      estimatedHighRisk: 4600
-    })
-    expect(result.level).toBe('organize')
-    expect(result.level).not.toBe('high')
-  })
-
-  it('allows safe-floor-only risk to rise gradually after safe floor without going high', () => {
-    const result = assessRisk({
-      currentLoad: 96000,
-      composerLoad: 0,
-      expectedAssistantGrowth: 0,
-      safetyMargin: 0,
-      coverage: 'complete',
-      parserHealth: 'healthy',
-      confidence: 0.9,
-      safeFloor: 90000,
-      estimatedRiskStart: 90000,
-      safeFloorEvidenceReady: true,
-      estimatedHighRisk: 110000
-    })
-    expect(['long', 'organize']).toContain(result.level)
-    expect(result.level).not.toBe('high')
-  })
-
-  it('can ignore unsent composer and expected response growth when callers pass current load only', () => {
-    const result = assessRisk({
-      currentLoad: 80000,
-      composerLoad: 0,
-      expectedAssistantGrowth: 0,
-      safetyMargin: 0,
-      coverage: 'complete',
-      parserHealth: 'healthy',
-      confidence: 0.9,
-      failureCeiling: 100000
-    })
-    expect(result.predictedNextTurnLoad).toBe(80000)
-  })
-
-  it('keeps predicted load equal to current load when future inputs are zeroed', () => {
+  it('ignores legacy composer and heuristic inputs', () => {
     const result = assessRisk({
       currentLoad: 1000,
-      composerLoad: 0,
-      expectedAssistantGrowth: 0,
-      safetyMargin: 0,
+      composerLoad: 50000,
+      expectedAssistantGrowth: 50000,
+      safetyMargin: 50000,
+      confidence: 0,
+      feedbackBias: 6,
       coverage: 'complete',
-      parserHealth: 'healthy',
-      confidence: 0.5,
-      estimatedRiskStart: 5000,
-      estimatedHighRisk: 8000
+      parserHealth: 'healthy'
     })
+    expect(result.level).toBe('normal')
     expect(result.predictedNextTurnLoad).toBe(1000)
   })
 
-  it('is conservative for contradictory safe and failure bounds', () => {
+  it('uses B for predicted next-turn load', () => {
     const result = assessRisk({
-      currentLoad: 3500,
-      composerLoad: 0,
-      expectedAssistantGrowth: 0,
-      safetyMargin: 0,
+      currentLoad: 70000,
       coverage: 'complete',
       parserHealth: 'healthy',
-      confidence: 0.2,
-      safeFloor: 5000,
-      failureCeiling: 3000,
-      estimatedRiskStart: 2800,
-      estimatedHighRisk: 3000
+      failureBoundary: 80000,
+      turnBuffer: 2500
     })
-    expect(result.reasons).toContain('contradictory_calibration_bounds')
-    expect(result.score).toBeGreaterThan(80)
+    expect(result.predictedNextTurnLoad).toBe(72500)
+  })
+
+  it('treats warm-start boundaries as guidance, not strong warnings', () => {
+    const result = assessRisk({
+      currentLoad: 79000,
+      coverage: 'complete',
+      parserHealth: 'healthy',
+      failureBoundary: 80000,
+      turnBuffer: 2000,
+      usingWarmStartPrior: true
+    })
+    expect(['normal', 'long']).toContain(result.level)
+    expect(result.level).not.toBe('organize')
+    expect(result.level).not.toBe('high')
   })
 })

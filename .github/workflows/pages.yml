@@ -66,6 +66,7 @@ jobs:
               "urlList": [
                 "https://luobo656.github.io/longchat-guard/",
                 "https://luobo656.github.io/longchat-guard/zh/",
+                "https://luobo656.github.io/longchat-guard/zh-tw/",
                 "https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-warning/",
                 "https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-long-conversation-warning/",
                 "https://luobo656.github.io/longchat-guard/guides/chatgpt-context-window-warning/",

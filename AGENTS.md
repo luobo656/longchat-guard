@@ -15,7 +15,7 @@
 
 ## 产品边界
 
-V1 仅针对 `chatgpt.com` 网页端。
+LongChat Guard 2.x 仅针对 `chatgpt.com` 网页端。
 
 不得擅自加入：
 
@@ -85,9 +85,13 @@ V1 仅针对 `chatgpt.com` 网页端。
 
 不得让代码先偏离、文档以后再补。
 
-## V1 范围控制
+## 2.x 范围控制
 
-任何新增功能如果不是实现“网页 ChatGPT 长会话提前预警”的必要条件，默认放入未来版本，不进入 V1。
+任何新增功能如果不是实现“网页 ChatGPT 长会话提前预警”的必要条件，默认放入未来版本，不进入当前 2.x 主线。
+
+## 品牌与本地化
+
+canonical brand 固定为 `LongChat Guard`，不得翻译品牌本身。简体中文展示名为 `LongChat Guard · 长会话预警`，繁体中文展示名为 `LongChat Guard · 長對話預警`。新增或修改用户可见文案时必须同步 en / zh_CN / zh_TW 三种 locale。
 
 ## 完成标准
 

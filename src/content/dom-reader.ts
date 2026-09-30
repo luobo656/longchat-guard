@@ -43,12 +43,17 @@ export function readConversationHints(doc: Document, url: string): string[] {
 }
 
 export function readMessages(doc: Document): PageMessageSnapshot[] {
+  const groupedRendererMessages = readTurnKeyMessages(doc)
+  if (groupedRendererMessages.length > 0) return groupedRendererMessages
+
   const primary = Array.from(doc.querySelectorAll<HTMLElement>('[data-message-author-role]'))
   const candidates =
     primary.length > 0
       ? primary
       : Array.from(
-          doc.querySelectorAll<HTMLElement>('article, [role="article"], [data-testid*="conversation-turn"]')
+          doc.querySelectorAll<HTMLElement>(
+            '[data-turn="user"], [data-turn="assistant"], article, [role="article"], [data-testid*="conversation-turn"]'
+          )
         )
   const deduped = removeNestedCandidates(candidates)
   const messages: PageMessageSnapshot[] = []
@@ -73,6 +78,101 @@ export function readMessages(doc: Document): PageMessageSnapshot[] {
   })
 
   return messages
+}
+
+function readTurnKeyMessages(doc: Document): PageMessageSnapshot[] {
+  const groups = Array.from(doc.querySelectorAll<HTMLElement>('[data-turn-key]'))
+  if (groups.length === 0) return []
+
+  const messages: PageMessageSnapshot[] = []
+  for (const group of groups) {
+    const key = group.getAttribute('data-turn-key')?.trim()
+    if (!key) continue
+
+    const user = group.querySelector<HTMLElement>('[data-user-message-bubble]')
+    const userText = user ? readText(user) : ''
+    if (user && userText) {
+      messages.push(messageSnapshotFromRoots(
+        'user',
+        userText,
+        messages.length,
+        `turn-key:${key}:user`,
+        [user]
+      ))
+    }
+
+    const assistantRoots = Array.from(
+      group.querySelectorAll<HTMLElement>('[data-markdown-text-style="assistant-message"]')
+    ).filter((element) => readText(element))
+
+    let roots = assistantRoots
+    let assistantText = assistantRoots.map(readText).filter(Boolean).join('\n\n')
+
+    if (!assistantText) {
+      const explicit = group.querySelector<HTMLElement>(
+        '[data-message-author-role="assistant"], [data-turn="assistant"]'
+      )
+      const explicitText = explicit ? readText(explicit) : ''
+      if (explicit && explicitText) {
+        roots = [explicit]
+        assistantText = explicitText
+      }
+    }
+
+    if (!assistantText) {
+      const marker = group.querySelector<HTMLElement>(
+        '[data-conversation-role="assistant"], [data-chatgpt-agent-turn-start]'
+      )
+      const contentUnit = marker ? closestContentUnit(marker, group) : undefined
+      const contentText = contentUnit ? readText(contentUnit) : ''
+      if (contentUnit && contentText) {
+        roots = [contentUnit]
+        assistantText = contentText
+      }
+    }
+
+    if (assistantText) {
+      messages.push(messageSnapshotFromRoots(
+        'assistant',
+        assistantText,
+        messages.length,
+        `turn-key:${key}:assistant`,
+        roots
+      ))
+    }
+  }
+
+  return messages
+}
+
+function closestContentUnit(element: HTMLElement, group: HTMLElement): HTMLElement | undefined {
+  let current: HTMLElement | null = element
+  while (current && current !== group) {
+    if (current.hasAttribute('data-content-search-unit-key')) return current
+    current = current.parentElement
+  }
+  return undefined
+}
+
+function messageSnapshotFromRoots(
+  role: 'user' | 'assistant',
+  text: string,
+  ordinalHint: number,
+  stableHint: string,
+  roots: HTMLElement[]
+): PageMessageSnapshot {
+  return {
+    role,
+    text,
+    stableHint,
+    ordinalHint,
+    semanticScore: 1,
+    hasCode: roots.some((root) => root.querySelector('pre, code') !== null),
+    attachmentCount: roots.reduce(
+      (total, root) => total + root.querySelectorAll('img, [data-testid*="attachment"]').length,
+      0
+    )
+  }
 }
 
 export function readComposerText(doc: Document): string {
@@ -122,16 +222,30 @@ export function readTailEvidence(doc: Document): 'at_tail' | 'not_tail' | 'unkno
 }
 
 export function findConversationScrollContainer(doc: Document): HTMLElement | undefined {
+  const explicitRoots = Array.from(
+    doc.querySelectorAll<HTMLElement>('[data-app-action-timeline-scroll], .thread-scroll-container')
+  )
+  for (const candidate of explicitRoots) {
+    if (isScrollSurface(candidate) && scrollRange(candidate) > 48 && canProgrammaticallyScroll(candidate)) {
+      return candidate
+    }
+  }
+
   const messages = messageRootElements(doc)
   const first = messages[0]
   const last = messages.at(-1)
   if (first && last) {
     const candidates = collectScrollCandidates(first, last)
-    if (candidates.length > 0) return candidates[0]
+    const movable = candidates.find(canProgrammaticallyScroll)
+    if (movable) return movable
   }
 
   for (const candidate of [doc.scrollingElement, doc.documentElement, doc.body]) {
-    if (isScrollSurface(candidate) && scrollRange(candidate) > 48) {
+    if (
+      isScrollSurface(candidate) &&
+      scrollRange(candidate) > 48 &&
+      canProgrammaticallyScroll(candidate)
+    ) {
       return candidate
     }
   }
@@ -216,11 +330,45 @@ function isScrollSurface(element: Element | null | undefined): element is HTMLEl
   )
 }
 
+function canProgrammaticallyScroll(element: HTMLElement): boolean {
+  const range = scrollRange(element)
+  if (range <= 48) return false
+  const originalTop = element.scrollTop
+  const probes = [
+    Math.min(range, originalTop + 16),
+    originalTop - 16
+  ].filter((value, index, values) =>
+    Math.abs(value - originalTop) >= 1 && values.indexOf(value) === index
+  )
+
+  try {
+    for (const probeTop of probes) {
+      element.scrollTop = probeTop
+      if (Math.abs(element.scrollTop - originalTop) >= 1) {
+        element.scrollTop = originalTop
+        return true
+      }
+    }
+    element.scrollTop = originalTop
+    return false
+  } catch {
+    try { element.scrollTop = originalTop } catch {}
+    return false
+  }
+}
+
 function messageRootElements(doc: Document): HTMLElement[] {
+  const grouped = Array.from(doc.querySelectorAll<HTMLElement>('[data-turn-key]'))
+  if (grouped.length > 0) return removeNestedCandidates(grouped)
+
   const primary = Array.from(doc.querySelectorAll<HTMLElement>('[data-message-author-role]'))
   if (primary.length > 0) return removeNestedCandidates(primary)
   return removeNestedCandidates(
-    Array.from(doc.querySelectorAll<HTMLElement>('article, [role="article"], [data-testid*="conversation-turn"]'))
+    Array.from(
+      doc.querySelectorAll<HTMLElement>(
+        '[data-turn="user"], [data-turn="assistant"], article, [role="article"], [data-testid*="conversation-turn"]'
+      )
+    )
   )
 }
 
@@ -242,9 +390,10 @@ function removeNestedCandidates(candidates: HTMLElement[]): HTMLElement[] {
 
 function readRole(element: HTMLElement): 'user' | 'assistant' | 'unknown' {
   const authorRole = element.getAttribute('data-message-author-role')?.toLowerCase()
+  const dataTurn = element.getAttribute('data-turn')?.toLowerCase()
   const aria = element.getAttribute('aria-label')?.toLowerCase() ?? ''
   const testId = element.getAttribute('data-testid')?.toLowerCase() ?? ''
-  const roleText = `${authorRole ?? ''} ${aria} ${testId}`
+  const roleText = `${authorRole ?? ''} ${dataTurn ?? ''} ${aria} ${testId}`
   if (/\buser\b|you|human/.test(roleText)) return 'user'
   if (/assistant|chatgpt|gpt/.test(roleText)) return 'assistant'
   return 'unknown'
@@ -256,6 +405,11 @@ function readStableMessageHint(element: HTMLElement): string | undefined {
     element.getAttribute('data-message-id-anon') ??
     undefined
   if (direct) return `data-message-id:${direct}`
+
+  const directTestId = element.getAttribute('data-testid')?.trim()
+  if (directTestId && /conversation-turn-/i.test(directTestId)) {
+    return `conversation-turn:${directTestId}`
+  }
 
   for (const attribute of Array.from(element.attributes)) {
     const name = attribute.name.toLowerCase()
@@ -294,6 +448,7 @@ function semanticScoreFor(
 ): number {
   let score = 0
   if (element.hasAttribute('data-message-author-role')) score += 0.65
+  if (!hasPrimaryCandidates && /^(user|assistant)$/i.test(element.getAttribute('data-turn') ?? '')) score += 0.35
   if (!hasPrimaryCandidates && element.matches('article, [role="article"]')) score += 0.35
   if (!hasPrimaryCandidates && element.getAttribute('data-testid')?.includes('conversation-turn')) score += 0.25
   if (role !== 'unknown') score += 0.2

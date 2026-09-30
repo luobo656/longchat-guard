@@ -98,12 +98,25 @@ describe('chrome local storage persistence model', () => {
     const storage = new MemoryStorage()
     storage.seed('conversationGuardState', {
       installSalt: 'keep-me',
-      settings: { enabled: true, generationId: 'g1' },
+      settings: {
+        enabled: true,
+        generationId: 'g1',
+        privacyConsentVersion: 1,
+        privacyConsentedAt: 77
+      },
       generations: [
         {
           id: 'g1',
           createdAt: 1,
-          samples: [],
+          samples: [{
+            conversationKey: 'chatgpt:legacy-limit',
+            generationId: 'g1',
+            firstConfirmedFailureLoad: 77324,
+            coverageState: 'mostly_complete',
+            parserHealth: 'healthy',
+            failureEvidenceQuality: 'confirmed',
+            updatedAt: 2
+          }],
           confidence: 0.05,
           suspiciousChangeCount: 0
         }
@@ -114,9 +127,26 @@ describe('chrome local storage persistence model', () => {
           generationId: 'g1',
           coverageState: 'complete',
           parserHealth: 'healthy',
-          messages: [],
-          activeFingerprints: [],
-          currentEstimatedLoad: 0,
+          messages: [
+            {
+              fingerprint: 'legacy-a',
+              role: 'assistant',
+              tokenEstimate: 900,
+              charCount: 3600,
+              observedAt: 1,
+              localBranchId: 'active'
+            },
+            {
+              fingerprint: 'legacy-b',
+              role: 'assistant',
+              tokenEstimate: 1800,
+              charCount: 7200,
+              observedAt: 2,
+              localBranchId: 'active'
+            }
+          ],
+          activeFingerprints: ['legacy-a', 'legacy-b'],
+          currentEstimatedLoad: 2700,
           updatedAt: 1
         }
       }
@@ -124,15 +154,18 @@ describe('chrome local storage persistence model', () => {
 
     const state = await loadState(storage)
 
-    expect(state.schemaVersion).toBeGreaterThanOrEqual(5)
+    expect(state.schemaVersion).toBeGreaterThanOrEqual(7)
     expect(state.installSalt).toBe('keep-me')
-    expect(state.generations[0]?.recentAssistantTokenCounts).toEqual([])
+    expect(state.generations[0]?.recentAssistantTokenCounts).toEqual([900, 1800])
+    expect(state.generations[0]?.growthHistoryConversationKeys).toEqual(['chatgpt:one'])
+    expect(state.generations[0]?.environmentConflictKeys).toEqual([])
+    expect(state.generations[0]?.samples[0]?.firstConfirmedFailureLoad).toBe(77324)
     expect(state.ledgers['chatgpt:one']?.completedAssistantFingerprints).toEqual([])
     expect(state.ledgers['chatgpt:one']?.dismissedFailureKeys).toEqual([])
     expect(state.conversationControls).toEqual({})
     expect(state.generations[0]?.verificationFactor).toBe(1)
-    expect(state.generations[0]?.feedbackBias).toBe(0)
-    expect(hasRequiredPrivacyConsent(state.settings)).toBe(false)
+    expect(hasRequiredPrivacyConsent(state.settings)).toBe(true)
+    expect(state.settings.privacyConsentedAt).toBe(77)
   })
 
   it('records affirmative privacy consent and keeps declined consent disabled', async () => {

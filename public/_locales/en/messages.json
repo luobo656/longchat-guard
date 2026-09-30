@@ -1,0 +1,73 @@
+{
+  "extensionName": { "message": "LongChat Guard" },
+  "extensionDescription": { "message": "Privacy-first local warnings for long ChatGPT conversations on Chrome and Edge." },
+  "actionTitle": { "message": "LongChat Guard" },
+
+  "riskNormal": { "message": "Normal" },
+  "riskLong": { "message": "Long" },
+  "riskOrganize": { "message": "Near risk" },
+  "riskHigh": { "message": "High risk" },
+  "riskLearning": { "message": "Learning" },
+  "riskRecognizing": { "message": "Checking" },
+
+  "labelRisk": { "message": "Risk" },
+  "labelSafe": { "message": "Safe" },
+  "labelHighRisk": { "message": "High risk" },
+  "labelLearning": { "message": "Learning" },
+
+  "learningInitial": { "message": "Initial setup" },
+  "learningCalibrating": { "message": "Calibrating" },
+  "learningStable": { "message": "Stable" },
+  "learningLearning": { "message": "Learning" },
+
+  "actionCopyContinuation": { "message": "Copy continuation prompt" },
+  "actionScanCurrent": { "message": "Scan current chat" },
+  "actionRelearn": { "message": "Relearn" },
+  "actionMute": { "message": "Mute this chat" },
+  "actionRestore": { "message": "Restore alerts" },
+  "actionScanning": { "message": "Scanning…" },
+
+  "limitQuestion": { "message": "Did this chat reach the limit?" },
+  "limitYes": { "message": "Yes" },
+  "limitNo": { "message": "No" },
+
+  "consentTitle": { "message": "Enable local long-chat alerts" },
+  "consentLocalRead": { "message": "Reads visible ChatGPT content locally to estimate long-chat risk." },
+  "consentNoUpload": { "message": "Does not upload chat content." },
+  "consentNoRawPersist": { "message": "Does not save raw chat text." },
+  "consentDeleteLocal": { "message": "Uninstall or clear extension data to remove local data." },
+  "consentAccept": { "message": "Agree and start" },
+  "consentDecline": { "message": "Not now" },
+
+  "pillAria": { "message": "Open LongChat Guard" },
+  "pillMonitoring": { "message": "Monitoring" },
+  "pillConsentRequired": { "message": "Consent required" },
+  "pillDisabled": { "message": "Disabled" },
+
+  "continuationPrompt": { "message": "Summarize the current conversation so I can continue seamlessly in a new ChatGPT chat. Preserve: the current goal, completed work, confirmed decisions, important constraints, key data/files/code state, unresolved issues, pitfalls, and next steps. Do not omit context that would affect continuation." },
+
+  "toastContinuationCopied": { "message": "Continuation prompt copied" },
+  "toastCopyFailed": { "message": "Copy failed. Please try again." },
+  "toastActionFailed": { "message": "Action failed. Please try again." },
+  "toastRelearned": { "message": "Learning restarted for the current environment" },
+  "toastRemindersRestored": { "message": "Alerts restored for this chat" },
+  "toastConversationMuted": { "message": "Alerts muted for this chat" },
+  "toastFailureLearned": { "message": "Conversation-limit sample learned" },
+  "toastFailureIgnored": { "message": "This error was ignored" },
+  "toastMonitoringEnabled": { "message": "Local long-chat alerts enabled" },
+  "toastMonitoringDeferred": { "message": "Not enabled" },
+  "toastNoConversation": { "message": "Chat is open, but its conversation information is not available yet. Refresh and try again." },
+  "toastScanConfirm": { "message": "Scan complete. Confirm whether this chat reached the length limit." },
+  "toastScanAttachments": { "message": "Scan complete. Attachment-related data was kept with lower weight." },
+  "toastScanRoleUncertain": { "message": "Scan complete. Some message roles were uncertain, so learning weight was reduced." },
+  "toastScanComplete": { "message": "Full scan complete" },
+  "toastScanFailed": { "message": "Full scan did not finish. Please try again later." },
+
+  "scanNoScroll": { "message": "Conversation scroll area was not found. Refresh and try again." },
+  "scanNoMessages": { "message": "No conversation messages are available yet. Wait for the page to finish loading." },
+  "scanHeadLoading": { "message": "Older messages are still loading. Wait a few seconds and try again." },
+  "scanTailChanging": { "message": "The end of the conversation is still changing. Wait for the page to settle." },
+  "scanAlignmentFailed": { "message": "Part of the history could not be read continuously, so this learning pass was stopped." },
+  "scanLimitReached": { "message": "This chat is very long and the scan did not finish. Try once more." },
+  "scanIncomplete": { "message": "Complete history was not confirmed, so this scan will not be used as a complete learning sample." }
+}

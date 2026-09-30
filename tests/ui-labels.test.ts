@@ -1,33 +1,32 @@
 import { describe, expect, it } from 'vitest'
 import {
-  LEARNING_EXPLANATION,
   PANEL_FORBIDDEN_VALUE_PATTERNS,
   PANEL_VISIBLE_LABELS,
-  PRIVACY_CONSENT_COPY,
-  RECOVERING_EXPLANATION
+  PRIVACY_CONSENT_COPY
 } from '../src/content/ui'
 
 describe('guard UI labels', () => {
-  it('keeps the V1 panel focused on estimate, learning, and actions', () => {
+  it('keeps the 2.0 panel focused on risk, learning, and actions', () => {
     expect(PANEL_VISIBLE_LABELS).toEqual([
-      '当前会话长度',
-      '本地风险趋势',
-      '学习状态',
-      '复制续接提示词',
-      '完整扫描当前会话',
-      '重新学习',
-      '本会话暂不提醒'
+      'Risk',
+      'Safe',
+      'High risk',
+      'Learning',
+      'Copy continuation prompt',
+      'Scan current chat',
+      'Relearn',
+      'Mute this chat'
     ])
 
     const removedLabels = [
-      '下一轮预测',
-      '统计完整性',
-      '校准置信度',
-      '确认安全至',
-      '历史风险区',
-      '5 轮后提醒',
-      '恢复上一档案',
-      '清除全部学习数据'
+      'Next-turn prediction',
+      'Coverage statistics',
+      'Calibration confidence',
+      'Confirmed safe through',
+      'Historical risk zone',
+      'Remind in 5 turns',
+      'Restore previous profile',
+      'Clear all learning data'
     ]
     for (const label of removedLabels) {
       expect(PANEL_VISIBLE_LABELS).not.toContain(label)
@@ -50,35 +49,31 @@ describe('guard UI labels', () => {
     }
   })
 
-  it('uses the approved local-trend disclaimer only', () => {
-    const visibleCopy = [
-      ...PANEL_VISIBLE_LABELS,
-      '仅作本地趋势判断，不代表 OpenAI 官方额度或上限。'
-    ].join('\n')
-
-    expect(visibleCopy).toContain('仅作本地趋势判断，不代表 OpenAI 官方额度或上限。')
-    expect(visibleCopy).not.toContain('官方剩余额度')
-    expect(visibleCopy).not.toContain('≈0')
+  it('keeps the monitoring panel copy short and direct', () => {
+    const visibleCopy = PANEL_VISIBLE_LABELS.join('\n')
+    expect(visibleCopy).toContain('Risk')
+    expect(visibleCopy).toContain('Safe')
+    expect(visibleCopy).toContain('High risk')
+    expect(visibleCopy).not.toContain('official quota progress')
+    expect(visibleCopy).not.toContain('learning evidence')
+    expect(visibleCopy).not.toContain('rule')
   })
 
   it('contains the required privacy consent copy', () => {
     expect(PRIVACY_CONSENT_COPY).toEqual([
-      '仅在本机读取当前 ChatGPT 页面内容用于长会话趋势判断。',
-      '不上传。',
-      '不保存聊天正文。',
-      '可通过卸载扩展/清除扩展数据删除本地数据。',
-      '同意并开始',
-      '暂不开启'
+      'Reads visible ChatGPT content locally to estimate long-chat risk.',
+      'Does not upload chat content.',
+      'Does not save raw chat text.',
+      'Uninstall or clear extension data to remove local data.',
+      'Agree and start',
+      'Not now'
     ])
   })
 
-  it('frames cold start as background learning instead of a dead-end failure state', () => {
-    expect(LEARNING_EXPLANATION).toContain('正在学习你的会话长度范围')
-    expect(LEARNING_EXPLANATION).toContain('完成后会自动提前提醒')
-    expect(LEARNING_EXPLANATION).toContain('请正常使用')
-    expect(LEARNING_EXPLANATION).toContain('给插件一点学习时间')
-    expect(LEARNING_EXPLANATION).not.toContain('无法可靠')
-    expect(RECOVERING_EXPLANATION).toContain('自动恢复监测')
-    expect(RECOVERING_EXPLANATION).toContain('不会丢')
+  it('avoids explanation-heavy monitoring copy', () => {
+    const visibleCopy = PANEL_VISIBLE_LABELS.join('\n')
+    expect(visibleCopy).not.toContain('Please wait while the extension learns')
+    expect(visibleCopy).not.toContain('will automatically remind you later')
+    expect(visibleCopy).not.toContain('give the extension some time')
   })
 })

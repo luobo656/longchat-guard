@@ -1,4 +1,4 @@
-# V1 验收基线
+# LongChat Guard 2.0 验收基线
 
 ## A. 构建与范围
 
@@ -12,7 +12,7 @@
 - [ ] content script 为可直接加载的 classic script，不包含顶层 ESM `import` / `export`
 - [ ] 不新增权限，不申请 `<all_urls>`、cookies、history、webRequest 等非必要权限
 
-## B. V1 用户界面
+## B. 2.0 用户界面
 
 - [ ] 未同意隐私说明前只显示一次性隐私同意卡
 - [ ] 同意卡文案包含：仅在本机读取当前 ChatGPT 页面内容用于长会话趋势判断；不上传；不保存聊天正文；可通过卸载扩展/清除扩展数据删除本地数据
@@ -22,21 +22,26 @@
 - [ ] 未同意前不做 fingerprint 或 token 估算
 - [ ] 未同意前不注册会话观察 MutationObserver 或发送监听
 - [ ] 默认只显示状态胶囊
-- [ ] 点击胶囊后只显示当前会话长度、学习状态、必要时旧会话历史可能不完整说明
-- [ ] 当前会话长度只显示正常范围 / 偏长 / 建议整理 / 接近风险区 / 暂时无法判断等模糊文案
-- [ ] 显示本地风险趋势条，但不显示任何数字、比例或额度
-- [ ] cold-start 趋势条不得伪装成精确额度
-- [ ] unreliable 趋势条明显灰化并 fail-closed
+- [ ] 点击胶囊后主信息只显示风险卡、学习状态和必要操作，不显示规则说明或统计解释
+- [ ] 风险状态只显示正常 / 偏长 / 接近风险 / 高风险 / 识别中
+- [ ] 风险轨道使用绿色到红色的固定渐变背景，白色圆点表示当前位置，圆点位置随 `trendScore` 平滑移动
+- [ ] 轨道只显示“安全 / 高风险”，不显示数字、比例、阈值或计算规则
+- [ ] 新会话负载远低于已学习风险起点时，即使 coverage incomplete、置信度较低，圆点也必须保持靠近左端；这些不确定性只影响告警决策
+- [ ] unreliable 轨道明显灰化并 fail-closed
+- [ ] 学习状态按证据分为学习中 / 初步完成 / 校准中 / 已稳定；单个失败样本不得直接显示“已稳定”
+- [ ] 主面板不显示学习样本数、附件说明、校准置信度或其他规则性说明
 - [ ] 用户界面不显示 token / tokens
 - [ ] 用户界面不显示 `≈数字`
 - [ ] 用户界面不显示数字 + K
 - [ ] 用户界面不显示阈值、百分比或可被理解为官方额度的数据
-- [ ] 底部免责声明为“仅作本地趋势判断，不代表 OpenAI 官方额度或上限。”
-- [ ] 面板只提供复制续接提示词、重新学习、本会话暂不提醒
+- [ ] 主面板不显示冗长免责声明或规则说明
+- [ ] 面板操作只提供复制续接提示词、扫描当前会话、重新学习、本会话不提醒；不提供扫描诊断或开发者工具入口
+- [ ] 当前 generation 已有 confirmed F 后隐藏“扫描当前会话”；点击“重新学习”创建新 generation 后扫描按钮重新显示
 - [ ] 面板展开在右下胶囊上方、右侧对齐，窄屏不出屏
 - [ ] 点击页面其他位置收起面板
 - [ ] 点击 Shadow DOM 内部、胶囊、面板或按钮不收起
 - [ ] Escape 收起面板
+- [ ] 完整扫描后若出现长度上限确认卡，面板自动打开并将确认卡滚动到可见区域、聚焦主要确认按钮
 - [ ] 不显示下一轮预测
 - [ ] 不显示统计完整性卡片
 - [ ] 不显示校准置信度百分比
@@ -53,29 +58,34 @@
 - [ ] 从首页点击历史会话不能继承 complete
 - [ ] 刷新已持久化 complete 的会话保持 complete
 - [ ] 直接打开旧 `/c/id` 标为 incomplete，除非此前已持久化 complete
-- [ ] incomplete 时提示旧会话历史可能不完整，实际长度可能高于当前判断
+- [ ] incomplete 时继续在内部保守处理，不能因此把结果变得更乐观；主面板不显示常驻旧会话警告
 
-## D. 风险逻辑
+## D. 2.0 L/S/F/B 风险逻辑
 
-- [ ] 风险只基于当前会话负载、已学习边界、coverage/parser 保守修正
-- [ ] composer 草稿不进入风险依据
-- [ ] expected assistant growth 不进入风险依据
-- [ ] 下一轮预测负载不进入用户可见逻辑
-- [ ] parser unreliable 时 fail-closed，显示无法可靠监测
-- [ ] coverage 不完整只能更保守，不能让结果更乐观
+- [ ] L 只取当前会话本地负载；composer 草稿、固定 expected growth、feedbackBias 不参与风险决策
+- [ ] S 只来自 complete coverage + healthy parser 的稳定 assistant completion；同会话只保留最高安全负载
+- [ ] F 只来自 confirmed conversation-length-limit；多个失败使用质量加权鲁棒低分位，单个极端低值不得完全支配 F
+- [ ] B 来自近期 assistant 增长高分位；稳定 completion 自动学习，完整历史扫描按 conversation/generation 去重 seed
+- [ ] 有 F+B 时按距离 F 还剩 3 / 2 / 1 个 B 分别进入 long / organize / high；L>=F 必须 high
+- [ ] 只有 S 没 F 时最多 long；没有 S/F 时不得伪造 organize/high
+- [ ] coverage incomplete / 低置信度不得把短新会话抬到 long/organize/high
+- [ ] parser unreliable 时 fail-closed；其他 parser/coverage 状态不通过人工加分推高风险
+- [ ] trendScore 与告警 severity 分离；有 F 时直接反映 L/F 的本地经验位置
 
-## E. 学习与校准
+## E. 学习、换代与迁移
 
-- [ ] 完整 Coverage + healthy parser 下的成功 assistant completion 可更新 Safe Floor
-- [ ] incomplete / degraded 的成功回复不得形成 confirmed Safe Floor
-- [ ] 只有明确 conversation length 类错误可更新 Failure Ceiling
-- [ ] 非长度错误不得污染 Failure Ceiling
-- [ ] “重新学习”创建新 Generation，旧样本不与新 Generation 直接平均
-- [ ] warm-start prior 不得单独制造 high 风险
+- [ ] 多个独立 complete + healthy 会话自动累积 S；同一会话只更新最高 S
+- [ ] 只有明确 conversation length 类错误可更新 F，其他错误不得污染 F
+- [ ] 已稳定要求当前 generation 同时存在 S、F、B，confirmed safe conversations >= 2，独立边界会话 >= 4
+- [ ] 已有 F+B 时，单个环境冲突不得换代；至少两个独立 conflict key 才自动新 generation
+- [ ] early-failure conflict 与 above-F safe conflict 两条链路都能自动换代，并将当前观察 seed 到新 generation
+- [ ] warm-start prior 不得单独制造 organize/high；当前新证据与旧 prior 冲突时旧边界退出当前计算
+- [ ] schema >= 7 的迁移保留 install salt、隐私同意、ledgers 和既有 S/F samples；旧完整账本可回填 B，无需用户重新扫描
 
 ## F. 隐私
 
 - [ ] `chrome.storage.local` 中无用户聊天正文
+- [ ] 成功扫描不保留诊断；失败只保存最近一次原因与最后少量结构指标，不含 URL、聊天正文或消息指纹明文，并在 7 天后自动删除
 - [ ] 无 assistant 原文
 - [ ] 无 composer 草稿正文
 - [ ] 无附件正文
@@ -86,20 +96,33 @@
 - [ ] 页面内容 locally processed, never transmitted to developer/server
 - [ ] 文档说明卸载扩展或清除扩展数据可删除本地数据
 
-## G. 品牌图标与 manifest
+## G. 品牌、本地化与 GEO
+
+- [ ] canonical brand 始终为 `LongChat Guard`，任何 locale 都不得把品牌翻译成“龙查卫队”等名称
+- [ ] 英文 display name 为 `LongChat Guard`
+- [ ] 简体中文 display name 为 `LongChat Guard · 长会话预警`
+- [ ] 繁体中文 display name 为 `LongChat Guard · 長對話預警`
+- [ ] manifest 使用 `__MSG_extensionName__` / `__MSG_extensionDescription__`、`default_locale: en` 和 `_locales/en|zh_CN|zh_TW`
+- [ ] action title 在所有语言中固定为 `LongChat Guard`
+- [ ] 普通用户可见 UI 在 en / zh_CN / zh_TW 下都有本地化文案，不出现混合语言主界面
+- [ ] README、官网、商店 listing、FAQ、llms.txt、AI discovery profile 对产品定义、品牌、隐私和官方关系保持一致
+- [ ] 官网 JSON-LD 的 SoftwareApplication 版本与发布版本一致，并互链 GitHub 与 Chrome Web Store canonical sources
+- [ ] GEO 页面提供直接问答、可引用事实和 canonical source links，不通过关键词堆砌伪造相关性
+
+## H. 品牌图标与 manifest
 
 - [ ] `public/icons/icon.svg` 存在并为深青绿底板、白色气泡、橙色守护盾牌的原创高对比构图
 - [ ] `public/icons/icon16.png`、`icon32.png`、`icon48.png`、`icon128.png` 存在
 - [ ] 图标不含 ChatGPT/OpenAI logo、六结标志、字母或文字
 - [ ] `manifest.icons` 与 `action.default_icon` 指向存在的图标路径
-- [ ] manifest name 与 `action.default_title` 均为“LongChat Guard”
+- [ ] manifest name / description / action title 使用 i18n message placeholder；各 locale 解析后品牌规则符合 G 节，action title 始终为 `LongChat Guard`
 - [ ] name/description 不暗示 OpenAI 官方关系
 - [ ] MV3 权限最小，仅 `storage` 与 `https://chatgpt.com/*`
-- [ ] manifest version 为 `1.0.1`
+- [ ] manifest version 为 `2.0.1`
 
-## H. 发布阻断
+## I. 发布阻断
 
-出现任一情况不得发布 V1：
+出现任一情况不得发布 2.0：
 
 1. 聊天正文进入持久化存储或日志
 2. 上传聊天正文

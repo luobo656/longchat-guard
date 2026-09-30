@@ -31,25 +31,17 @@ describe('feedback and conversation controls', () => {
     })
   })
 
-  it('keeps subjective timing feedback low-weight and bounded', async () => {
-    const coordinator = new StorageMutationCoordinator(new MemoryStorage())
-    for (let index = 0; index < 5; index += 1) {
-      await coordinator.recordFeedback('too_late')
+  it('ignores legacy subjective feedback bias in 2.0 risk decisions', () => {
+    const base = {
+      currentLoad: 50000,
+      coverage: 'complete' as const,
+      parserHealth: 'healthy' as const,
+      failureBoundary: 80000,
+      turnBuffer: 5000
     }
-    let state = await coordinator.loadState()
-    let generation = state.generations.find(
-      (item) => item.id === state.settings.generationId
+    expect(assessRisk({ ...base, feedbackBias: -6 })).toEqual(
+      assessRisk({ ...base, feedbackBias: 6 })
     )
-    expect(generation?.feedbackBias).toBe(6)
-
-    for (let index = 0; index < 10; index += 1) {
-      await coordinator.recordFeedback('too_early')
-    }
-    state = await coordinator.loadState()
-    generation = state.generations.find(
-      (item) => item.id === state.settings.generationId
-    )
-    expect(generation?.feedbackBias).toBe(-6)
   })
 
   it('cannot demote a confirmed failure boundary out of high risk', () => {

@@ -21,11 +21,15 @@ There is no server, no fetch/XHR backend call, no OpenAI API integration, and no
 
 ## Local User Data Handling
 
-Visible ChatGPT conversation text is processed transiently in the user's browser only after affirmative consent. Raw conversation text, assistant text, composer drafts, and attachment text are not persisted. No conversation data is transmitted to the developer or a server. Locally stored anonymous fingerprints and calibration metadata are used only for the extension's single purpose.
+Visible ChatGPT conversation text is processed transiently in the user's browser only after affirmative consent. Raw conversation text, assistant text, composer drafts, and attachment text are not persisted. No conversation data is transmitted to the developer or a server. Locally stored anonymous fingerprints, learned boundary metadata, and assistant-growth estimates are used only for the extension's single purpose. Successful history scans leave no diagnostic record; a failed scan can retain a bounded local structural diagnostic for up to 7 days with no conversation URL or raw chat text.
 
 ## No Official Quota Claims
 
-The UI does not display token counts, percentages, K values, remaining quota, or official limits. It only shows fuzzy local trend states.
+The UI does not display token counts, percentages, K values, remaining quota, or official limits. LongChat Guard learns empirical browser-side safe/failure boundaries and typical assistant-reply growth, then shows simple local risk states. These are not OpenAI-provided limits.
+
+## Localization / Brand
+
+The canonical brand is always `LongChat Guard`. Localized display names are `LongChat Guard` (English), `LongChat Guard · 长会话预警` (Simplified Chinese), and `LongChat Guard · 長對話預警` (Traditional Chinese). The brand itself is not translated. All three locales use Manifest V3 i18n resources.
 
 ## Trademark Notice
 

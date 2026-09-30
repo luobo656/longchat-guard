@@ -2,7 +2,7 @@
 
 ## Product Boundary
 
-Keep V1 focused on `chatgpt.com` long-conversation warning:
+Keep LongChat Guard 2.x focused on `chatgpt.com` long-conversation warning:
 
 - No other websites.
 - No servers.
@@ -28,3 +28,5 @@ Do not add persistent storage fields for raw user text, assistant responses, com
 ## Brand Rules
 
 Do not use OpenAI or ChatGPT logos, the six-knot mark, or any official-looking brand treatment. `ChatGPT` may be used only to identify the supported website.
+
+The canonical brand is always `LongChat Guard`. Do not translate the brand itself. User-visible copy must stay aligned across `en`, `zh_CN`, and `zh_TW` locale files.

@@ -100,7 +100,7 @@ describe('generation coordinator controls', () => {
     expect(summarizeGeneration(generation).failureCeiling).toBe(6000)
   })
 
-  it('creates a fresh generation after repeated independent earlier failures and seeds the latest boundary', async () => {
+  it('creates a fresh generation after two independent earlier failures separated by learned B', async () => {
     const coordinator = new StorageMutationCoordinator(new MemoryStorage())
 
     await observeLoad(coordinator, 'chatgpt:old', 10000, 1)
@@ -111,8 +111,13 @@ describe('generation coordinator controls', () => {
       composerTokenEstimate: 0,
       observedAt: 2
     })
+    await coordinator.seedGrowthHistory({
+      conversationKey: 'chatgpt:old',
+      tokenCounts: [1000],
+      observedAt: 2
+    })
 
-    await observeLoad(coordinator, 'chatgpt:early-1', 5000, 3)
+    await observeLoad(coordinator, 'chatgpt:early-1', 8000, 3)
     await coordinator.recordFailure({
       conversationKey: 'chatgpt:early-1',
       errorKind: 'conversation_length_limit',
@@ -121,7 +126,7 @@ describe('generation coordinator controls', () => {
       observedAt: 4
     })
 
-    await observeLoad(coordinator, 'chatgpt:early-2', 2000, 5)
+    await observeLoad(coordinator, 'chatgpt:early-2', 6000, 5)
     const result = await coordinator.recordFailure({
       conversationKey: 'chatgpt:early-2',
       errorKind: 'conversation_length_limit',
@@ -140,7 +145,53 @@ describe('generation coordinator controls', () => {
     expect(result.state.generations).toHaveLength(2)
     expect(active.createdReason).toBe('auto_change')
     expect(active.samples).toHaveLength(1)
-    expect(summarizeGeneration(active).failureCeiling).toBe(2000)
+    expect(summarizeGeneration(active).failureBoundary).toBe(6000)
     expect(old?.archivedAt).toBe(6)
+  })
+
+  it('also creates a fresh generation after two independent safe results exceed old F by more than B', async () => {
+    const coordinator = new StorageMutationCoordinator(new MemoryStorage())
+
+    await observeLoad(coordinator, 'chatgpt:old-failure', 10000, 1)
+    await coordinator.recordFailure({
+      conversationKey: 'chatgpt:old-failure',
+      errorKind: 'conversation_length_limit',
+      confidence: 'high',
+      composerTokenEstimate: 0,
+      observedAt: 2
+    })
+    await coordinator.seedGrowthHistory({
+      conversationKey: 'chatgpt:growth',
+      tokenCounts: [1000],
+      observedAt: 2
+    })
+
+    await observeLoad(coordinator, 'chatgpt:safe-1', 12000, 3)
+    await coordinator.recordCompletion({
+      conversationKey: 'chatgpt:safe-1',
+      assistantFingerprint: 'safe-1',
+      estimatedLoad: 12000,
+      assistantTokenCount: 500,
+      observedAt: 4
+    })
+
+    await observeLoad(coordinator, 'chatgpt:safe-2', 13000, 5)
+    const result = await coordinator.recordCompletion({
+      conversationKey: 'chatgpt:safe-2',
+      assistantFingerprint: 'safe-2',
+      estimatedLoad: 13000,
+      assistantTokenCount: 500,
+      observedAt: 6
+    })
+
+    const active = result.state.generations.find(
+      (generation) => generation.id === result.state.settings.generationId
+    )!
+    const summary = summarizeGeneration(active)
+    expect(result.state.generations).toHaveLength(2)
+    expect(active.createdReason).toBe('auto_change')
+    expect(summary.safeBoundary).toBe(13000)
+    expect(summary.failureBoundary).toBeUndefined()
+    expect(active.environmentConflictKeys).toEqual([])
   })
 })

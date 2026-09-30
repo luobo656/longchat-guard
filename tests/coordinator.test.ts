@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { StorageMutationCoordinator } from '../src/background/coordinator'
+import { summarizeGeneration } from '../src/core/calibration'
 import type { LocalStorageArea } from '../src/core/storage'
 
 class SlowMemoryStorage implements LocalStorageArea {
@@ -148,6 +149,62 @@ describe('storage mutation coordinator', () => {
 
     expect(result.snapshot.currentEstimatedLoad).toBe(100)
     expect(result.risk.predictedNextTurnLoad).toBe(100)
+  })
+
+  it('accumulates safe boundaries across independent complete conversations', async () => {
+    const coordinator = new StorageMutationCoordinator(new SlowMemoryStorage())
+    for (const [conversationKey, load] of [['chatgpt:safe-a', 40000], ['chatgpt:safe-b', 52000]] as const) {
+      await coordinator.observeWindow({
+        conversationKey,
+        coverageState: 'complete',
+        parserHealth: 'healthy',
+        tailEvidence: 'at_tail',
+        composerTokenEstimate: 0,
+        observedAt: load,
+        observedMessages: [{
+          contentFingerprint: conversationKey,
+          stableHintHash: `${conversationKey}-tail`,
+          role: 'assistant',
+          tokenEstimate: load,
+          charCount: load * 3,
+          observedAt: load
+        }]
+      })
+      await coordinator.recordCompletion({
+        conversationKey,
+        assistantFingerprint: `stable:${conversationKey}-tail`,
+        estimatedLoad: load,
+        assistantTokenCount: 500,
+        observedAt: load + 1
+      })
+    }
+
+    const state = await coordinator.loadState()
+    const generation = state.generations.find((item) => item.id === state.settings.generationId)
+    const safeSamples = generation?.samples.filter(
+      (sample) => sample.highestConfirmedSafeLoad !== undefined
+    ) ?? []
+    expect(safeSamples).toHaveLength(2)
+    expect(safeSamples.map((sample) => sample.highestConfirmedSafeLoad).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([40000, 52000])
+  })
+
+  it('seeds historical assistant growth only once per conversation', async () => {
+    const coordinator = new StorageMutationCoordinator(new SlowMemoryStorage())
+    await coordinator.seedGrowthHistory({
+      conversationKey: 'chatgpt:history',
+      tokenCounts: [100, 200, 300],
+      observedAt: 1
+    })
+    await coordinator.seedGrowthHistory({
+      conversationKey: 'chatgpt:history',
+      tokenCounts: [9999],
+      observedAt: 2
+    })
+    const state = await coordinator.loadState()
+    const generation = state.generations.find((item) => item.id === state.settings.generationId)!
+    expect(generation.growthHistoryConversationKeys).toEqual(['chatgpt:history'])
+    expect(generation.recentAssistantTokenCounts).toEqual([100, 200, 300])
+    expect(summarizeGeneration(generation).turnBuffer).toBe(300)
   })
 
   it('records completion and failure events idempotently without error pollution', async () => {

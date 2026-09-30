@@ -2,34 +2,41 @@
 
 ## Name
 
-LongChat Guard for ChatGPT
+LongChat Guard
 
 ## Short Description
 
-ChatGPT long-conversation warning and context-risk monitor that runs locally in Chrome.
+Local, privacy-first warnings when a ChatGPT conversation is getting long.
 
 ## Long Description
 
-LongChat Guard is a privacy-first Chrome extension for people who want a ChatGPT long-conversation warning, conversation-length monitor, or context-risk reminder on `chatgpt.com`. It does not read official OpenAI quotas and does not show exact token counts, percentages, K values, remaining limits, or official conversation limits.
+LongChat Guard is a local-first Chrome extension for long ChatGPT conversations on `chatgpt.com`. It helps you notice when a conversation is getting long and approaching a risk area learned from your own browser-side usage, so you can organize, summarize, or continue in a fresh chat before the thread becomes difficult to manage.
 
-The extension estimates conversation length trends locally and uses local calibration signals to warn when a conversation appears long or near a learned risk area. The panel offers a continuation prompt, relearning for the current environment, and per-conversation mute.
+The extension learns from local evidence rather than pretending to know an official quota. It uses confirmed safe conversations, confirmed conversation-length failures, and your typical assistant-reply growth to make simple states such as Normal, Long, Near risk, and High risk. It does not show exact token counts, percentages, remaining quota, or an official OpenAI conversation limit.
 
-LongChat Guard is designed for long ChatGPT conversations where users want an earlier signal to organize, summarize, or continue in a fresh chat without relying on a fake official quota meter.
+Useful actions are kept simple:
+- a color risk track with a current-position marker;
+- a continuation prompt for moving important working context into a fresh ChatGPT conversation;
+- optional one-time scanning of an older conversation while the local boundary is still being learned;
+- relearning when the environment changes;
+- mute/restore alerts for the current conversation.
 
-Before monitoring starts, the extension discloses its data handling and requires affirmative consent. After consent, visible ChatGPT conversation content is read transiently in the browser only for local length estimation and anonymous local fingerprinting. Raw conversation text is not persisted and is never transmitted to the developer or a third party. Choosing “Not now” keeps monitoring disabled.
+Privacy is local by design. Monitoring starts only after affirmative consent. Visible ChatGPT conversation content is processed transiently in the browser for local estimation and anonymous local fingerprinting. Raw chat text is not persisted or uploaded to the developer, a LongChat Guard server, or a third party. No OpenAI API key is required.
+
+LongChat Guard is useful for people searching for a ChatGPT long-conversation warning, conversation-length monitor, context-window risk reminder, long-chat guard, or a privacy-first ChatGPT browser extension.
 
 ## Single Purpose
 
-Provide local long-conversation trend warnings on `chatgpt.com` so users can organize and continue before a conversation becomes too long.
+Provide local long-conversation risk warnings on `chatgpt.com` so users can organize and continue long chats at the right time.
 
 ## Permission Rationale
 
-- `storage`: stores anonymous local fingerprints, internal estimates, calibration metadata, and reminder controls.
-- `https://chatgpt.com/*`: runs the content script only on ChatGPT web pages.
+- `storage`: stores anonymous local fingerprints, internal estimates, learned boundary metadata, and reminder controls.
+- `https://chatgpt.com/*`: runs the extension only on the supported ChatGPT website.
 
 ## Unofficial Notice
 
-This extension is not an official OpenAI product and is not sponsored, endorsed, or maintained by OpenAI. `ChatGPT` is used only to identify the supported website.
+LongChat Guard is an independent open-source project. It is not affiliated with, sponsored by, endorsed by, or maintained by OpenAI. “ChatGPT” is used only to identify the supported website and use case.
 
 ## Listing Links
 

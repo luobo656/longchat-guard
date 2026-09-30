@@ -30,7 +30,7 @@ export interface LocalStorageArea {
 
 const STATE_KEY = 'conversationGuardState'
 const DEFAULT_GENERATION_ID = 'default-generation'
-export const CURRENT_SCHEMA_VERSION = 6
+export const CURRENT_SCHEMA_VERSION = 7
 export const REQUIRED_PRIVACY_CONSENT_VERSION = 1
 
 export async function loadState(storage: LocalStorageArea): Promise<PersistedState> {
@@ -125,16 +125,18 @@ function createInitialGeneration(id: string, now: number): CalibrationGeneration
 export function normalizeState(raw: PersistedState): PersistedState {
   const now = Date.now()
   const generationId = raw.settings?.generationId ?? DEFAULT_GENERATION_ID
-  const generations =
+  let generations =
     raw.generations.length > 0
       ? raw.generations.map((generation) => ({
           ...generation,
           recentAssistantTokenCounts: generation.recentAssistantTokenCounts ?? [],
+          growthHistoryConversationKeys: generation.growthHistoryConversationKeys ?? [],
+          environmentConflictKeys: generation.environmentConflictKeys ?? [],
           pendingFailureConfirmations: generation.pendingFailureConfirmations ?? [],
-          suspiciousChangeCount: generation.suspiciousChangeCount ?? 0,
+          suspiciousChangeCount:
+            generation.environmentConflictKeys?.length ?? generation.suspiciousChangeCount ?? 0,
           changePointSuggested: generation.changePointSuggested ?? false,
-          verificationFactor: generation.verificationFactor ?? 1,
-          feedbackBias: generation.feedbackBias ?? 0
+          verificationFactor: generation.verificationFactor ?? 1
         }))
       : [createInitialGeneration(generationId, now)]
   const ledgers = Object.fromEntries(
@@ -148,6 +150,34 @@ export function normalizeState(raw: PersistedState): PersistedState {
       }
     ])
   )
+  if ((raw.schemaVersion ?? 0) < 7) {
+    const eligibleLedgers = Object.values(ledgers).filter((ledger) =>
+      ledger.generationId === generationId &&
+      (ledger.coverageState === 'complete' || ledger.coverageState === 'mostly_complete') &&
+      ledger.parserHealth !== 'unreliable'
+    )
+    const historicalGrowth = eligibleLedgers
+      .flatMap((ledger) => ledger.messages)
+      .filter((message) => message.role === 'assistant' && message.tokenEstimate > 0)
+      .sort((a, b) => a.observedAt - b.observedAt)
+      .map((message) => message.tokenEstimate)
+      .slice(-32)
+    if (historicalGrowth.length > 0) {
+      generations = generations.map((generation) =>
+        generation.id === generationId
+          ? {
+              ...generation,
+              recentAssistantTokenCounts: historicalGrowth,
+              growthHistoryConversationKeys: unique([
+                ...(generation.growthHistoryConversationKeys ?? []),
+                ...eligibleLedgers.map((ledger) => ledger.conversationKey)
+              ])
+            }
+          : generation
+      )
+    }
+  }
+
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     installSalt: raw.installSalt,

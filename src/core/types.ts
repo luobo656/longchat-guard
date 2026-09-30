@@ -97,6 +97,8 @@ export interface CalibrationGeneration {
   confidence: number
   suspiciousChangeCount: number
   recentAssistantTokenCounts?: number[]
+  growthHistoryConversationKeys?: string[]
+  environmentConflictKeys?: string[]
   pendingFailureConfirmations?: PendingFailureConfirmation[]
   changePointSuggested?: boolean
   feedbackBias?: number
@@ -104,6 +106,9 @@ export interface CalibrationGeneration {
 
 export interface WarmStartPrior {
   sourceGenerationId: string
+  safeBoundary?: number
+  failureBoundary?: number
+  turnBuffer?: number
   estimatedRiskStart: number
   estimatedHighRisk: number
   confidence: number
@@ -129,20 +134,24 @@ export interface ConversationControl {
 
 export interface RiskInput {
   currentLoad: number
-  composerLoad: number
-  expectedAssistantGrowth: number
-  safetyMargin: number
   coverage: CoverageState
   parserHealth: ParserHealth
-  confidence: number
+  safeBoundary?: number
+  failureBoundary?: number
+  turnBuffer?: number
+  usingWarmStartPrior?: boolean
+  // Legacy 1.x inputs are accepted for upgrade compatibility but ignored by 2.0 risk logic.
   safeFloor?: number
-  safeFloorEvidenceReady?: boolean
   failureCeiling?: number
+  composerLoad?: number
+  expectedAssistantGrowth?: number
+  safetyMargin?: number
+  confidence?: number
+  safeFloorEvidenceReady?: boolean
   estimatedRiskStart?: number
   estimatedHighRisk?: number
   suspiciousChangeCount?: number
   changePointSuggested?: boolean
-  usingWarmStartPrior?: boolean
   feedbackBias?: number
 }
 
@@ -150,5 +159,6 @@ export interface RiskAssessment {
   level: RiskLevel
   predictedNextTurnLoad: number
   score: number
+  trendScore: number
   reasons: string[]
 }

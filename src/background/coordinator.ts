@@ -3,6 +3,7 @@ import { reconcileSequence, type TailEvidence } from '../core/sequence-reconcile
 import {
   recordFailureObservation,
   recordSuccessfulAssistantCompletion,
+  seedGrowthHistory,
   summarizeGeneration
 } from '../core/calibration'
 import { assessRisk } from '../core/risk-engine'
@@ -17,7 +18,6 @@ import type {
   CoverageState,
   ErrorKind,
   EvidenceConfidence,
-  FeedbackKind,
   ObservedMessageRecord,
   ParserHealth,
   PersistedConversationLedger,
@@ -50,18 +50,24 @@ export interface FailureEvent {
   observedAt: number
 }
 
+export interface SeedGrowthHistoryEvent {
+  conversationKey: string
+  tokenCounts: number[]
+  observedAt: number
+}
+
 export type BackgroundRequest =
   | { type: 'guard.loadState' }
   | { type: 'guard.upsertLedger'; snapshot: PersistedConversationLedger }
   | { type: 'guard.observeWindow'; window: ObservedConversationWindow }
   | { type: 'guard.recordCompletion'; event: CompletionEvent }
   | { type: 'guard.recordFailure'; event: FailureEvent }
+  | { type: 'guard.seedGrowthHistory'; event: SeedGrowthHistoryEvent }
   | { type: 'guard.startGeneration'; reason: 'environment_change' | 'recalibrate'; observedAt: number }
   | { type: 'guard.restoreGeneration'; generationId: string; observedAt: number }
   | { type: 'guard.clearLearning'; observedAt: number }
   | { type: 'guard.confirmPendingFailure'; conversationKey: string; accepted: boolean; observedAt: number }
   | { type: 'guard.updateControl'; conversationKey: string; patch: Partial<ConversationControl> }
-  | { type: 'guard.recordFeedback'; feedback: FeedbackKind }
   | { type: 'guard.updatePrivacyConsent'; accepted: boolean; observedAt: number }
 
 export type BackgroundResponse =
@@ -88,10 +94,7 @@ export class StorageMutationCoordinator {
       const normalizedIncoming: PersistedConversationLedger = {
         ...snapshot,
         generationId,
-        coverageState:
-          existing?.coverageState === 'complete' || snapshot.coverageState === 'complete'
-            ? 'complete'
-            : snapshot.coverageState
+        coverageState: strongestCoverage(existing?.coverageState, snapshot.coverageState)
       }
       const merged = mergeLedgerSnapshots(existing, normalizedIncoming)
       state.ledgers[snapshot.conversationKey] = merged
@@ -114,10 +117,7 @@ export class StorageMutationCoordinator {
         activeFingerprints: existing?.activeFingerprints ?? [],
         observed: window.observedMessages,
         tailEvidence: window.tailEvidence,
-        coverageState:
-          existing?.coverageState === 'complete' || window.coverageState === 'complete'
-            ? 'complete'
-            : window.coverageState,
+        coverageState: strongestCoverage(existing?.coverageState, window.coverageState),
         parserHealth: window.parserHealth,
         now: window.observedAt
       })
@@ -149,18 +149,20 @@ export class StorageMutationCoordinator {
 
   recordCompletion(event: CompletionEvent): Promise<{ state: PersistedState; risk?: RiskAssessment }> {
     return this.enqueue(async () => {
-      const state = await loadState(this.storage)
+      let state = await loadState(this.storage)
       const ledger = state.ledgers[event.conversationKey]
       const generation = currentGeneration(state)
       if (!ledger || !generation) return { state }
       if (ledger.completedAssistantFingerprints?.includes(event.assistantFingerprint)) {
-        return { state, risk: riskFor(ledger, generation, 0) }
+        return { state, risk: riskFor(ledger, generation) }
       }
-      ledger.completedAssistantFingerprints = [
+
+      ledger.completedAssistantFingerprints = unique([
         ...(ledger.completedAssistantFingerprints ?? []),
         event.assistantFingerprint
-      ]
-      const updatedGeneration = recordSuccessfulAssistantCompletion(generation, {
+      ])
+      const wasSuggested = generation.changePointSuggested ?? false
+      const observation = {
         conversationKey: event.conversationKey,
         generationId: generation.id,
         estimatedLoad: event.estimatedLoad,
@@ -169,10 +171,42 @@ export class StorageMutationCoordinator {
         coverageState: ledger.coverageState,
         parserHealth: ledger.parserHealth,
         observedAt: event.observedAt
-      })
+      } as const
+      const updatedGeneration = recordSuccessfulAssistantCompletion(generation, observation)
+      replaceGeneration(state, updatedGeneration)
+
+      if (!wasSuggested && updatedGeneration.changePointSuggested) {
+        state = rollToAutoChangeGenerationFromSuccess(state, observation)
+        const activeGeneration = currentGeneration(state)
+        if (!activeGeneration) throw new Error('missing_generation_after_auto_change')
+        ledger.generationId = activeGeneration.id
+        state.ledgers[event.conversationKey] = ledger
+        await saveState(this.storage, state)
+        return { state, risk: riskFor(ledger, activeGeneration) }
+      }
+
+      await saveState(this.storage, state)
+      return { state, risk: riskFor(ledger, updatedGeneration) }
+    })
+  }
+
+  seedGrowthHistory(event: SeedGrowthHistoryEvent): Promise<{ state: PersistedState; risk?: RiskAssessment }> {
+    return this.enqueue(async () => {
+      const state = await loadState(this.storage)
+      const generation = currentGeneration(state)
+      if (!generation) return { state }
+      const updatedGeneration = seedGrowthHistory(
+        generation,
+        event.conversationKey,
+        event.tokenCounts
+      )
       replaceGeneration(state, updatedGeneration)
       await saveState(this.storage, state)
-      return { state, risk: riskFor(ledger, updatedGeneration, 0) }
+      const ledger = state.ledgers[event.conversationKey]
+      return {
+        state,
+        ...(ledger ? { risk: riskFor(ledger, updatedGeneration) } : {})
+      }
     })
   }
 
@@ -184,6 +218,7 @@ export class StorageMutationCoordinator {
       if (!ledger || !generation) return { state }
 
       const estimatedLoad = ledger.currentEstimatedLoad + event.composerTokenEstimate
+      const wasSuggested = generation.changePointSuggested ?? false
       const confirmedKey = confirmedFailureKey(generation.id, event.errorKind)
       const dismissedKey = dismissedFailureKey(generation.id, event.errorKind, estimatedLoad)
       if (ledger.confirmedFailureFingerprints?.includes(confirmedKey)) {
@@ -219,6 +254,7 @@ export class StorageMutationCoordinator {
       if (
         event.errorKind === 'conversation_length_limit' &&
         event.confidence === 'high' &&
+        !wasSuggested &&
         updatedGeneration.changePointSuggested
       ) {
         state = rollToAutoChangeGeneration(state, observation)
@@ -279,6 +315,7 @@ export class StorageMutationCoordinator {
       const generation = currentGeneration(state)
       const ledger = state.ledgers[conversationKey]
       if (!generation || !ledger) return { state }
+      const wasSuggested = generation.changePointSuggested ?? false
 
       const pending = generation.pendingFailureConfirmations?.find(
         (item) => item.conversationKey === conversationKey
@@ -319,7 +356,7 @@ export class StorageMutationCoordinator {
       ])
       replaceGeneration(state, updatedGeneration)
 
-      if (updatedGeneration.changePointSuggested) {
+      if (!wasSuggested && updatedGeneration.changePointSuggested) {
         state = rollToAutoChangeGeneration(state, observation)
         const activeGeneration = currentGeneration(state)
         if (!activeGeneration) throw new Error('missing_generation_after_auto_change')
@@ -353,31 +390,6 @@ export class StorageMutationCoordinator {
     })
   }
 
-  recordFeedback(feedback: FeedbackKind): Promise<PersistedState> {
-    return this.enqueue(async () => {
-      const state = await loadState(this.storage)
-      const generation = currentGeneration(state)
-      if (!generation) return state
-      const current = generation.feedbackBias ?? 0
-      const nextBias =
-        feedback === 'too_early'
-          ? current - 2
-          : feedback === 'too_late'
-            ? current + 2
-            : current > 0
-              ? current - 1
-              : current < 0
-                ? current + 1
-                : 0
-      replaceGeneration(state, {
-        ...generation,
-        feedbackBias: Math.max(-6, Math.min(6, nextBias))
-      })
-      await saveState(this.storage, state)
-      return state
-    })
-  }
-
   updatePrivacyConsent(accepted: boolean, observedAt: number): Promise<PersistedState> {
     return this.enqueue(async () => {
       const state = await loadState(this.storage)
@@ -392,6 +404,20 @@ export class StorageMutationCoordinator {
     this.queue = next.catch(() => undefined)
     return next
   }
+}
+
+function strongestCoverage(
+  existing: CoverageState | undefined,
+  incoming: CoverageState
+): CoverageState {
+  if (!existing) return incoming
+  const rank: Record<CoverageState, number> = {
+    unknown: 0,
+    incomplete: 1,
+    mostly_complete: 2,
+    complete: 3
+  }
+  return rank[existing] >= rank[incoming] ? existing : incoming
 }
 
 function rollToAutoChangeGeneration(
@@ -413,7 +439,40 @@ function rollToAutoChangeGeneration(
     generationId: generation.id,
     confidence: 'high'
   })
-  replaceGeneration(rolled, seeded)
+  replaceGeneration(rolled, {
+    ...seeded,
+    environmentConflictKeys: [],
+    suspiciousChangeCount: 0,
+    changePointSuggested: false
+  })
+  return rolled
+}
+
+function rollToAutoChangeGenerationFromSuccess(
+  state: PersistedState,
+  observation: {
+    conversationKey: string
+    estimatedLoad: number
+    assistantTokenCount: number
+    assistantFingerprint: string
+    coverageState: CoverageState
+    parserHealth: ParserHealth
+    observedAt: number
+  }
+): PersistedState {
+  const rolled = startNewGeneration(state, 'auto_change', observation.observedAt)
+  const generation = currentGeneration(rolled)
+  if (!generation) throw new Error('missing_generation_after_auto_change')
+  const seeded = recordSuccessfulAssistantCompletion(generation, {
+    ...observation,
+    generationId: generation.id
+  })
+  replaceGeneration(rolled, {
+    ...seeded,
+    environmentConflictKeys: [],
+    suspiciousChangeCount: 0,
+    changePointSuggested: false
+  })
   return rolled
 }
 
@@ -447,28 +506,20 @@ function replaceGeneration(state: PersistedState, generation: NonNullable<Return
 function riskFor(
   ledger: PersistedConversationLedger,
   generation: NonNullable<ReturnType<typeof currentGeneration>>,
-  _composerTokenEstimate: number
+  _legacyComposerTokenEstimate = 0
 ): RiskAssessment {
   const summary = summarizeGeneration(generation)
-  const input = {
+  return assessRisk({
     currentLoad: ledger.currentEstimatedLoad,
-    composerLoad: 0,
-    expectedAssistantGrowth: 0,
-    safetyMargin: 0,
     coverage: ledger.coverageState,
     parserHealth: ledger.parserHealth,
-    confidence: summary.confidence
-  }
-  return assessRisk({
-    ...input,
-    ...(summary.safeFloor !== undefined ? { safeFloor: summary.safeFloor } : {}),
-    safeFloorEvidenceReady: summary.safeFloorEvidenceReady,
-    ...(summary.failureCeiling !== undefined ? { failureCeiling: summary.failureCeiling } : {}),
-    estimatedRiskStart: summary.estimatedRiskStart,
-    estimatedHighRisk: summary.estimatedHighRisk,
-    suspiciousChangeCount: summary.suspiciousChangeCount,
-    changePointSuggested: summary.changePointSuggested,
-    usingWarmStartPrior: summary.usingWarmStartPrior,
-    feedbackBias: generation.feedbackBias ?? 0
+    ...(summary.safeBoundary !== undefined
+      ? { safeBoundary: summary.safeBoundary }
+      : {}),
+    ...(summary.failureBoundary !== undefined
+      ? { failureBoundary: summary.failureBoundary }
+      : {}),
+    turnBuffer: summary.turnBuffer,
+    usingWarmStartPrior: summary.usingWarmStartPrior
   })
 }

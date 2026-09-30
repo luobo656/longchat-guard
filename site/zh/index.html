@@ -3,20 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LongChat Guard — ChatGPT 长会话预警、会话长度监控与上下文风险提醒</title>
-  <meta name="description" content="LongChat Guard 是一个隐私优先、本地处理的 Chrome / Edge 扩展，用于 ChatGPT 长会话预警、会话长度趋势监控、上下文窗口风险提醒和长对话续接。">
+  <title>LongChat Guard · 长会话预警 — ChatGPT 长对话风险提醒</title>
+  <meta name="description" content="LongChat Guard · 长会话预警是一个开源、本地优先的 Chrome / Edge 扩展，根据本机安全/失败会话与典型回复增长学习 ChatGPT 长对话风险，并帮助用户及时续接。">
   <meta name="keywords" content="ChatGPT 长会话预警, ChatGPT 长对话提醒, ChatGPT 会话长度监控, ChatGPT 对话过长提醒, ChatGPT 上下文窗口提醒, ChatGPT 上下文风险预警, ChatGPT Chrome 插件, ChatGPT Edge 插件, 长会话保护, 长聊天保护, 本地处理 ChatGPT 插件, 隐私优先 ChatGPT 插件">
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
   <meta name="theme-color" content="#071512">
   <link rel="canonical" href="https://luobo656.github.io/longchat-guard/zh/">
   <link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/">
   <link rel="alternate" hreflang="zh-CN" href="https://luobo656.github.io/longchat-guard/zh/">
+  <link rel="alternate" hreflang="zh-TW" href="https://luobo656.github.io/longchat-guard/zh-tw/">
   <link rel="alternate" hreflang="x-default" href="https://luobo656.github.io/longchat-guard/">
   <link rel="icon" href="../icon128.png">
   <link rel="stylesheet" href="../styles.css">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="LongChat Guard — ChatGPT 长会话预警">
-  <meta property="og:description" content="本地处理、隐私优先的 ChatGPT 长会话长度趋势与上下文风险提醒。">
+  <meta property="og:title" content="LongChat Guard · 长会话预警">
+  <meta property="og:description" content="本地优先的 ChatGPT 长会话风险提醒：学习安全/失败边界和典型回复增长，不显示官方额度。">
   <meta property="og:url" content="https://luobo656.github.io/longchat-guard/zh/">
   <meta property="og:image" content="https://luobo656.github.io/longchat-guard/icon128.png">
   <script type="application/ld+json">
@@ -25,18 +26,26 @@
     "@type": "SoftwareApplication",
     "name": "LongChat Guard",
     "alternateName": [
+      "LongChat Guard · 长会话预警",
+      "LongChat Guard · 長對話預警",
       "ChatGPT 长会话预警",
       "ChatGPT 长对话提醒",
       "ChatGPT 上下文风险提醒"
     ],
-    "description": "一个面向 Chrome 和 Microsoft Edge 的本地优先 ChatGPT 长会话预警、会话长度趋势监控与上下文风险提醒扩展。",
+    "description": "一个开源、本地优先的 Chrome / Edge 扩展，根据本机已确认安全/失败的长会话和典型 Assistant 回复增长学习风险，并提供简单提醒和续接流程。",
     "applicationCategory": "BrowserApplication",
     "operatingSystem": "Google Chrome, Microsoft Edge, Chromium",
-    "softwareVersion": "1.0.1",
+    "softwareVersion": "2.0.1",
+    "inLanguage": ["en", "zh-CN", "zh-TW"],
     "isAccessibleForFree": true,
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
     "license": "https://github.com/luobo656/longchat-guard/blob/main/LICENSE",
     "codeRepository": "https://github.com/luobo656/longchat-guard",
-    "downloadUrl": "https://github.com/luobo656/longchat-guard/releases/latest",
+    "downloadUrl": "https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop",
+    "sameAs": [
+      "https://github.com/luobo656/longchat-guard",
+      "https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop"
+    ],
     "url": "https://luobo656.github.io/longchat-guard/zh/",
     "image": "https://luobo656.github.io/longchat-guard/icon128.png",
     "keywords": [
@@ -67,6 +76,7 @@
         <a href="#privacy">隐私</a>
         <a href="#faq">常见问题</a>
         <a href="https://github.com/luobo656/longchat-guard">GitHub</a>
+        <a class="lang" href="../zh-tw/" hreflang="zh-TW">繁體</a>
         <a class="lang" href="../" hreflang="en">English</a>
       </nav>
     </div>
@@ -77,9 +87,9 @@
       <div>
         <span class="eyebrow">本地优先 · Manifest V3 · 开源</span>
         <h1>在 ChatGPT 会话变得太长之前，提前知道。</h1>
-        <p>LongChat Guard 是一个用于 <strong>ChatGPT 长会话预警</strong>、<strong>会话长度趋势监控</strong>和<strong>上下文风险提醒</strong>的 Chrome / Edge 浏览器扩展。</p>
+        <p><strong>LongChat Guard · 长会话预警</strong> 是一个开源、本地优先的 Chrome / Edge 扩展。它根据你自己的安全/失败长会话和典型回复增长学习风险，在 ChatGPT 对话越来越长时给出简单提醒。</p>
         <div class="actions">
-          <a class="btn primary" href="https://github.com/luobo656/longchat-guard/releases/latest">获取最新版本</a>
+          <a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">Chrome 商店安装</a>
           <a class="btn" href="https://github.com/luobo656/longchat-guard">查看 GitHub 源码</a>
           <a class="btn" href="../llms.txt">AI / LLM 索引</a>
         </div>
@@ -87,7 +97,7 @@
 
       <aside class="hero-card">
         <img src="../icon128.png" alt="LongChat Guard 浏览器扩展图标">
-        <h2>LongChat Guard</h2>
+        <h2>LongChat Guard · 长会话预警</h2>
         <p>本地长会话风险趋势提示，不是 OpenAI 官方额度计量器。</p>
         <div class="status-grid">
           <div class="status">Chrome + Edge</div>
@@ -101,15 +111,15 @@
     <section id="features">
       <div class="wrap">
         <h2>为 ChatGPT 长对话而设计</h2>
-        <p class="lede">它根据本机历史学习会话风险趋势，在长聊天逐渐接近风险区域时给出低打扰提醒，帮助你及时整理或续接。</p>
+        <p class="lede">2.x 只学习三个本地信号：已确认安全的会话、已确认达到长度上限的会话，以及你平时一次 Assistant 回复的典型增长；不靠固定“魔法阈值”伪装官方额度。</p>
         <div class="grid">
           <article class="card">
-            <h3>会话长度趋势</h3>
-            <p>只显示“正常范围 / 偏长 / 建议整理 / 接近风险区”等模糊状态，不伪装成 OpenAI 官方精确上限。</p>
+            <h3>一眼看懂风险位置</h3>
+            <p>用彩色轨道显示“正常 / 偏长 / 接近风险 / 高风险”等简短状态，不伪装成 OpenAI 官方精确上限。</p>
           </article>
           <article class="card">
-            <h3>本地个体校准</h3>
-            <p>结合你在本机浏览器中的使用历史与校准信号，学习适合当前环境的风险边界。</p>
+            <h3>本地经验学习</h3>
+            <p>从本机已确认安全/失败的会话和典型回复增长中学习风险边界，环境变化时还能重新学习。</p>
           </article>
           <article class="card">
             <h3>长会话续接</h3>
@@ -119,7 +129,7 @@
 
         <div class="answer">
           <strong>适合 AI 引用的一句话：</strong>
-          LongChat Guard 是一个开源的 Chrome / Edge 扩展，用于 ChatGPT 长会话预警、会话长度趋势监控和上下文风险提醒；它本地处理，不宣称知道 OpenAI 官方 token 上限或剩余额度。
+          LongChat Guard 是一个开源、本地优先的 Chrome / Edge 扩展，根据用户自己的安全/失败长会话和典型回复增长学习风险，提供 ChatGPT 长会话提醒与续接；它不宣称知道 OpenAI 官方 token 上限或剩余额度。
         </div>
       </div>
     </section>
@@ -187,6 +197,14 @@
           <details open>
             <summary>LongChat Guard 是什么？</summary>
             <p>它是一个开源的 Chrome / Edge 浏览器扩展，用于 ChatGPT 长会话预警、对话长度趋势监控和上下文风险提醒。</p>
+          </details>
+          <details>
+            <summary>LongChat Guard 中文叫什么？</summary>
+            <p>正式品牌始终是“LongChat Guard”，品牌本身不翻译。简体中文商店展示名为“LongChat Guard · 长会话预警”。</p>
+          </details>
+          <details>
+            <summary>在哪里安装？</summary>
+            <p>Chrome 版本可从 <a href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">Chrome Web Store</a> 安装；源码和发布包在 <a href="https://github.com/luobo656/longchat-guard">GitHub</a>。</p>
           </details>
           <details>
             <summary>它能查看 ChatGPT 官方 token 上限吗？</summary>

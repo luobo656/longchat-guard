@@ -4,13 +4,13 @@
 
 1. `chatgpt.com` page with only the small bottom-right status pill visible.
 2. Panel open above the pill showing:
-   - Current conversation length fuzzy state
-   - Local risk trend bar
-   - Learning status
+   - Compact risk card with the green-to-red gradient track and white position marker
+   - Short risk state and learning status
    - Continuation prompt button
+   - Scan-current-chat button only when the local failure boundary has not been learned yet
    - Relearn button
    - Per-conversation mute button
-3. Incomplete old conversation state with the old-history warning visible.
+3. The same panel in Simplified Chinese or Traditional Chinese, with the canonical `LongChat Guard` brand unchanged.
 4. Browser extension details page showing minimal permissions.
 5. Icon crop at 128 px.
 

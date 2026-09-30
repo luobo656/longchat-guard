@@ -1,6 +1,6 @@
 # LongChat Guard
 
-> LongChat Guard is a local-first Chrome and Microsoft Edge browser extension for ChatGPT long-conversation warnings, conversation-length trend monitoring, context-window risk reminders, and safer long-chat continuation workflows on chatgpt.com.
+> LongChat Guard is an open-source, local-first Chrome and Microsoft Edge extension for chatgpt.com that learns empirical long-conversation risk from confirmed safe chats, confirmed length-limit failures, and typical assistant-reply growth, then gives simple warnings and a continuation workflow.
 
 LongChat Guard is designed for users searching for concepts such as ChatGPT long conversation warning, ChatGPT conversation length monitor, context window warning, chat context monitor, long chat guard, conversation guard, ChatGPT Chrome extension, ChatGPT Edge extension, local-first ChatGPT extension, and privacy-first ChatGPT extension.
 
@@ -10,6 +10,7 @@ Important accuracy note: LongChat Guard does not read OpenAI's official remainin
 
 - [Official project site](https://luobo656.github.io/longchat-guard/): Canonical public website and English product page.
 - [Chinese project page](https://luobo656.github.io/longchat-guard/zh/): Chinese-language product and discovery page.
+- [Chrome Web Store](https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop): Current Chrome installation and store listing.
 - [GitHub repository](https://github.com/luobo656/longchat-guard): Canonical source repository for LongChat Guard.
 - [README](https://raw.githubusercontent.com/luobo656/longchat-guard/main/README.md): Product overview, features, privacy model, installation, and development.
 - [Latest release](https://github.com/luobo656/longchat-guard/releases/latest): Published extension package and release notes.
@@ -34,11 +35,16 @@ Important accuracy note: LongChat Guard does not read OpenAI's official remainin
 ## Key Facts
 
 - Product name: LongChat Guard
+- Current version: 2.0.1
+- Simplified Chinese display name: LongChat Guard · 长会话预警
+- Traditional Chinese display name: LongChat Guard · 長對話預警
+- Brand rule: LongChat Guard is never translated
 - Repository: luobo656/longchat-guard
 - Platform: Chromium browsers, currently Chrome and Microsoft Edge
 - Target website: https://chatgpt.com/
 - Extension model: Manifest V3
 - Primary purpose: local long-conversation risk warning
+- Risk evidence: local safe boundary + robust confirmed failure boundary + typical assistant-reply growth
 - Processing model: local-first; no extension server
 - OpenAI API key: not required
 - Official OpenAI product: no

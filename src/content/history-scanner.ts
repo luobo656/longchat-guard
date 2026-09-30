@@ -1,5 +1,4 @@
-import { reconcileSequence } from '../core/sequence-reconciler'
-import type { MessageRecord, ObservedMessageRecord } from '../core/types'
+import type { ObservedMessageRecord } from '../core/types'
 import type { PageMessageSnapshot } from '../core/page-adapter'
 import { findConversationScrollContainer, readMessages } from './dom-reader'
 
@@ -11,6 +10,33 @@ export type HistoryScanFailureReason =
   | 'window_alignment_failed'
   | 'scan_limit_reached'
 
+export interface HistoryScanDiagnostic {
+  at: number
+  phase:
+    | 'start'
+    | 'settle_bottom'
+    | 'capture'
+    | 'scroll_up'
+    | 'wait_load'
+    | 'top_probe'
+    | 'verify_tail'
+    | 'complete'
+    | 'failure'
+    | 'restore'
+  step?: number
+  scrollTop: number
+  scrollHeight: number
+  clientHeight: number
+  logicalTop?: number
+  scrollMode?: 'normal' | 'reversed'
+  pageMessageCount?: number
+  observedCount?: number
+  addedCount?: number
+  totalMessageCount?: number
+  reason?: HistoryScanFailureReason
+  surfaceHint?: string
+}
+
 export interface HistoryScanResult {
   complete: boolean
   reason?: HistoryScanFailureReason
@@ -18,14 +44,17 @@ export interface HistoryScanResult {
   messageCount: number
   attachmentCount: number
   unknownRoleCount: number
+  diagnostics: HistoryScanDiagnostic[]
 }
 
 export interface HistoryScanOptions {
   maxHeadRounds?: number
   maxSweepSteps?: number
   requiredStableRounds?: number
+  maxEmptyWindowRetries?: number
   stepRatio?: number
   settle?: () => Promise<void>
+  headSettle?: () => Promise<void>
 }
 
 interface ScrollSurface {
@@ -37,11 +66,17 @@ interface ScrollSurface {
 interface HistoryScanSource {
   surface: ScrollSurface
   readWindow(): PageMessageSnapshot[]
+  notifyScroll?(): void
+  surfaceHint?: string
+  scrollMode?: 'normal' | 'reversed'
 }
 
 type ObserveWindow = (messages: PageMessageSnapshot[]) => Promise<ObservedMessageRecord[]>
 
 const TOP_BOTTOM_TOLERANCE = 4
+const MAX_DIAGNOSTICS = 240
+const HEIGHT_STABLE_ROUNDS = 3
+const MAX_HEIGHT_SETTLE_CHECKS = 12
 
 export async function scanConversationHistory(
   doc: Document,
@@ -53,7 +88,10 @@ export async function scanConversationHistory(
   return scanHistorySource(
     {
       surface,
-      readWindow: () => readMessages(doc)
+      readWindow: () => readMessages(doc),
+      notifyScroll: () => surface.dispatchEvent(new Event('scroll', { bubbles: true })),
+      surfaceHint: describeScrollSurface(surface, doc),
+      scrollMode: detectScrollMode(surface)
     },
     observeWindow,
     options
@@ -65,168 +103,370 @@ export async function scanHistorySource(
   observeWindow: ObserveWindow,
   options: HistoryScanOptions = {}
 ): Promise<HistoryScanResult> {
-  const maxHeadRounds = options.maxHeadRounds ?? 30
-  const maxSweepSteps = options.maxSweepSteps ?? 500
-  const requiredStableRounds = options.requiredStableRounds ?? 4
-  const stepRatio = options.stepRatio ?? 0.42
+  const maxHeadRounds = options.maxHeadRounds ?? 8
+  const maxSweepSteps = options.maxSweepSteps ?? 2000
+  const requiredStableRounds = options.requiredStableRounds ?? 3
+  const maxEmptyWindowRetries = options.maxEmptyWindowRetries ?? 4
+  const stepRatio = options.stepRatio ?? 0.6
   const settle = options.settle ?? defaultSettle
-  const originalTop = source.surface.scrollTop
-
-  let messages: MessageRecord[] = []
-  let activeFingerprints: string[] = []
+  const headSettle = options.headSettle ?? (options.settle ? settle : defaultHeadSettle)
+  const scrollMode = source.scrollMode ?? 'normal'
+  const diagnostics: HistoryScanDiagnostic[] = []
+  const recordsByIdentity = new Map<string, ObservedMessageRecord>()
+  let activeIdentities: string[] = []
   let attachmentCount = 0
 
-  const capture = async (tailEvidence: 'at_tail' | 'not_tail' | 'unknown') => {
-    const pageMessages = source.readWindow()
-    if (pageMessages.length === 0) return { ok: false as const, reason: 'no_messages' as const }
+  const maxTop = (): number =>
+    Math.max(0, source.surface.scrollHeight - source.surface.clientHeight)
+
+  const logicalTop = (): number => {
+    const max = maxTop()
+    return scrollMode === 'reversed'
+      ? Math.max(0, Math.min(max, source.surface.scrollTop + max))
+      : Math.max(0, Math.min(max, source.surface.scrollTop))
+  }
+
+  const originalDistanceFromBottom = maxTop() - logicalTop()
+
+  const record = (
+    phase: HistoryScanDiagnostic['phase'],
+    detail: Omit<
+      HistoryScanDiagnostic,
+      'at' | 'phase' | 'scrollTop' | 'scrollHeight' | 'clientHeight'
+    > = {}
+  ): void => {
+    const event: HistoryScanDiagnostic = {
+      at: Date.now(),
+      phase,
+      scrollTop: source.surface.scrollTop,
+      scrollHeight: source.surface.scrollHeight,
+      clientHeight: source.surface.clientHeight,
+      logicalTop: logicalTop(),
+      scrollMode,
+      ...detail
+    }
+    diagnostics.push(event)
+    if (diagnostics.length > MAX_DIAGNOSTICS) diagnostics.shift()
+    if (typeof chrome !== 'undefined' && chrome.runtime?.id) {
+      console.debug('[LongChat Guard][history-scan]', event)
+    }
+  }
+
+  const moveSurface = (top: number): void => {
+    const max = maxTop()
+    const clampedTop = Math.max(0, Math.min(max, top))
+    source.surface.scrollTop = scrollMode === 'reversed' ? clampedTop - max : clampedTop
+    source.notifyScroll?.()
+  }
+
+  const buildObservedMessages = (): ObservedMessageRecord[] =>
+    activeIdentities.flatMap((identity, index) => {
+      const message = recordsByIdentity.get(identity)
+      if (!message) return []
+      return [{ ...message, ordinalHint: index }]
+    })
+
+  const result = (
+    complete: boolean,
+    reason?: HistoryScanFailureReason
+  ): HistoryScanResult => {
+    const observedMessages = buildObservedMessages()
+    const unknownRoleCount = observedMessages.reduce(
+      (count, message) => count + (message.role === 'unknown' ? 1 : 0),
+      0
+    )
+    return {
+      complete,
+      ...(reason ? { reason } : {}),
+      observedMessages,
+      messageCount: observedMessages.length,
+      attachmentCount,
+      unknownRoleCount,
+      diagnostics: [...diagnostics]
+    }
+  }
+
+  const fail = (reason: HistoryScanFailureReason, step?: number): HistoryScanResult => {
+    record('failure', {
+      ...(step !== undefined ? { step } : {}),
+      reason,
+      totalMessageCount: activeIdentities.length
+    })
+    return result(false, reason)
+  }
+
+  const readObservedWindow = async (
+    phase: HistoryScanDiagnostic['phase'],
+    step?: number,
+    waitForEmpty: () => Promise<void> = settle
+  ): Promise<
+    | { ok: true; observed: ObservedMessageRecord[]; pageMessageCount: number }
+    | { ok: false; reason: 'no_messages' }
+  > => {
+    let pageMessages = source.readWindow()
+    let retries = 0
+    while (pageMessages.length === 0 && retries < maxEmptyWindowRetries) {
+      record(phase, {
+        ...(step !== undefined ? { step } : {}),
+        pageMessageCount: 0,
+        totalMessageCount: activeIdentities.length
+      })
+      retries += 1
+      await waitForEmpty()
+      pageMessages = source.readWindow()
+    }
+    if (pageMessages.length === 0) return { ok: false, reason: 'no_messages' }
+
     const observed = await observeWindow(pageMessages)
+    record(phase, {
+      ...(step !== undefined ? { step } : {}),
+      pageMessageCount: pageMessages.length,
+      observedCount: observed.length,
+      totalMessageCount: activeIdentities.length
+    })
+    if (observed.length === 0) return { ok: false, reason: 'no_messages' }
+
     attachmentCount = Math.max(
       attachmentCount,
       observed.reduce((total, message) => total + (message.attachmentCount ?? 0), 0)
     )
-    const reconciled = reconcileSequence({
-      existingMessages: messages,
-      activeFingerprints,
-      observed,
-      tailEvidence,
-      coverageState: 'incomplete',
-      parserHealth: 'healthy',
-      now: Date.now()
-    })
-    if (reconciled.reliability !== 'reliable') {
-      return { ok: false as const, reason: 'window_alignment_failed' as const }
+    return { ok: true, observed, pageMessageCount: pageMessages.length }
+  }
+
+  const mergeBackwardWindow = (
+    observed: ObservedMessageRecord[]
+  ):
+    | { ok: true; addedCount: number; firstVisible: string; lastVisible: string }
+    | { ok: false; reason: 'window_alignment_failed' } => {
+    const identities = observed.map(observedIdentity)
+    if (new Set(identities).size !== identities.length) {
+      return { ok: false, reason: 'window_alignment_failed' }
     }
-    messages = reconciled.messages
-    activeFingerprints = reconciled.activeFingerprints
+
+    observed.forEach((message, index) => {
+      const identity = identities[index]
+      if (identity) recordsByIdentity.set(identity, message)
+    })
+
+    if (activeIdentities.length === 0) {
+      activeIdentities = [...identities]
+      return {
+        ok: true,
+        addedCount: identities.length,
+        firstVisible: identities[0] ?? '',
+        lastVisible: identities.at(-1) ?? ''
+      }
+    }
+
+    if (findContiguousSubsequence(activeIdentities, identities) >= 0) {
+      return {
+        ok: true,
+        addedCount: 0,
+        firstVisible: identities[0] ?? '',
+        lastVisible: identities.at(-1) ?? ''
+      }
+    }
+
+    const overlap = longestSuffixPrefixOverlap(identities, activeIdentities)
+    if (overlap <= 0) return { ok: false, reason: 'window_alignment_failed' }
+
+    const prefix = identities.slice(0, identities.length - overlap)
+    if (prefix.some((identity) => activeIdentities.includes(identity))) {
+      return { ok: false, reason: 'window_alignment_failed' }
+    }
+
+    activeIdentities = [...prefix, ...activeIdentities]
     return {
-      ok: true as const,
-      firstVisible: observed[0] ? observedIdentity(observed[0]) : '',
-      lastVisible: observed.at(-1) ? observedIdentity(observed.at(-1)!) : ''
+      ok: true,
+      addedCount: prefix.length,
+      firstVisible: identities[0] ?? '',
+      lastVisible: identities.at(-1) ?? ''
     }
   }
 
-  try {
-    let headStableRounds = 0
-    let previousHeadIdentity = ''
-    for (let round = 0; round < maxHeadRounds; round += 1) {
-      source.surface.scrollTop = 0
-      await settle()
-      const captured = await capture('not_tail')
-      if (!captured.ok) return resultFailure(captured.reason, messages, activeFingerprints, attachmentCount)
+  const captureBackward = async (
+    phase: HistoryScanDiagnostic['phase'],
+    step?: number,
+    waitForEmpty: () => Promise<void> = settle
+  ): Promise<
+    | {
+        ok: true
+        addedCount: number
+        firstVisible: string
+        lastVisible: string
+      }
+    | { ok: false; reason: HistoryScanFailureReason }
+  > => {
+    const read = await readObservedWindow(phase, step, waitForEmpty)
+    if (!read.ok) return read
+    const merged = mergeBackwardWindow(read.observed)
+    if (!merged.ok) return merged
+    record('capture', {
+      ...(step !== undefined ? { step } : {}),
+      pageMessageCount: read.pageMessageCount,
+      observedCount: read.observed.length,
+      addedCount: merged.addedCount,
+      totalMessageCount: activeIdentities.length
+    })
+    return merged
+  }
 
-      const atTop = source.surface.scrollTop <= TOP_BOTTOM_TOLERANCE
-      const sameHead = captured.firstVisible === previousHeadIdentity
-      headStableRounds = atTop && sameHead ? headStableRounds + 1 : 0
-      previousHeadIdentity = captured.firstVisible
+  const waitForHeightStability = async (step: number): Promise<number> => {
+    let lastHeight = source.surface.scrollHeight
+    let stableRounds = 0
+    for (let check = 0; check < MAX_HEIGHT_SETTLE_CHECKS; check += 1) {
+      await settle()
+      const height = source.surface.scrollHeight
+      stableRounds = height === lastHeight ? stableRounds + 1 : 0
+      lastHeight = height
+      record('wait_load', { step, totalMessageCount: activeIdentities.length })
+      if (stableRounds >= HEIGHT_STABLE_ROUNDS) break
+    }
+    return lastHeight
+  }
+
+  const settleAtBottom = async (): Promise<boolean> => {
+    let stableRounds = 0
+    let lastHeight = -1
+    const checks = Math.max(requiredStableRounds * 4, 8)
+    for (let check = 0; check < checks; check += 1) {
+      moveSurface(maxTop())
+      await settle()
+      const height = source.surface.scrollHeight
+      const atBottom = maxTop() - logicalTop() <= TOP_BOTTOM_TOLERANCE
+      stableRounds = atBottom && height === lastHeight ? stableRounds + 1 : 0
+      lastHeight = height
+      record('settle_bottom', { step: check, totalMessageCount: activeIdentities.length })
+      if (stableRounds >= requiredStableRounds) return true
+    }
+    return false
+  }
+
+  record('start', source.surfaceHint ? { surfaceHint: source.surfaceHint } : {})
+
+  try {
+    if (!(await settleAtBottom())) return fail('tail_not_stable')
+
+    const initial = await captureBackward('capture')
+    if (!initial.ok) return fail(initial.reason)
+    const confirmedTailIdentity = initial.lastVisible
+    if (!confirmedTailIdentity) return fail('no_messages')
+
+    let reachedStableTop = false
+    let topStableRounds = 0
+
+    for (let step = 0; step < maxSweepSteps; step += 1) {
+      const beforeHeight = source.surface.scrollHeight
+      const stepSize = Math.max(200, Math.floor(source.surface.clientHeight * stepRatio))
+      const nextTop = Math.max(0, logicalTop() - stepSize)
+      moveSurface(nextTop)
+      record('scroll_up', { step, totalMessageCount: activeIdentities.length })
+
+      await waitForHeightStability(step)
+
+      const captured = await captureBackward(
+        'capture',
+        step,
+        logicalTop() <= TOP_BOTTOM_TOLERANCE ? headSettle : settle
+      )
+      if (!captured.ok) return fail(captured.reason, step)
+
+      const atTop = logicalTop() <= TOP_BOTTOM_TOLERANCE
+      const noProgress =
+        captured.addedCount === 0 && source.surface.scrollHeight === beforeHeight
+
+      if (atTop && noProgress) {
+        topStableRounds += 1
+      } else {
+        topStableRounds = 0
+      }
+
+      if (atTop && topStableRounds >= requiredStableRounds) {
+        reachedStableTop = true
+        break
+      }
+    }
+
+    if (!reachedStableTop) return fail('scan_limit_reached')
+
+    let confirmedHeadIdentity = ''
+    let previousHeadHeight = -1
+    let headStableRounds = 0
+
+    for (let round = 0; round < maxHeadRounds; round += 1) {
+      moveSurface(10)
+      await settle()
+      moveSurface(0)
+      await headSettle()
+
+      const captured = await captureBackward('top_probe', round, headSettle)
+      if (!captured.ok) return fail(captured.reason, round)
+
+      const sameHead = captured.firstVisible === confirmedHeadIdentity
+      const sameHeight = source.surface.scrollHeight === previousHeadHeight
+      const atTop = logicalTop() <= TOP_BOTTOM_TOLERANCE
+      headStableRounds =
+        atTop && sameHead && sameHeight && captured.addedCount === 0
+          ? headStableRounds + 1
+          : 0
+      confirmedHeadIdentity = captured.firstVisible
+      previousHeadHeight = source.surface.scrollHeight
+
       if (headStableRounds >= requiredStableRounds) break
     }
-    if (headStableRounds < requiredStableRounds) {
-      return resultFailure('head_not_stable', messages, activeFingerprints, attachmentCount)
-    }
-    const confirmedHeadIdentity = previousHeadIdentity
 
-    let tailStableRounds = 0
-    let previousTailIdentity = ''
-    let lastSuccessfulTop = source.surface.scrollTop
-    for (let step = 0; step < maxSweepSteps; step += 1) {
-      const maxTop = Math.max(0, source.surface.scrollHeight - source.surface.clientHeight)
-      const remaining = maxTop - source.surface.scrollTop
-      const atBottom = remaining <= TOP_BOTTOM_TOLERANCE
-      const captured = await capture(atBottom ? 'at_tail' : 'not_tail')
-      if (!captured.ok) {
-        const failedTop = source.surface.scrollTop
-        const gap = failedTop - lastSuccessfulTop
-        if (gap > 24) {
-          source.surface.scrollTop = lastSuccessfulTop + Math.max(12, Math.floor(gap / 2))
-          await settle()
-          continue
-        }
-        return resultFailure(captured.reason, messages, activeFingerprints, attachmentCount)
-      }
-      lastSuccessfulTop = source.surface.scrollTop
-
-      if (atBottom) {
-        const sameTail = captured.lastVisible === previousTailIdentity
-        tailStableRounds = sameTail ? tailStableRounds + 1 : 0
-        previousTailIdentity = captured.lastVisible
-        if (tailStableRounds >= requiredStableRounds) {
-          source.surface.scrollTop = 0
-          await settle()
-          await settle()
-          const headVerification = await capture('not_tail')
-          if (!headVerification.ok) {
-            return resultFailure(
-              headVerification.reason,
-              messages,
-              activeFingerprints,
-              attachmentCount
-            )
-          }
-          if (
-            source.surface.scrollTop > TOP_BOTTOM_TOLERANCE ||
-            headVerification.firstVisible !== confirmedHeadIdentity
-          ) {
-            return resultFailure(
-              'head_not_stable',
-              messages,
-              activeFingerprints,
-              attachmentCount
-            )
-          }
-          const metrics = scanMetrics(messages, activeFingerprints)
-          return {
-            complete: true,
-            observedMessages: toObservedMessages(messages, activeFingerprints),
-            messageCount: activeFingerprints.length,
-            attachmentCount,
-            unknownRoleCount: metrics.unknownRoleCount
-          }
-        }
-        await settle()
-        continue
-      }
-
-      const stepSize = Math.max(180, Math.floor(source.surface.clientHeight * stepRatio))
-      const nextTop = Math.min(maxTop, source.surface.scrollTop + stepSize)
-      source.surface.scrollTop = nextTop
-      await settle()
+    if (headStableRounds < requiredStableRounds || !confirmedHeadIdentity) {
+      return fail('head_not_stable')
     }
 
-    return resultFailure(
-      tailStableRounds > 0 ? 'tail_not_stable' : 'scan_limit_reached',
-      messages,
-      activeFingerprints,
-      attachmentCount
-    )
+    if (!(await settleAtBottom())) return fail('tail_not_stable')
+
+    const tailRead = await readObservedWindow('verify_tail')
+    if (!tailRead.ok) return fail(tailRead.reason)
+    const tailIdentities = tailRead.observed.map(observedIdentity)
+    const tailStart = findContiguousSubsequence(activeIdentities, tailIdentities)
+    const tailMatches =
+      tailStart >= 0 &&
+      tailIdentities.at(-1) === confirmedTailIdentity &&
+      tailIdentities.at(-1) === activeIdentities.at(-1)
+
+    record('verify_tail', {
+      observedCount: tailRead.observed.length,
+      totalMessageCount: activeIdentities.length
+    })
+
+    if (!tailMatches) return fail('tail_not_stable')
+
+    record('complete', { totalMessageCount: activeIdentities.length })
+    return result(true)
   } finally {
-    source.surface.scrollTop = originalTop
+    moveSurface(Math.max(0, maxTop() - originalDistanceFromBottom))
+    record('restore', { totalMessageCount: activeIdentities.length })
   }
 }
 
-function toObservedMessages(
-  messages: MessageRecord[],
-  activeFingerprints: string[]
-): ObservedMessageRecord[] {
-  const byFingerprint = new Map(messages.map((message) => [message.fingerprint, message]))
-  return activeFingerprints.flatMap((fingerprint, index) => {
-    const message = byFingerprint.get(fingerprint)
-    if (!message?.contentFingerprint) return []
-    return [
-      {
-        contentFingerprint: message.contentFingerprint,
-        ...(message.stableHintHash ? { stableHintHash: message.stableHintHash } : {}),
-        role: message.role,
-        tokenEstimate: message.tokenEstimate,
-        charCount: message.charCount,
-        observedAt: message.lastObservedAt ?? message.observedAt,
-        ordinalHint: index,
-        ...(message.hasCode !== undefined ? { hasCode: message.hasCode } : {}),
-        ...(message.attachmentCount !== undefined
-          ? { attachmentCount: message.attachmentCount }
-          : {})
-      }
-    ]
-  })
+function detectScrollMode(surface: HTMLElement): 'normal' | 'reversed' {
+  const originalTop = surface.scrollTop
+  try {
+    surface.scrollTop = -1
+    const reversed = surface.scrollTop < 0
+    surface.scrollTop = originalTop
+    return reversed ? 'reversed' : 'normal'
+  } catch {
+    try { surface.scrollTop = originalTop } catch {}
+    return 'normal'
+  }
+}
+
+function describeScrollSurface(surface: HTMLElement, doc: Document): string {
+  if (surface === doc.scrollingElement) return `document.scrollingElement:${surface.tagName.toLowerCase()}`
+  if (surface === doc.documentElement) return `document.documentElement:${surface.tagName.toLowerCase()}`
+  if (surface === doc.body) return `document.body:${surface.tagName.toLowerCase()}`
+  const tag = surface.tagName.toLowerCase()
+  const role = surface.getAttribute('role')?.trim()
+  const id = surface.id.trim()
+  const classes = Array.from(surface.classList).slice(0, 4).join('.')
+  return [tag, id ? `#${id}` : '', classes ? `.${classes}` : '', role ? `[role=${role}]` : ''].join('')
 }
 
 function observedIdentity(message: ObservedMessageRecord): string {
@@ -235,21 +475,22 @@ function observedIdentity(message: ObservedMessageRecord): string {
     : `${message.role}:${message.contentFingerprint}`
 }
 
-function resultFailure(
-  reason: HistoryScanFailureReason,
-  messages: MessageRecord[],
-  activeFingerprints: string[],
-  attachmentCount: number
-): HistoryScanResult {
-  const metrics = scanMetrics(messages, activeFingerprints)
-  return {
-    complete: false,
-    reason,
-    observedMessages: toObservedMessages(messages, activeFingerprints),
-    messageCount: activeFingerprints.length,
-    attachmentCount,
-    unknownRoleCount: metrics.unknownRoleCount
+function findContiguousSubsequence(haystack: string[], needle: string[]): number {
+  if (needle.length === 0) return -1
+  for (let start = 0; start <= haystack.length - needle.length; start += 1) {
+    if (needle.every((value, offset) => haystack[start + offset] === value)) return start
   }
+  return -1
+}
+
+function longestSuffixPrefixOverlap(left: string[], right: string[]): number {
+  const max = Math.min(left.length, right.length)
+  for (let size = max; size > 0; size -= 1) {
+    if (left.slice(left.length - size).every((value, index) => value === right[index])) {
+      return size
+    }
+  }
+  return 0
 }
 
 function emptyFailure(reason: HistoryScanFailureReason): HistoryScanResult {
@@ -259,25 +500,26 @@ function emptyFailure(reason: HistoryScanFailureReason): HistoryScanResult {
     observedMessages: [],
     messageCount: 0,
     attachmentCount: 0,
-    unknownRoleCount: 0
-  }
-}
-
-function scanMetrics(
-  messages: MessageRecord[],
-  activeFingerprints: string[]
-): { unknownRoleCount: number } {
-  const byFingerprint = new Map(messages.map((message) => [message.fingerprint, message]))
-  return {
-    unknownRoleCount: activeFingerprints.reduce(
-      (count, fingerprint) =>
-        count + (byFingerprint.get(fingerprint)?.role === 'unknown' ? 1 : 0),
-      0
-    )
+    unknownRoleCount: 0,
+    diagnostics: [
+      {
+        at: Date.now(),
+        phase: 'failure',
+        scrollTop: 0,
+        scrollHeight: 0,
+        clientHeight: 0,
+        reason
+      }
+    ]
   }
 }
 
 async function defaultSettle(): Promise<void> {
-  await new Promise<void>((resolve) => window.setTimeout(resolve, 240))
+  await new Promise<void>((resolve) => window.setTimeout(resolve, 300))
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+}
+
+async function defaultHeadSettle(): Promise<void> {
+  await new Promise<void>((resolve) => window.setTimeout(resolve, 900))
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 }

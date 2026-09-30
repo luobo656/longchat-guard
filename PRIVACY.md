@@ -2,11 +2,12 @@
 
 LongChat Guard is a local browser extension for `chatgpt.com`.
 
-Before the extension reads or processes visible ChatGPT conversation content for the first time, it presents an in-product privacy disclosure and requires the user to choose **“同意并开始 / Agree and start.”** Choosing “暂不开启 / Not now” keeps monitoring disabled.
+Before the extension reads or processes visible ChatGPT conversation content for the first time, it presents a localized in-product privacy disclosure and requires affirmative consent. Supported UI locales include English, Simplified Chinese, and Traditional Chinese. Choosing the localized “Not now / 暂不开启 / 暫不啟用” option keeps monitoring disabled.
 
 ## Data Processing
 
 After affirmative consent, the extension reads visible page text only inside the content script so it can estimate local conversation length trends and create anonymous local fingerprints. Raw text is processed transiently in memory. Before consent, conversation text is not read, fingerprinted, token-estimated, or added to the local conversation ledger.
+A successful history scan leaves no diagnostic record. If a history scan fails, LongChat Guard may retain only a bounded local failure summary (failure reason and a few scrolling/structure metrics) for up to 7 days. That diagnostic does not include the conversation URL, raw chat text, or raw message fingerprints.
 
 ## Data Stored Locally
 
@@ -16,8 +17,9 @@ The extension may store:
 - Anonymous message fingerprints
 - Internal token and character estimates
 - Branch, coverage, and parser health metadata
-- Local calibration metadata
+- Learned safe/failure boundary metadata and recent assistant-growth estimates
 - Per-conversation reminder controls
+- On history-scan failure only: a bounded structural diagnostic summary with no conversation URL or raw chat text; it expires after 7 days
 
 ## Data Not Stored
 

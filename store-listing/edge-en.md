@@ -2,34 +2,34 @@
 
 ## Name
 
-LongChat Guard for ChatGPT
+LongChat Guard
 
 ## Short Description
 
-ChatGPT long-conversation warning and context-risk monitor that runs locally in Edge.
+Local, privacy-first warnings when a ChatGPT conversation is getting long.
 
 ## Description
 
-LongChat Guard is a privacy-first Microsoft Edge extension for ChatGPT long-conversation warnings, conversation-length monitoring, context-risk reminders, and long-chat continuation on `chatgpt.com`.
+LongChat Guard is a local-first Microsoft Edge extension for long ChatGPT conversations on `chatgpt.com`. It learns browser-side risk boundaries from confirmed safe conversations, confirmed conversation-length failures, and typical assistant-reply growth, then shows simple states such as Normal, Long, Near risk, and High risk.
 
-It helps users notice when a ChatGPT web conversation is getting long and may be worth organizing, summarizing, or continuing in a fresh conversation. It uses local trend judgment and local calibration only.
+It helps you decide when a long conversation is worth organizing, summarizing, or continuing in a fresh chat. A built-in continuation prompt makes that handoff easier.
 
-It does not show exact token counts, percentages, K values, remaining quota, or official limits. It does not require an OpenAI API key and does not upload chat content.
+LongChat Guard is not an official quota meter. It does not display exact token counts, percentages, remaining quota, or an official OpenAI conversation limit. It requires no OpenAI API key.
 
-Before monitoring starts, the extension explains its data handling and requires affirmative consent. After consent, visible ChatGPT conversation content is processed transiently in the browser for local trend estimation and anonymous local fingerprinting. Raw conversation text is not persisted or transmitted. Choosing “Not now” keeps monitoring disabled.
+Monitoring starts only after affirmative consent. Visible ChatGPT conversation content is processed transiently in the browser for local estimation and anonymous local fingerprinting. Raw chat text is not persisted or transmitted to the developer, a LongChat Guard server, or a third party.
 
 ## Single Purpose
 
-Provide local long-conversation trend warnings on `chatgpt.com`.
+Provide local long-conversation risk warnings on `chatgpt.com`.
 
 ## Permissions
 
-- `storage`: local anonymous calibration data and reminder controls.
-- `https://chatgpt.com/*`: content script for the supported website only.
+- `storage`: anonymous local fingerprints, learned boundary metadata, internal estimates, and reminder controls.
+- `https://chatgpt.com/*`: runs only on the supported ChatGPT website.
 
 ## Unofficial Notice
 
-This is not an official OpenAI or ChatGPT product. `ChatGPT` identifies the supported website only.
+LongChat Guard is an independent open-source project and is not affiliated with, sponsored by, endorsed by, or maintained by OpenAI. “ChatGPT” identifies the supported website and use case only.
 
 ## Listing Links
 

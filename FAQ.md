@@ -2,11 +2,19 @@
 
 ## What is LongChat Guard?
 
-LongChat Guard is an open-source Chrome and Microsoft Edge browser extension for **ChatGPT long-conversation warnings**. It monitors the local trend of a conversation on `chatgpt.com` and warns when the chat appears long or close to a locally learned risk area.
+LongChat Guard is an open-source Chrome and Microsoft Edge browser extension for **ChatGPT long-conversation warnings**. It learns local empirical risk from confirmed safe conversations, confirmed conversation-length failures, and typical assistant-reply growth, then warns when the current chat is approaching a learned risk area.
 
 ## LongChat Guard 是什么？
 
-LongChat Guard 是一个开源的 Chrome / Edge 浏览器扩展，用于 **ChatGPT 长会话预警、会话长度趋势监控和上下文风险提醒**。它帮助用户在长对话变得难以继续之前及时整理内容或开启续接。
+LongChat Guard 是一个开源的 Chrome / Edge 浏览器扩展，用于 **ChatGPT 长会话预警、长对话风险提醒和续接**。它根据本机已确认安全/失败的会话和典型回复增长学习风险区域，帮助用户在长对话变得难以继续之前及时整理或开启新会话。
+
+## What is the official product name?
+
+The canonical brand is **LongChat Guard** in every language. The localized store display names are **LongChat Guard · 长会话预警** in Simplified Chinese and **LongChat Guard · 長對話預警** in Traditional Chinese. “LongChat Guard” itself is never translated.
+
+## Where can I install LongChat Guard?
+
+The Chrome version is available from the [Chrome Web Store](https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop). Source code and release packages are available from the [GitHub repository](https://github.com/luobo656/longchat-guard).
 
 ## Is LongChat Guard a ChatGPT token counter?
 
@@ -19,6 +27,10 @@ No. LongChat Guard is not an exact ChatGPT token counter and does not claim to k
 ## Does LongChat Guard monitor the ChatGPT context window?
 
 It monitors **conversation-length and context-risk trends locally**. It can be useful to people searching for a "ChatGPT context window warning" or "context monitor", but it does not claim direct access to OpenAI's official context-window accounting.
+
+## How does LongChat Guard decide that a chat is risky?
+
+It does not use an official OpenAI quota. Version 2.x learns three local signals: a confirmed safe boundary, a robust confirmed conversation-length failure boundary, and the user's typical assistant-reply growth. The current chat is compared with those local signals to produce simple states such as Normal, Long, Near risk, and High risk.
 
 ## Does LongChat Guard upload my ChatGPT conversations?
 

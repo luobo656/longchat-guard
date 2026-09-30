@@ -3,9 +3,11 @@ import {
   createGeneration,
   recordFailureObservation,
   recordSuccessfulAssistantCompletion,
+  seedGrowthHistory,
   summarizeGeneration,
   upsertConversationSample
 } from '../src/core/calibration'
+import { deriveLearningStage, shouldShowScanAction } from '../src/content/app'
 
 describe('calibration', () => {
   it('uses independent conversation boundaries instead of per-turn averaging', () => {
@@ -228,7 +230,86 @@ describe('calibration', () => {
     expect(summary.reasons).toContain('contradictory_safe_and_failure_bounds')
   })
 
-  it('suspicious early failure increments change-point signal without switching generation', () => {
+  it('moves learning presentation from initial calibration to stable only with broad safe and failure evidence', () => {
+    let generation = createGeneration('stage', 1)
+    expect(deriveLearningStage(summarizeGeneration(generation))).toBe('learning')
+
+    generation = recordFailureObservation(generation, {
+      conversationKey: 'failure', generationId: 'stage', estimatedLoad: 100000,
+      errorKind: 'conversation_length_limit', confidence: 'high', coverageState: 'complete',
+      parserHealth: 'healthy', observedAt: 2
+    })
+    expect(deriveLearningStage(summarizeGeneration(generation))).toBe('initial')
+
+    for (let index = 0; index < 5; index += 1) {
+      generation = recordSuccessfulAssistantCompletion(generation, {
+        conversationKey: `safe-${index}`,
+        generationId: 'stage',
+        estimatedLoad: 50000 + index * 1000,
+        assistantTokenCount: 500,
+        assistantFingerprint: `safe-${index}-tail`,
+        coverageState: 'complete',
+        parserHealth: 'healthy',
+        observedAt: 3 + index
+      })
+      if (index === 0) {
+        expect(deriveLearningStage(summarizeGeneration(generation))).toBe('calibrating')
+      }
+    }
+
+    expect(deriveLearningStage(summarizeGeneration(generation))).toBe('stable')
+  })
+
+  it('hides manual scan after confirmed F and shows it again for a fresh generation', () => {
+    let generation = createGeneration('scan-action', 1)
+    expect(shouldShowScanAction(summarizeGeneration(generation))).toBe(true)
+    generation = recordFailureObservation(generation, {
+      conversationKey: 'limit',
+      generationId: 'scan-action',
+      estimatedLoad: 77324,
+      errorKind: 'conversation_length_limit',
+      confidence: 'high',
+      coverageState: 'complete',
+      parserHealth: 'healthy',
+      observedAt: 2
+    })
+    expect(shouldShowScanAction(summarizeGeneration(generation))).toBe(false)
+    const relearned = createGeneration('scan-action-2', 3, generation)
+    expect(shouldShowScanAction(summarizeGeneration(relearned))).toBe(true)
+  })
+
+  it('uses a robust low failure quantile so one extreme low outlier does not define F by itself', () => {
+    let generation = createGeneration('robust-f', 1)
+    for (const [index, load] of [1000, 78000, 80000, 82000].entries()) {
+      generation = recordFailureObservation(generation, {
+        conversationKey: `failure-${index}`,
+        generationId: 'robust-f',
+        estimatedLoad: load,
+        errorKind: 'conversation_length_limit',
+        confidence: 'high',
+        coverageState: 'complete',
+        parserHealth: 'healthy',
+        observedAt: 10 + index
+      })
+    }
+    const summary = summarizeGeneration(generation)
+    expect(summary.failureBoundary).toBeGreaterThan(1000)
+    expect(summary.failureBoundary).toBeLessThan(78000)
+  })
+
+  it('learns B from a high quantile of recent assistant growth and seeds history once per conversation', () => {
+    let generation = createGeneration('growth', 1)
+    generation = seedGrowthHistory(generation, 'chatgpt:old', [100, 200, 300, 400, 500])
+    const first = summarizeGeneration(generation)
+    expect(first.turnBuffer).toBe(500)
+    expect(generation.growthHistoryConversationKeys).toEqual(['chatgpt:old'])
+
+    generation = seedGrowthHistory(generation, 'chatgpt:old', [9999])
+    expect(summarizeGeneration(generation).turnBuffer).toBe(500)
+    expect(generation.growthHistoryConversationKeys).toEqual(['chatgpt:old'])
+  })
+
+  it('records one independent early-failure conflict only when F and B make it meaningful', () => {
     let generation = createGeneration('g1', 1)
     generation = recordFailureObservation(generation, {
       conversationKey: 'old',
@@ -240,10 +321,11 @@ describe('calibration', () => {
       parserHealth: 'healthy',
       observedAt: 2
     })
+    generation = seedGrowthHistory(generation, 'growth-source', [1000])
     generation = recordFailureObservation(generation, {
       conversationKey: 'new',
       generationId: 'g1',
-      estimatedLoad: 5000,
+      estimatedLoad: 8000,
       errorKind: 'conversation_length_limit',
       confidence: 'high',
       coverageState: 'complete',
@@ -251,6 +333,7 @@ describe('calibration', () => {
       observedAt: 3
     })
     expect(generation.id).toBe('g1')
+    expect(generation.environmentConflictKeys).toEqual(['failure:new'])
     expect(generation.suspiciousChangeCount).toBe(1)
     expect(generation.changePointSuggested).toBe(false)
   })

@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.0.1 - 2026-09-30
+
+- Added official Manifest V3 localization for English, Simplified Chinese, and Traditional Chinese.
+- Fixed brand identity across locales: canonical brand stays `LongChat Guard`; Chinese display names use `LongChat Guard · 长会话预警` and `LongChat Guard · 長對話預警` instead of machine-translated brand names.
+- Localized the in-product risk panel, consent flow, actions, continuation prompt, scan messages, and status copy.
+- Updated Chrome/Edge store listing copy in all three languages and added a ready-to-use update checklist.
+- Refreshed README, FAQ, llms/AI-discovery files, structured product facts, and public-site GEO content.
+- No new permissions.
+
+## 2.0.0 - 2026-09-30
+
+- Replaced additive risk heuristics with the first-principles local L/S/F/B model: current load, confirmed safe boundary, robust confirmed failure boundary, and dynamic assistant-reply growth buffer.
+- Added robust failure-boundary learning, automatic reply-growth learning, old-ledger migration, and bidirectional environment-change detection.
+- Hid manual history scanning after a confirmed failure boundary is learned; relearning restores the action for a fresh generation.
+- Reduced scan diagnostics to failure-only bounded local metadata with 7-day expiry; successful scans leave no diagnostic record.
+- Kept the finalized compact gradient risk track UI and minimal MV3 permissions.
+
 ## 1.0.1 - 2026-09-29
 
 - Reframed first-run uncertainty as a friendly local learning state instead of an error-like "unreliable" message.

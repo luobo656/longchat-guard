@@ -1,0 +1,73 @@
+{
+  "extensionName": { "message": "LongChat Guard · 長對話預警" },
+  "extensionDescription": { "message": "ChatGPT 長對話風險提醒與本機趨勢監測；不顯示官方額度，不上傳聊天原文。" },
+  "actionTitle": { "message": "LongChat Guard" },
+
+  "riskNormal": { "message": "正常" },
+  "riskLong": { "message": "偏長" },
+  "riskOrganize": { "message": "接近風險" },
+  "riskHigh": { "message": "高風險" },
+  "riskLearning": { "message": "學習中" },
+  "riskRecognizing": { "message": "識別中" },
+
+  "labelRisk": { "message": "風險" },
+  "labelSafe": { "message": "安全" },
+  "labelHighRisk": { "message": "高風險" },
+  "labelLearning": { "message": "學習" },
+
+  "learningInitial": { "message": "初步完成" },
+  "learningCalibrating": { "message": "校準中" },
+  "learningStable": { "message": "已穩定" },
+  "learningLearning": { "message": "學習中" },
+
+  "actionCopyContinuation": { "message": "複製續接提示詞" },
+  "actionScanCurrent": { "message": "掃描目前對話" },
+  "actionRelearn": { "message": "重新學習" },
+  "actionMute": { "message": "本對話不提醒" },
+  "actionRestore": { "message": "恢復提醒" },
+  "actionScanning": { "message": "正在掃描…" },
+
+  "limitQuestion": { "message": "這個對話到過上限嗎？" },
+  "limitYes": { "message": "到過" },
+  "limitNo": { "message": "沒有" },
+
+  "consentTitle": { "message": "啟用本機長對話預警" },
+  "consentLocalRead": { "message": "僅在本機讀取目前 ChatGPT 頁面內容，用於長對話趨勢判斷。" },
+  "consentNoUpload": { "message": "不上傳聊天內容。" },
+  "consentNoRawPersist": { "message": "不儲存聊天原文。" },
+  "consentDeleteLocal": { "message": "可透過解除安裝擴充功能或清除擴充功能資料刪除本機資料。" },
+  "consentAccept": { "message": "同意並開始" },
+  "consentDecline": { "message": "暫不啟用" },
+
+  "pillAria": { "message": "開啟 LongChat Guard" },
+  "pillMonitoring": { "message": "正在監測" },
+  "pillConsentRequired": { "message": "需要同意" },
+  "pillDisabled": { "message": "未啟用" },
+
+  "continuationPrompt": { "message": "請總結目前對話，讓我能在新的 ChatGPT 對話中無縫繼續。請保留：目前目標、已完成工作、已確認決定、重要限制、關鍵資料/檔案/程式碼狀態、尚未解決的問題、容易踩坑的地方，以及下一步建議。不要省略會影響後續繼續工作的上下文。" },
+
+  "toastContinuationCopied": { "message": "續接提示詞已複製" },
+  "toastCopyFailed": { "message": "複製失敗，請再試一次" },
+  "toastActionFailed": { "message": "操作失敗，請稍後再試" },
+  "toastRelearned": { "message": "已重新學習目前環境" },
+  "toastRemindersRestored": { "message": "已恢復本對話提醒" },
+  "toastConversationMuted": { "message": "本對話提醒已靜音" },
+  "toastFailureLearned": { "message": "已作為對話長度樣本學習" },
+  "toastFailureIgnored": { "message": "已忽略這次錯誤" },
+  "toastMonitoringEnabled": { "message": "已啟用本機長對話預警" },
+  "toastMonitoringDeferred": { "message": "暫不啟用" },
+  "toastNoConversation": { "message": "目前對話已開啟，但尚未識別到對話資訊。請重新整理後再試" },
+  "toastScanConfirm": { "message": "掃描完成，請確認這個對話是否曾達到長度上限" },
+  "toastScanAttachments": { "message": "掃描完成，含附件內容，已以較低權重保留" },
+  "toastScanRoleUncertain": { "message": "掃描完成，但部分訊息角色未確認，已降低學習權重" },
+  "toastScanComplete": { "message": "完整掃描完成" },
+  "toastScanFailed": { "message": "完整掃描未完成，請稍後再試" },
+
+  "scanNoScroll": { "message": "找不到對話捲動區域，請重新整理後再試" },
+  "scanNoMessages": { "message": "暫時沒有讀取到對話訊息，請等待頁面載入完成後再試" },
+  "scanHeadLoading": { "message": "較早的歷史訊息仍在載入，請稍等幾秒後再試" },
+  "scanTailChanging": { "message": "對話末端仍在變化，請等待頁面穩定後再試" },
+  "scanAlignmentFailed": { "message": "部分歷史訊息未能連續讀取，已停止本次學習以避免誤差" },
+  "scanLimitReached": { "message": "這個對話很長，本次掃描未完成，請再試一次" },
+  "scanIncomplete": { "message": "尚未確認完整歷史，本次不會作為完整學習樣本" }
+}

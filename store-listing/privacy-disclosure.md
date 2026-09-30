@@ -7,6 +7,7 @@ The extension processes conversation content locally in the user's browser after
 ## Local Processing
 
 Before any conversation text is read, the extension displays an in-product disclosure and requires the user to choose “Agree and start / 同意并开始”. If the user chooses “Not now / 暂不开启”, monitoring remains disabled. After consent, visible conversation text may be read transiently by the content script for local length estimation and anonymous fingerprinting. Raw text is not persisted.
+A successful history scan leaves no diagnostic record. If a history scan fails, the extension may keep only the failure reason and a small bounded set of scrolling/structure metrics locally for up to 7 days; the diagnostic record does not include the conversation URL, raw chat text, or raw message fingerprints.
 
 ## Local Storage
 
@@ -16,8 +17,9 @@ Stored locally:
 - Anonymous message fingerprints
 - Internal token and character estimates
 - Coverage/parser metadata
-- Calibration metadata
+- Learned safe/failure boundary metadata and recent assistant-growth estimates
 - Reminder controls
+- On scan failure only: a bounded structural diagnostic summary that contains no URL or raw chat text and expires after 7 days
 
 Not stored:
 
