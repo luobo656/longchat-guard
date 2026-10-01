@@ -17,6 +17,8 @@ Important accuracy note: LongChat Guard does not read OpenAI's official remainin
 
 ## Product and Technical Documentation
 
+- [2.0.2 methodology](https://luobo656.github.io/longchat-guard/methodology/): Transparent explanation of current load, safe boundary, confirmed failure boundary, dynamic reply-growth buffer, generation changes, privacy, and limitations.
+- [ChatGPT conversation too long guide](https://luobo656.github.io/longchat-guard/guides/chatgpt-conversation-too-long/): Practical handoff guidance when a working thread becomes too long or reaches a conversation-length failure.
 - [Long conversation warning guide](https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-warning/): Practical explanation of long ChatGPT conversations, warning signals, and continuation workflows.
 - [Context window warning guide](https://luobo656.github.io/longchat-guard/guides/chatgpt-context-window-warning/): Explains the difference between a local context-risk warning and an official OpenAI context limit.
 - [When to start a new ChatGPT conversation](https://luobo656.github.io/longchat-guard/guides/when-to-start-new-chatgpt-conversation/): Practical decision signals for summarizing and moving a long thread into a fresh conversation.

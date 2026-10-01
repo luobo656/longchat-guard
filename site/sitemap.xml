@@ -3,7 +3,7 @@
         xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://luobo656.github.io/longchat-guard/</loc>
-    <lastmod>2026-09-30</lastmod>
+    <lastmod>2026-10-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
     <xhtml:link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/"/>
@@ -12,7 +12,7 @@
   </url>
   <url>
     <loc>https://luobo656.github.io/longchat-guard/zh/</loc>
-    <lastmod>2026-09-30</lastmod>
+    <lastmod>2026-10-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
     <xhtml:link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/"/>
@@ -21,7 +21,7 @@
   </url>
   <url>
     <loc>https://luobo656.github.io/longchat-guard/zh-tw/</loc>
-    <lastmod>2026-09-30</lastmod>
+    <lastmod>2026-10-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
     <xhtml:link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/"/>
@@ -91,6 +91,49 @@
     <priority>0.85</priority>
     <xhtml:link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/guides/how-to-continue-long-chatgpt-conversation/"/>
     <xhtml:link rel="alternate" hreflang="zh-CN" href="https://luobo656.github.io/longchat-guard/zh/guides/how-to-continue-long-chatgpt-conversation/"/>
+  </url>
+
+  <url>
+    <loc>https://luobo656.github.io/longchat-guard/methodology/</loc>
+    <lastmod>2026-10-01</lastmod><changefreq>monthly</changefreq><priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://luobo656.github.io/longchat-guard/zh/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="zh-TW" href="https://luobo656.github.io/longchat-guard/zh-tw/methodology/"/>
+  </url>
+  <url>
+    <loc>https://luobo656.github.io/longchat-guard/zh/methodology/</loc>
+    <lastmod>2026-10-01</lastmod><changefreq>monthly</changefreq><priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://luobo656.github.io/longchat-guard/zh/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="zh-TW" href="https://luobo656.github.io/longchat-guard/zh-tw/methodology/"/>
+  </url>
+  <url>
+    <loc>https://luobo656.github.io/longchat-guard/zh-tw/methodology/</loc>
+    <lastmod>2026-10-01</lastmod><changefreq>monthly</changefreq><priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://luobo656.github.io/longchat-guard/zh/methodology/"/>
+    <xhtml:link rel="alternate" hreflang="zh-TW" href="https://luobo656.github.io/longchat-guard/zh-tw/methodology/"/>
+  </url>
+  <url>
+    <loc>https://luobo656.github.io/longchat-guard/guides/chatgpt-conversation-too-long/</loc>
+    <lastmod>2026-10-01</lastmod><changefreq>monthly</changefreq><priority>0.95</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/guides/chatgpt-conversation-too-long/"/>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-conversation-too-long/"/>
+    <xhtml:link rel="alternate" hreflang="zh-TW" href="https://luobo656.github.io/longchat-guard/zh-tw/guides/chatgpt-conversation-too-long/"/>
+  </url>
+  <url>
+    <loc>https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-conversation-too-long/</loc>
+    <lastmod>2026-10-01</lastmod><changefreq>monthly</changefreq><priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/guides/chatgpt-conversation-too-long/"/>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-conversation-too-long/"/>
+    <xhtml:link rel="alternate" hreflang="zh-TW" href="https://luobo656.github.io/longchat-guard/zh-tw/guides/chatgpt-conversation-too-long/"/>
+  </url>
+  <url>
+    <loc>https://luobo656.github.io/longchat-guard/zh-tw/guides/chatgpt-conversation-too-long/</loc>
+    <lastmod>2026-10-01</lastmod><changefreq>monthly</changefreq><priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/guides/chatgpt-conversation-too-long/"/>
+    <xhtml:link rel="alternate" hreflang="zh-CN" href="https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-conversation-too-long/"/>
+    <xhtml:link rel="alternate" hreflang="zh-TW" href="https://luobo656.github.io/longchat-guard/zh-tw/guides/chatgpt-conversation-too-long/"/>
   </url>
 </urlset>
 

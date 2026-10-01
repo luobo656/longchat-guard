@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LongChat Guard 2.0.2 风险判断方法：本地安全边界、失败边界与回复增长</title>
+  <meta name="description" content="公开解释 LongChat Guard 2.0.2 如何使用当前负载、安全边界、失败边界和典型回复增长在本地判断 ChatGPT 长会话风险。">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
+  <link rel="canonical" href="https://luobo656.github.io/longchat-guard/zh/methodology/">
+  <link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/methodology/">
+  <link rel="alternate" hreflang="zh-CN" href="https://luobo656.github.io/longchat-guard/zh/methodology/">
+  <link rel="alternate" hreflang="zh-TW" href="https://luobo656.github.io/longchat-guard/zh-tw/methodology/">
+  <link rel="alternate" hreflang="x-default" href="https://luobo656.github.io/longchat-guard/methodology/">
+  <link rel="icon" href="../../icon128.png">
+  <link rel="stylesheet" href="../../styles.css">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="LongChat Guard 2.0.2 风险判断方法：本地安全边界、失败边界与回复增长">
+  <meta property="og:description" content="公开解释 LongChat Guard 2.0.2 如何使用当前负载、安全边界、失败边界和典型回复增长在本地判断 ChatGPT 长会话风险。">
+  <meta property="og:url" content="https://luobo656.github.io/longchat-guard/zh/methodology/">
+  <meta property="og:image" content="https://luobo656.github.io/longchat-guard/icon128.png">
+</head>
+<body>
+  <header class="topbar"><div class="wrap nav"><a class="brand" href="../../"><img src="../../icon128.png" alt="LongChat Guard"><span>LongChat Guard</span></a><nav class="navlinks"><a href="../../">首页</a><a href="../../PRIVACY.md">隐私</a><a href="https://github.com/luobo656/longchat-guard">GitHub</a></nav></div></header>
+  <main>
+    <article class="wrap">
+      <section><span class="eyebrow">LongChat Guard 2.0.2 · 判断方法</span><h1>LongChat Guard 如何在不知道官方额度的情况下判断长会话风险？</h1><p class="lede">LongChat Guard 不知道 OpenAI 私有的“剩余会话额度”，也不会伪造一个看起来很精确的百分比。2.0.2 只使用浏览器本机里真实出现的证据进行学习。</p><div class="answer"><strong>一句话：</strong>模型使用四个概念——当前负载 L、已确认安全边界 S、稳健的已确认失败边界 F、动态单轮增长缓冲 B。目的不是预测官方 token 上限，而是在“未来几轮典型增长可能逼近本机已经观察到的失败边界”时提前提醒。</div></section>
+      <section><h2>四个本地信号</h2><div class="grid"><article class="card"><h3>L：当前会话负载</h3><p>表示当前长会话已经增长到什么程度的内部估算，不作为“官方 token 数”展示。</p></article><article class="card"><h3>S：已确认安全边界</h3><p>只有历史完整、解析健康并正常完成的 Assistant 回复才能建立安全边界，同一会话保留最高已确认安全点。</p></article><article class="card"><h3>F：已确认失败边界</h3><p>只有用户确认的“会话长度达到上限”失败才会建立 F。存在多个样本时使用稳健低分位，避免一个异常偏低样本永久主导判断。</p></article><article class="card"><h3>B：动态单轮增长缓冲</h3><p>根据最近 Assistant 回复增长的稳健高分位学习，适应不同用户每一轮回复通常增长多少。</p></article></div></section>
+      <section><h2>风险分档怎么形成？</h2><p>当 F 和 B 都存在时，系统会判断当前负载距离失败边界还容得下大约几次“典型增长”。如果已经达到 F，或者再增长一个 B 就会触及 F，则为高风险；两个 B 左右为接近风险；三个 B 左右为偏长；距离更远则保持正常。</p><p>如果只有安全边界，没有失败边界，系统不会凭空给出高风险；如果还没有任何可靠边界，就保持学习状态，而不是假装已经知道“还剩多少百分比”。</p><div class="notice"><strong>重要：</strong>页面历史不完整、置信度不足、附件不确定或刚安装插件，都不会被硬算成风险进度。解析器不可靠时会保守停止可信判断。</div></section>
+      <section><h2>为什么不用固定阈值？</h2><p>ChatGPT 网页端并没有向普通浏览器扩展公开一个简单、统一、可以诚实称为“官方剩余会话额度”的接口。用固定数字做百分比会显得精确，但依据很弱。因此 LongChat Guard 更愿意使用你当前浏览器环境里真正观察到的安全完成、长度失败和典型回复增长。</p></section>
+      <section><h2>环境变化时怎么办？</h2><p>一次异常不会立刻推翻旧模型。系统会寻找多个彼此独立的冲突证据，例如明显早于旧失败边界发生的失败，或明显超过旧失败边界仍安全完成的会话。出现多个独立冲突后，会进入新的学习代际，并允许新证据淘汰已经过时的旧边界。</p></section>
+      <section><h2>隐私与本地证据</h2><p>只有用户明确同意后才开始监测。用户聊天原文、Assistant 回复原文、输入草稿和附件正文不会持久化保存。本地只保留匿名指纹、内部估算、学习边界、增长历史和提醒设置。成功的历史扫描不会留下诊断记录；扫描失败时最多保留 7 天的有限结构诊断，不包含聊天原文和会话网址。</p></section>
+      <section><h2>这个方法能告诉你什么？</h2><p>它能给出“当前长会话是否接近你本机实际观察到的风险区域”的经验信号；不能证明 OpenAI 的精确 token 数、模型上下文窗口、剩余额度、计费额度或统一会话上限。</p><div class="actions"><a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">安装 LongChat Guard</a><a class="btn" href="../guides/chatgpt-conversation-too-long/">ChatGPT 会话太长了怎么办？</a></div></section>
+    </article></main>
+  <footer><div class="wrap footer-grid"><span>LongChat Guard · MIT License</span><span><a href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">Chrome 商店</a> · <a href="https://github.com/luobo656/longchat-guard">源码</a></span></div></footer>
+</body>
+</html>

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LongChat Guard 2.0.2 風險判斷方法：本機安全邊界、失敗邊界與回覆增長</title>
+  <meta name="description" content="公開說明 LongChat Guard 2.0.2 如何使用目前負載、安全邊界、失敗邊界和典型回覆增長在本機判斷 ChatGPT 長對話風險。">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
+  <link rel="canonical" href="https://luobo656.github.io/longchat-guard/zh-tw/methodology/">
+  <link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/methodology/">
+  <link rel="alternate" hreflang="zh-CN" href="https://luobo656.github.io/longchat-guard/zh/methodology/">
+  <link rel="alternate" hreflang="zh-TW" href="https://luobo656.github.io/longchat-guard/zh-tw/methodology/">
+  <link rel="alternate" hreflang="x-default" href="https://luobo656.github.io/longchat-guard/methodology/">
+  <link rel="icon" href="../../icon128.png">
+  <link rel="stylesheet" href="../../styles.css">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="LongChat Guard 2.0.2 風險判斷方法：本機安全邊界、失敗邊界與回覆增長">
+  <meta property="og:description" content="公開說明 LongChat Guard 2.0.2 如何使用目前負載、安全邊界、失敗邊界和典型回覆增長在本機判斷 ChatGPT 長對話風險。">
+  <meta property="og:url" content="https://luobo656.github.io/longchat-guard/zh-tw/methodology/">
+  <meta property="og:image" content="https://luobo656.github.io/longchat-guard/icon128.png">
+</head>
+<body>
+  <header class="topbar"><div class="wrap nav"><a class="brand" href="../../"><img src="../../icon128.png" alt="LongChat Guard"><span>LongChat Guard</span></a><nav class="navlinks"><a href="../../">首頁</a><a href="../../PRIVACY.md">隱私</a><a href="https://github.com/luobo656/longchat-guard">GitHub</a></nav></div></header>
+  <main>
+    <article class="wrap">
+      <section><span class="eyebrow">LongChat Guard 2.0.2 · 判斷方法</span><h1>LongChat Guard 如何在不知道官方額度的情況下判斷長對話風險？</h1><p class="lede">LongChat Guard 不知道 OpenAI 私有的「剩餘對話額度」，也不會虛構精確百分比。2.0.2 只使用瀏覽器本機中真正出現的證據學習。</p><div class="answer"><strong>簡單說：</strong>模型使用目前負載 L、已確認安全邊界 S、穩健的已確認失敗邊界 F，以及動態單輪增長緩衝 B。目的不是預測官方 token 上限，而是在未來幾輪典型增長可能逼近本機已觀察到的失敗邊界時提早提醒。</div></section>
+      <section><h2>四個本機信號</h2><div class="grid"><article class="card"><h3>L：目前對話負載</h3><p>代表目前長對話增長程度的內部估算，不作為官方 token 數顯示。</p></article><article class="card"><h3>S：已確認安全邊界</h3><p>只有歷史完整、解析健康並正常完成的 Assistant 回覆才能建立安全邊界。</p></article><article class="card"><h3>F：已確認失敗邊界</h3><p>只有使用者確認的對話長度上限失敗才建立 F；多個樣本使用穩健低分位，避免單一異常值主導。</p></article><article class="card"><h3>B：動態單輪增長緩衝</h3><p>依最近 Assistant 回覆增長的穩健高分位學習，適應不同使用習慣。</p></article></div></section>
+      <section><h2>風險分級</h2><p>當 F 和 B 都存在時，系統判斷目前負載距離失敗邊界大約還容得下幾次典型增長：下一個 B 就可能碰到 F 時屬高風險，約兩個 B 為接近風險，約三個 B 為偏長，更遠則維持正常。</p><div class="notice"><strong>重要：</strong>歷史不完整、信心不足或剛安裝，不會被硬轉成「風險百分比」。解析不可靠時會保守停止可信判斷。</div></section>
+      <section><h2>為什麼不用固定魔法數字？</h2><p>ChatGPT 網頁端並沒有向一般瀏覽器擴充功能公開一個可誠實稱為官方剩餘對話額度的通用介面。LongChat Guard 因此改用本機真正觀察到的安全完成、長度失敗和典型回覆增長。</p></section>
+      <section><h2>環境改變與隱私</h2><p>多個獨立衝突證據會啟動新的學習代際，讓新環境淘汰過時邊界。監測只在使用者同意後開始；聊天原文、Assistant 回覆原文、草稿和附件正文不持久化。失敗掃描最多保留 7 天的有限結構診斷，不含聊天原文或對話網址。</p></section>
+      <section><h2>限制</h2><p>這個方法提供的是本機經驗風險信號，不是 OpenAI 官方 token 計量、上下文視窗、剩餘額度或統一會話上限。</p><div class="actions"><a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">安裝 LongChat Guard</a><a class="btn" href="../guides/chatgpt-conversation-too-long/">ChatGPT 對話太長了怎麼辦？</a></div></section>
+    </article></main>
+  <footer><div class="wrap footer-grid"><span>LongChat Guard · MIT License</span><span><a href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">Chrome 商店</a> · <a href="https://github.com/luobo656/longchat-guard">原始碼</a></span></div></footer>
+</body>
+</html>

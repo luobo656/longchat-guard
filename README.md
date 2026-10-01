@@ -27,6 +27,12 @@ LongChat Guard is an open-source, local-first Chrome/Edge extension for **ChatGP
 - **三语本地化**：English / 简体中文 / 繁體中文；canonical brand 始终是 **LongChat Guard**。
 - **明确隐私同意**：用户主动同意前，不读取或处理 ChatGPT 会话正文。
 
+## 方法与指南
+
+- [LongChat Guard 2.0.2 风险判断方法](https://luobo656.github.io/longchat-guard/zh/methodology/)
+- [ChatGPT 会话太长了怎么办？](https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-conversation-too-long/)
+- [English methodology](https://luobo656.github.io/longchat-guard/methodology/)
+
 ## 它解决什么问题？
 
 当 ChatGPT 对话持续很久时，用户通常真正想知道的不是一个未经证实的 token 数，而是：**现在是否值得整理、总结或开启新会话？** LongChat Guard 给这个决策提供本地经验信号。
