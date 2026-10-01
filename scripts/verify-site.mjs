@@ -2,18 +2,38 @@ import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 const root = process.cwd()
-const required = [
+const chromeStoreUrl =
+  'https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop'
+
+const htmlPages = [
   'site/index.html',
   'site/zh/index.html',
   'site/zh-tw/index.html',
+  'site/methodology/index.html',
+  'site/zh/methodology/index.html',
+  'site/zh-tw/methodology/index.html',
   'site/guides/chatgpt-long-conversation-warning/index.html',
-  'site/guides/chatgpt-context-window-warning/index.html',
-  'site/guides/when-to-start-new-chatgpt-conversation/index.html',
-  'site/guides/how-to-continue-long-chatgpt-conversation/index.html',
   'site/zh/guides/chatgpt-long-conversation-warning/index.html',
+  'site/zh-tw/guides/chatgpt-long-conversation-warning/index.html',
+  'site/guides/chatgpt-context-window-warning/index.html',
   'site/zh/guides/chatgpt-context-window-warning/index.html',
+  'site/zh-tw/guides/chatgpt-context-window-warning/index.html',
+  'site/guides/when-to-start-new-chatgpt-conversation/index.html',
   'site/zh/guides/when-to-start-new-chatgpt-conversation/index.html',
+  'site/zh-tw/guides/when-to-start-new-chatgpt-conversation/index.html',
+  'site/guides/how-to-continue-long-chatgpt-conversation/index.html',
   'site/zh/guides/how-to-continue-long-chatgpt-conversation/index.html',
+  'site/zh-tw/guides/how-to-continue-long-chatgpt-conversation/index.html',
+  'site/guides/chatgpt-conversation-too-long/index.html',
+  'site/zh/guides/chatgpt-conversation-too-long/index.html',
+  'site/zh-tw/guides/chatgpt-conversation-too-long/index.html',
+  'site/guides/chatgpt-long-conversation-extension/index.html',
+  'site/zh/guides/chatgpt-long-conversation-extension/index.html',
+  'site/zh-tw/guides/chatgpt-long-conversation-extension/index.html'
+]
+
+const required = [
+  ...htmlPages,
   'site/styles.css',
   'site/robots.txt',
   'site/sitemap.xml',
@@ -31,33 +51,22 @@ for (const relative of required) {
   }
 }
 
-for (const relative of [
-  'site/index.html',
-  'site/zh/index.html',
-  'site/zh-tw/index.html',
-  'site/guides/chatgpt-long-conversation-warning/index.html',
-  'site/guides/chatgpt-context-window-warning/index.html',
-  'site/guides/when-to-start-new-chatgpt-conversation/index.html',
-  'site/guides/how-to-continue-long-chatgpt-conversation/index.html',
-  'site/zh/guides/chatgpt-long-conversation-warning/index.html',
-  'site/zh/guides/chatgpt-context-window-warning/index.html',
-  'site/zh/guides/when-to-start-new-chatgpt-conversation/index.html',
-  'site/zh/guides/how-to-continue-long-chatgpt-conversation/index.html'
-]) {
+for (const relative of htmlPages) {
   const html = readFileSync(join(root, relative), 'utf8')
   if (!html.includes('rel="canonical"')) throw new Error(`${relative} is missing canonical URL`)
   if (!html.includes('hreflang=')) throw new Error(`${relative} is missing hreflang links`)
   if (!html.includes('application/ld+json')) throw new Error(`${relative} is missing JSON-LD`)
   if (!html.includes('LongChat Guard')) throw new Error(`${relative} is missing canonical entity name`)
   if (!html.toLowerCase().includes('openai')) throw new Error(`${relative} is missing accuracy boundary`)
+  if (html.includes('<meta name="keywords"')) {
+    throw new Error(`${relative} should not rely on meta-keyword stuffing`)
+  }
 
   const scripts = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)]
   if (scripts.length === 0) throw new Error(`${relative} has no parseable JSON-LD block`)
   for (const script of scripts) JSON.parse(script[1])
 }
 
-const chromeStoreUrl =
-  'https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop'
 const englishHome = readFileSync(join(root, 'site/index.html'), 'utf8')
 const simplifiedHome = readFileSync(join(root, 'site/zh/index.html'), 'utf8')
 const traditionalHome = readFileSync(join(root, 'site/zh-tw/index.html'), 'utf8')
@@ -86,32 +95,55 @@ if (simplifiedHome.includes('龙查卫队') || traditionalHome.includes('龍查�
 }
 
 const discovery = readFileSync(join(root, 'AI_DISCOVERY.md'), 'utf8')
+const llms = readFileSync(join(root, 'llms.txt'), 'utf8')
 const llmsFull = readFileSync(join(root, 'site/llms-full.txt'), 'utf8')
-for (const [label, content] of [
+for (const [label, body] of [
   ['AI discovery profile', discovery],
+  ['llms.txt', llms],
   ['llms-full.txt', llmsFull]
 ]) {
-  if (!content.includes('2.0.2')) throw new Error(`${label} has a stale product version`)
-  if (!content.includes(chromeStoreUrl)) {
+  if (!body.includes('2.0.2')) throw new Error(`${label} has a stale product version`)
+  if (!body.includes(chromeStoreUrl)) {
     throw new Error(`${label} is missing the canonical Chrome Web Store source`)
   }
 }
 
+const base = 'https://luobo656.github.io/longchat-guard/'
+const publicUrls = [
+  base,
+  `${base}zh/`,
+  `${base}zh-tw/`,
+  `${base}methodology/`,
+  `${base}zh/methodology/`,
+  `${base}zh-tw/methodology/`,
+  `${base}guides/chatgpt-long-conversation-warning/`,
+  `${base}zh/guides/chatgpt-long-conversation-warning/`,
+  `${base}zh-tw/guides/chatgpt-long-conversation-warning/`,
+  `${base}guides/chatgpt-context-window-warning/`,
+  `${base}zh/guides/chatgpt-context-window-warning/`,
+  `${base}zh-tw/guides/chatgpt-context-window-warning/`,
+  `${base}guides/when-to-start-new-chatgpt-conversation/`,
+  `${base}zh/guides/when-to-start-new-chatgpt-conversation/`,
+  `${base}zh-tw/guides/when-to-start-new-chatgpt-conversation/`,
+  `${base}guides/how-to-continue-long-chatgpt-conversation/`,
+  `${base}zh/guides/how-to-continue-long-chatgpt-conversation/`,
+  `${base}zh-tw/guides/how-to-continue-long-chatgpt-conversation/`,
+  `${base}guides/chatgpt-conversation-too-long/`,
+  `${base}zh/guides/chatgpt-conversation-too-long/`,
+  `${base}zh-tw/guides/chatgpt-conversation-too-long/`,
+  `${base}guides/chatgpt-long-conversation-extension/`,
+  `${base}zh/guides/chatgpt-long-conversation-extension/`,
+  `${base}zh-tw/guides/chatgpt-long-conversation-extension/`
+]
+
 const sitemap = readFileSync(join(root, 'site/sitemap.xml'), 'utf8')
-for (const url of [
-  'https://luobo656.github.io/longchat-guard/',
-  'https://luobo656.github.io/longchat-guard/zh/',
-  'https://luobo656.github.io/longchat-guard/zh-tw/',
-  'https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-warning/',
-  'https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-long-conversation-warning/',
-  'https://luobo656.github.io/longchat-guard/guides/chatgpt-context-window-warning/',
-  'https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-context-window-warning/',
-  'https://luobo656.github.io/longchat-guard/guides/when-to-start-new-chatgpt-conversation/',
-  'https://luobo656.github.io/longchat-guard/zh/guides/when-to-start-new-chatgpt-conversation/',
-  'https://luobo656.github.io/longchat-guard/guides/how-to-continue-long-chatgpt-conversation/',
-  'https://luobo656.github.io/longchat-guard/zh/guides/how-to-continue-long-chatgpt-conversation/'
-]) {
-  if (!sitemap.includes(url)) throw new Error(`Sitemap is missing ${url}`)
+for (const url of publicUrls) {
+  if (!sitemap.includes(`<loc>${url}</loc>`)) throw new Error(`Sitemap is missing ${url}`)
+}
+
+const workflow = readFileSync(join(root, '.github/workflows/pages.yml'), 'utf8')
+for (const url of publicUrls) {
+  if (!workflow.includes(`"${url}"`)) throw new Error(`IndexNow list is missing ${url}`)
 }
 
 const robots = readFileSync(join(root, 'site/robots.txt'), 'utf8')
@@ -148,5 +180,4 @@ if (!bingVerification.includes('37B036533D17363D5269988B241CB474')) {
   throw new Error('Bing Webmaster Tools verification file is invalid')
 }
 
-console.log('GEO site verification passed.')
-
+console.log(`GEO site verification passed for ${htmlPages.length} localized pages and ${publicUrls.length} sitemap URLs.`)

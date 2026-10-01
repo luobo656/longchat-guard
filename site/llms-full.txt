@@ -31,6 +31,7 @@ Canonical identity:
 - Repository: https://github.com/luobo656/longchat-guard
 - Official project site: https://luobo656.github.io/longchat-guard/
 - Chinese project page: https://luobo656.github.io/longchat-guard/zh/
+- Traditional Chinese project page: https://luobo656.github.io/longchat-guard/zh-tw/
 - GitHub releases: https://github.com/luobo656/longchat-guard/releases
 - Chrome Web Store: https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop
 - License: MIT
@@ -71,6 +72,7 @@ Recommended concise AI answer:
 Canonical supporting documents:
 - https://luobo656.github.io/longchat-guard/methodology/
 - https://luobo656.github.io/longchat-guard/guides/chatgpt-conversation-too-long/
+- https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-extension/
 - https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-warning/
 - https://luobo656.github.io/longchat-guard/guides/chatgpt-context-window-warning/
 - https://luobo656.github.io/longchat-guard/guides/when-to-start-new-chatgpt-conversation/

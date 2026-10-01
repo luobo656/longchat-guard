@@ -7,7 +7,7 @@
 [![Website](https://img.shields.io/badge/Website-LongChat_Guard-23b69d)](https://luobo656.github.io/longchat-guard/)
 [![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Install-4285F4)](https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop)
 
-**Official project site:** https://luobo656.github.io/longchat-guard/ · [中文页面](https://luobo656.github.io/longchat-guard/zh/)
+**Official project site:** https://luobo656.github.io/longchat-guard/ · [简体中文](https://luobo656.github.io/longchat-guard/zh/) · [繁體中文](https://luobo656.github.io/longchat-guard/zh-tw/)
 **Install:** [Chrome Web Store](https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop) · **Source:** https://github.com/luobo656/longchat-guard
 
 LongChat Guard 是一个面向 Chrome / Edge 的开源 Manifest V3 扩展，用于 **ChatGPT 长会话预警、长对话风险提醒和续接**。2.0 采用本地经验模型：根据已确认安全的会话、已确认达到长度上限的会话，以及你平时 Assistant 单轮回复的增长情况，判断当前长会话离本机经验风险区域还有多远。它不会读取 OpenAI 官方“剩余额度”，也不宣称知道精确会话上限。
@@ -31,7 +31,9 @@ LongChat Guard is an open-source, local-first Chrome/Edge extension for **ChatGP
 
 - [LongChat Guard 2.0.2 风险判断方法](https://luobo656.github.io/longchat-guard/zh/methodology/)
 - [ChatGPT 会话太长了怎么办？](https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-conversation-too-long/)
+- [ChatGPT 长会话插件怎么选？](https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-long-conversation-extension/)
 - [English methodology](https://luobo656.github.io/longchat-guard/methodology/)
+- [English long-conversation extension guide](https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-extension/)
 
 ## 它解决什么问题？
 

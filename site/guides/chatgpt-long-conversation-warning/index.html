@@ -9,6 +9,7 @@
   <link rel="canonical" href="https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-warning/">
   <link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-warning/">
   <link rel="alternate" hreflang="zh-CN" href="https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-long-conversation-warning/">
+  <link rel="alternate" hreflang="zh-TW" href="https://luobo656.github.io/longchat-guard/zh-tw/guides/chatgpt-long-conversation-warning/">
   <link rel="alternate" hreflang="x-default" href="https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-warning/">
   <link rel="icon" href="../../icon128.png">
   <link rel="stylesheet" href="../../styles.css">
@@ -23,7 +24,7 @@
     "headline":"ChatGPT Long Conversation Warning: What It Means and How LongChat Guard Helps",
     "description":"A practical guide to long ChatGPT conversations, local risk signals, and continuation workflows.",
     "datePublished":"2026-09-22",
-    "dateModified":"2026-09-22",
+    "dateModified":"2026-10-01",
     "mainEntityOfPage":"https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-warning/",
     "author":{"@type":"Person","name":"luobo656","url":"https://github.com/luobo656"},
     "publisher":{"@type":"Organization","name":"LongChat Guard","url":"https://luobo656.github.io/longchat-guard/"}
@@ -36,7 +37,7 @@
     <span class="eyebrow">Guide · ChatGPT long conversation warning</span>
     <h1>What does a ChatGPT long conversation warning actually mean?</h1>
     <p class="lede">LongChat Guard treats a growing ChatGPT thread as a <strong>local conversation-risk trend</strong>. The goal is to help you notice when a chat may be worth organizing or continuing elsewhere, without pretending the extension can see an official OpenAI remaining quota.</p>
-    <div class="answer"><strong>Short answer:</strong> LongChat Guard monitors the local length trend of the current ChatGPT conversation after user consent, learns from browser-side calibration history, and gives coarse warnings such as normal, long, organize, or near risk.</div>
+    <div class="answer"><strong>Short answer:</strong> LongChat Guard monitors the current conversation after user consent, learns from confirmed safe chats, confirmed conversation-length failures, and typical assistant-reply growth, and gives simple states such as Normal, Long, Near risk, and High risk.</div>
     <h2>Why long ChatGPT conversations become harder to manage</h2>
     <div class="grid">
       <article class="card"><h3>More history to carry</h3><p>As a thread grows, more decisions, constraints, references, and prior turns may matter to the current task.</p></article>

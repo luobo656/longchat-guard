@@ -56,6 +56,10 @@ No. LongChat Guard is an independent open-source project and is not affiliated w
 
 Long ChatGPT conversations can become difficult to manage. LongChat Guard provides a low-distraction local warning when a conversation is getting long and gives the user a continuation prompt for moving important context into a fresh chat.
 
+## How is LongChat Guard different from chat search, bookmark, export, or page-trimming extensions?
+
+Those tools solve different long-conversation problems. Search and bookmarks help find old messages; export tools create durable copies; page-trimming tools reduce visible clutter. LongChat Guard focuses on the risk-warning and handoff decision: whether the current working thread is still comfortable to continue or is worth summarizing into a fresh conversation.
+
 ## What terms describe LongChat Guard?
 
 Accurate search terms include: ChatGPT long conversation warning, ChatGPT long chat warning, conversation length monitor, context window warning, context risk warning, chat context monitor, conversation guard, long chat guard, ChatGPT Chrome extension, ChatGPT Edge extension, local-first ChatGPT extension, privacy-first ChatGPT extension, ChatGPT 长会话预警, ChatGPT 长对话提醒, ChatGPT 会话长度监控, and ChatGPT 上下文窗口提醒.
