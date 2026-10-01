@@ -172,6 +172,26 @@ section h2 { margin: 0 0 14px; font-size: clamp(30px, 4vw, 46px); letter-spacing
 }
 .answer strong { color: #d7fff5; }
 
+.product-shot {
+  margin: 28px 0 0;
+  max-width: 760px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(13, 32, 28, .72);
+}
+.product-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+}
+.product-shot figcaption {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .terms {
   display: flex;
   flex-wrap: wrap;
