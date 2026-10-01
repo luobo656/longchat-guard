@@ -107,3 +107,19 @@ LongChat Guard 的差异化应继续保持：
 4. 排名 4–15 且已有展示：加强原页面和外链，而不是重复建新页。
 5. 商店有访问但安装低：优先改善商店截图、首屏描述和评价，而不是继续堆 SEO 页面。
 6. 争取真实社区讨论、独立评测和自然外链。
+
+## 最终全站复核
+
+2026-10-01 对 sitemap 中全部 24 个页面执行了实时 on-page SEO 审计：
+
+- 24 / 24 页面均返回 200 且可索引；
+- 0 个 critical、0 个 high 级问题；
+- canonical、hreflang、viewport、favicon 均正常；
+- 被审计页面没有图片缺失 alt 的问题；
+- 结构化数据未发现 schema 错误；
+- 英文首页、methodology、conversation-too-long、long-conversation-extension 在上一轮修正后均不再有标题或 meta 长度问题。
+
+审计工具仍对部分中文页面标记“thin content”，主要来自其按空格统计英文式 word count 的规则；中文并不以空格分词，因此不把这个机械告警当成需要堆字数的理由。后续只在真实搜索意图或用户问题需要时补充内容。
+
+Indexing Tracker 当前 24 个 URL 中 2 个已确认收录，其余主要处于新页面待发现 / 待抓取阶段；没有 crawl error 或 warning。该阶段的 health score 低主要反映新 URL 尚未抓取，不代表页面技术质量低。
+
