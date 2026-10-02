@@ -13,6 +13,7 @@ export interface GuardUiModel {
   baselineState: BaselineState
   hasRiskBoundary: boolean
   showScanAction: boolean
+  showLimitCalibrationAction: boolean
   muted: boolean
   pendingFailureConfirmation: boolean
 }
@@ -20,6 +21,7 @@ export interface GuardUiModel {
 export interface GuardUiCallbacks {
   onCopyContinuation(): void
   onScanHistory(): void
+  onCalibrateLimit(): void
   onRecalibrate(): void
   onToggleMute(): void
   onConfirmFailure(accepted: boolean): void
@@ -32,14 +34,15 @@ const DESTROY_KEY = '__conversationGuardUiDestroy'
 
 export const PANEL_VISIBLE_LABELS = [
   'Risk',
-  'Safe',
+  'Low risk',
   'High risk',
-  'Baseline',
-  'Details & actions',
+  'Basis',
+  'More actions',
   'Copy continuation prompt',
   'Scan to set baseline',
-  'Refresh current chat',
-  'Recalibrate',
+  'Update current chat progress',
+  'Calibrate with a limit-hit chat',
+  'Recalibrate baseline',
   'Mute this chat'
 ] as const
 
@@ -82,7 +85,9 @@ export class GuardUi {
   private mode: 'monitoring' | 'consent' | 'disabled' = 'monitoring'
   private open = false
   private previousBaselineState: BaselineState | undefined
+  private previousRiskLevel: RiskLevel | undefined
   private historyScanBusy = false
+  private historyScanBusyMode: 'primary' | 'limit' | undefined
 
   constructor(private readonly callbacks: GuardUiCallbacks) {
     const globalState = globalThis as typeof globalThis & {
@@ -115,6 +120,7 @@ export class GuardUi {
     })
     this.bindButton('copy', callbacks.onCopyContinuation)
     this.bindButton('scan-history', callbacks.onScanHistory)
+    this.bindButton('calibrate-limit', callbacks.onCalibrateLimit)
     this.bindButton('learn', callbacks.onRecalibrate)
     this.bindButton('mute', callbacks.onToggleMute)
     this.bindButton('confirm-yes', () => callbacks.onConfirmFailure(true))
@@ -149,21 +155,39 @@ export class GuardUi {
       currentLengthLabel(model.riskLevel, model.baselineState)
     )
     setText(this.shadow, 'baseline', baselineLabel(model.baselineState))
+    const advice = requireElement<HTMLElement>(this.shadow, '[data-role="risk-advice"]')
+    const adviceText = riskAdvice(model.riskLevel, model.baselineState)
+    advice.hidden = !adviceText
+    advice.textContent = adviceText
     const baselineHint = requireElement<HTMLElement>(this.shadow, '[data-role="baseline-hint"]')
     baselineHint.hidden = model.baselineState !== 'none'
     const advanced = requireElement<HTMLDetailsElement>(this.shadow, '[data-role="advanced-details"]')
     if (model.baselineState === 'none') advanced.open = true
     else if (this.previousBaselineState === 'none') advanced.open = false
+    const riskEscalated =
+      (model.riskLevel === 'organize' || model.riskLevel === 'high') &&
+      this.previousRiskLevel !== 'organize' &&
+      this.previousRiskLevel !== 'high'
+    if (riskEscalated) advanced.open = true
     this.previousBaselineState = model.baselineState
+    this.previousRiskLevel = model.riskLevel
 
     const scan = button(this.shadow, 'scan-history')
     scan.hidden = !model.showScanAction
     scan.disabled = this.historyScanBusy
-    scan.textContent = this.historyScanBusy
-      ? t('actionScanning', 'Scanning…')
-      : model.baselineState === 'none'
-        ? t('actionScanBaseline', 'Scan to set baseline')
-        : t('actionRefreshCurrent', 'Refresh current chat')
+    scan.textContent =
+      this.historyScanBusy && this.historyScanBusyMode === 'primary'
+        ? t('actionScanning', 'Scanning…')
+        : model.baselineState === 'none'
+          ? t('actionScanBaseline', 'Scan to set baseline')
+          : t('actionRefreshCurrent', 'Update current chat progress')
+    const calibrateLimit = button(this.shadow, 'calibrate-limit')
+    calibrateLimit.hidden = !model.showLimitCalibrationAction
+    calibrateLimit.disabled = this.historyScanBusy
+    calibrateLimit.textContent =
+      this.historyScanBusy && this.historyScanBusyMode === 'limit'
+        ? t('actionScanning', 'Scanning…')
+        : t('actionCalibrateLimit', 'Calibrate with a limit-hit chat')
 
     const pending = requireElement<HTMLElement>(this.shadow, '[data-role="pending-confirm"]')
     pending.hidden = !model.pendingFailureConfirmation
@@ -196,15 +220,23 @@ export class GuardUi {
     }, 1800)
   }
 
-  setHistoryScanBusy(busy: boolean): void {
+  setHistoryScanBusy(busy: boolean, mode: 'primary' | 'limit' = 'primary'): void {
     this.historyScanBusy = busy
+    this.historyScanBusyMode = busy ? mode : undefined
     const scan = button(this.shadow, 'scan-history')
+    const calibrateLimit = button(this.shadow, 'calibrate-limit')
     scan.disabled = busy
-    scan.textContent = busy
-      ? t('actionScanning', 'Scanning…')
-      : this.previousBaselineState === 'none'
-        ? t('actionScanBaseline', 'Scan to set baseline')
-        : t('actionRefreshCurrent', 'Refresh current chat')
+    calibrateLimit.disabled = busy
+    scan.textContent =
+      busy && mode === 'primary'
+        ? t('actionScanning', 'Scanning…')
+        : this.previousBaselineState === 'none'
+          ? t('actionScanBaseline', 'Scan to set baseline')
+          : t('actionRefreshCurrent', 'Update current chat progress')
+    calibrateLimit.textContent =
+      busy && mode === 'limit'
+        ? t('actionScanning', 'Scanning…')
+        : t('actionCalibrateLimit', 'Calibrate with a limit-hit chat')
   }
 
   focusPendingConfirmation(): void {
@@ -228,6 +260,7 @@ export class GuardUi {
         learningMode === 'cold' ? 'none' : learningMode === 'warm' ? 'inherited' : 'safe',
       hasRiskBoundary: learningMode !== 'cold',
       showScanAction: true,
+      showLimitCalibrationAction: true,
       muted: false,
       pendingFailureConfirmation: false
     })
@@ -298,6 +331,8 @@ function template(): string {
       .track::after { content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none; background:linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,0) 58%,rgba(0,0,0,.035)); }
       .thumb { position:absolute; z-index:2; top:50%; left:clamp(11px,var(--risk-position),calc(100% - 11px)); width:22px; height:22px; border-radius:50%; transform:translate(-50%,-50%); background:#fff; border:1px solid rgba(0,0,0,.06); box-shadow:0 2px 6px rgba(0,0,0,.24),0 0 0 1px rgba(255,255,255,.3); transition:left .28s cubic-bezier(.2,.75,.25,1); }
       .risk-scale { display:flex; justify-content:space-between; margin-top:5px; padding:0 1px; color:rgba(255,255,255,.46); font-size:9px; }
+      .risk-advice { margin:7px 1px 0; color:rgba(255,255,255,.82); font-size:10px; line-height:1.4; }
+      .risk-advice[hidden] { display:none; }
       .trend[data-risk="unreliable"] .track { filter:grayscale(1); opacity:.45; }
       .trend[data-risk="unreliable"] .thumb { background:#d8d8d8; }
       .trend[data-boundary-ready="false"] .track { background:linear-gradient(90deg,#72777c 0%,#91969a 50%,#a8acaf 100%); filter:none; opacity:.72; }
@@ -350,7 +385,7 @@ function template(): string {
       <div class="panel" data-role="panel" hidden>
         <div class="section" data-role="monitor-panel">
           <div class="title">LongChat Guard</div>
-          <div class="trend" data-role="trend"><div class="risk-head"><span>${t('labelRisk', 'Risk')}</span><strong data-value="current-load">${t('riskBaselineNeeded', 'Set baseline')}</strong></div><div class="track" data-role="risk-track"><div class="thumb"></div></div><div class="risk-scale"><span>${t('labelSafe', 'Safe')}</span><span>${t('labelHighRisk', 'High risk')}</span></div></div>
+          <div class="trend" data-role="trend"><div class="risk-head"><span>${t('labelRisk', 'Risk')}</span><strong data-value="current-load">${t('riskBaselineNeeded', 'Set baseline')}</strong></div><div class="track" data-role="risk-track"><div class="thumb"></div></div><div class="risk-scale"><span>${t('labelLowRisk', 'Low risk')}</span><span>${t('labelHighRisk', 'High risk')}</span></div><p class="risk-advice" data-role="risk-advice" hidden></p></div>
           <div class="pending" data-role="pending-confirm" hidden>
             <strong>${t('limitQuestion', 'Did this chat reach the limit?')}</strong>
             <div class="actions">
@@ -359,14 +394,15 @@ function template(): string {
             </div>
           </div>
           <details class="advanced" data-role="advanced-details">
-            <summary>${t('detailsActions', 'Details & actions')}</summary>
+            <summary>${t('detailsActions', 'More actions')}</summary>
             <div class="advanced-body">
               <p class="baseline-hint" data-role="baseline-hint">${t('baselineHint', 'Open a complete old chat or the current chat, then scan it to set a baseline.')}</p>
-              <div class="metric"><span>${t('labelBaseline', 'Baseline')}</span><strong data-value="baseline">${t('baselineNone', 'Not set')}</strong></div>
+              <div class="metric"><span>${t('labelBaseline', 'Basis')}</span><strong data-value="baseline">${t('baselineNone', 'Not established')}</strong></div>
               <div class="actions">
                 <button class="action primary" data-action="copy">${t('actionCopyContinuation', 'Copy continuation prompt')}</button>
                 <button class="action" data-action="scan-history">${t('actionScanBaseline', 'Scan to set baseline')}</button>
-                <button class="action" data-action="learn">${t('actionRelearn', 'Relearn')}</button>
+                <button class="action" data-action="calibrate-limit">${t('actionCalibrateLimit', 'Calibrate with a limit-hit chat')}</button>
+                <button class="action" data-action="learn">${t('actionRelearn', 'Recalibrate baseline')}</button>
                 <button class="action" data-action="mute">${t('actionMute', 'Mute this chat')}</button>
               </div>
             </div>
@@ -395,10 +431,18 @@ function template(): string {
 }
 
 function baselineLabel(state: BaselineState): string {
-  if (state === 'confirmed') return t('baselineConfirmed', 'Confirmed')
-  if (state === 'inherited') return t('baselineInherited', 'Reused')
-  if (state === 'safe') return t('baselineReady', 'Ready')
-  return t('baselineNone', 'Not set')
+  if (state === 'confirmed') return t('baselineConfirmed', 'Confirmed limit')
+  if (state === 'inherited') return t('baselineInherited', 'Previous baseline reused')
+  if (state === 'safe') return t('baselineReady', 'Reference baseline established')
+  return t('baselineNone', 'Not established')
+}
+
+function riskAdvice(level: RiskLevel, baselineState: BaselineState): string {
+  if (baselineState === 'none') return ''
+  if (level === 'long') return t('riskAdviceLong', 'This chat is getting long. Consider organizing important context.')
+  if (level === 'organize') return t('riskAdviceOrganize', 'Prepare to continue in a new chat soon.')
+  if (level === 'high') return t('riskAdviceHigh', 'Continue in a new chat now.')
+  return ''
 }
 
 function clampTrendScore(score: number): number {

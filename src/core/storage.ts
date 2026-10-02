@@ -38,6 +38,7 @@ const MAX_GROWTH_KEYS = 32
 const MAX_COMPLETION_KEYS = 32
 const MAX_FAILURE_KEYS = 8
 const MAX_LEDGER_MESSAGE_RECORDS = 32
+const MAX_CONVERSATION_CONTROLS = 16
 
 export async function loadState(storage: LocalStorageArea): Promise<PersistedState> {
   const result = await storage.get(STATE_KEY)
@@ -229,7 +230,10 @@ export function normalizeState(raw: PersistedState): PersistedState {
     createInitialGeneration(generationId, now)
   const activeGeneration = compactGeneration(selectedGeneration)
   const compactedLedgers = compactLedgers(ledgers)
-  const conversationControls = raw.conversationControls ?? {}
+  const conversationControls = compactConversationControls(
+    raw.conversationControls ?? {},
+    compactedLedgers
+  )
 
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -320,6 +324,37 @@ function compactLedger(ledger: PersistedConversationLedger): PersistedConversati
     dismissedFailureKeys: unique(ledger.dismissedFailureKeys ?? []).slice(-MAX_FAILURE_KEYS),
     updatedAt: ledger.updatedAt
   }
+}
+
+function compactConversationControls(
+  controls: Record<string, ConversationControl>,
+  ledgers: Record<string, PersistedConversationLedger>
+): Record<string, ConversationControl> {
+  return Object.fromEntries(
+    Object.entries(controls)
+      .filter(([, control]) => hasMeaningfulControl(control))
+      .sort((a, b) => controlRecency(b[0], b[1], ledgers) - controlRecency(a[0], a[1], ledgers))
+      .slice(0, MAX_CONVERSATION_CONTROLS)
+  )
+}
+
+function hasMeaningfulControl(control: ConversationControl): boolean {
+  return (
+    control.muted !== undefined ||
+    control.snoozeUntilUserTurn !== undefined ||
+    control.lastDisplayedLevel !== undefined ||
+    control.lastAlertLevel !== undefined ||
+    control.lastAlertScore !== undefined ||
+    control.lastAlertUserTurn !== undefined
+  )
+}
+
+function controlRecency(
+  conversationKey: string,
+  control: ConversationControl,
+  ledgers: Record<string, PersistedConversationLedger>
+): number {
+  return Math.max(0, control.updatedAt ?? ledgers[conversationKey]?.updatedAt ?? 0)
 }
 
 export function hasRequiredPrivacyConsent(settings: ExtensionSettings): boolean {

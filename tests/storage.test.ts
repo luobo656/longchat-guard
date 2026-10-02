@@ -212,6 +212,25 @@ describe('chrome local storage persistence model', () => {
     expect(latest.messages[0]).not.toHaveProperty('attachmentCount')
   })
 
+  it('bounds per-conversation control state to the most recent entries', async () => {
+    const storage = new MemoryStorage()
+    const initial = await loadState(storage)
+    storage.seed('conversationGuardState', {
+      ...initial,
+      conversationControls: Object.fromEntries(
+        Array.from({ length: 20 }, (_, index) => [
+          `chatgpt:control-${index}`,
+          { muted: index % 2 === 0, updatedAt: index + 1 }
+        ])
+      )
+    })
+
+    const reloaded = await loadState(storage)
+    expect(Object.keys(reloaded.conversationControls)).toHaveLength(16)
+    expect(reloaded.conversationControls['chatgpt:control-19']).toBeDefined()
+    expect(reloaded.conversationControls['chatgpt:control-0']).toBeUndefined()
+  })
+
   it('records affirmative privacy consent and keeps declined consent disabled', async () => {
     const storage = new MemoryStorage()
     const state = await loadState(storage)

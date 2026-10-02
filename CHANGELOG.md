@@ -2,14 +2,16 @@
 
 ## Unreleased
 
-- A complete healthy history scan now establishes a usable local safe baseline immediately; if the scanned chat actually reached the conversation-length limit, confirming that upgrades the baseline with a failure ceiling.
-- “Scan current chat” stays available after calibration so users can refresh the current conversation estimate at any time.
-- Replaced the ambiguous user-facing “Learning” state with clear baseline states: Not set / Ready / Confirmed / Reused. Background calibration can continue without blocking normal use.
+- A complete healthy history scan establishes a usable local reference baseline immediately; normal scans no longer force a conversation-limit confirmation.
+- Split manual scanning into clear purposes: establish/update the current chat estimate versus calibrate with a chat that actually reached the conversation-length limit.
+- Explicit high-confidence length-limit errors can confirm the failure boundary automatically; otherwise the dedicated limit-calibration flow asks for user confirmation.
+- Replaced engineering-heavy copy with user-facing language: Low risk → High risk, Basis, More actions, Update current chat progress, Recalibrate baseline, and contextual next-step advice for long / near-risk / high-risk states.
+- High or near-risk transitions automatically surface the action area once so the continuation action is easy to reach without permanently expanding the panel.
 - Recalibration and version upgrades reuse the existing local baseline instead of making the risk track look empty again.
-- Collapsed baseline details and secondary controls under the localized “Details & actions” section so the default panel stays focused on the risk track.
-- Schema 8 compacts local storage to bounded recent conversation-length evidence, keeps only minimal anonymous message hashes/roles/length estimates needed for reconciliation, and preserves aggregate prefix load when old tail records are trimmed.
-- Removed persisted scan-diagnostic logs and history-scan console debug output; legacy diagnostic data is deleted on startup.
-- No raw chat text is persisted, no account name/email is stored, no new permissions were added, and the underlying L/S/F/B risk thresholds are unchanged.
+- Schema 8 compacts local storage to bounded recent conversation-length evidence, keeps only minimal anonymous message hashes/roles/length estimates needed for reconciliation, preserves aggregate prefix load when old tail records are trimmed, and bounds per-conversation UI control state.
+- Failed history scans keep only the latest bounded structural diagnostic tail in local storage; each new failure overwrites the previous record and data older than seven days is deleted. No raw chat text is included.
+- Expanded the three-language continuation prompt into a structured handoff package covering goals, completed work, decisions, constraints, exact code/file/platform state, unresolved issues, failed attempts, next actions, risks, and verified-vs-inferred status.
+- No account name/email is stored, no new permissions were added, and the underlying L/S/F/B risk thresholds are unchanged.
 
 ## 2.0.2 - 2026-10-01
 

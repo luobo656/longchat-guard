@@ -131,6 +131,7 @@ export interface ConversationControl {
   lastAlertLevel?: RiskLevel
   lastAlertScore?: number
   lastAlertUserTurn?: number
+  updatedAt?: number
 }
 
 export interface RiskInput {

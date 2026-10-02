@@ -207,6 +207,52 @@ describe('storage mutation coordinator', () => {
     expect(summarizeGeneration(generation).turnBuffer).toBe(300)
   })
 
+  it('allows explicit limit calibration to re-prompt after a previous dismissal', async () => {
+    const coordinator = new StorageMutationCoordinator(new SlowMemoryStorage())
+    await coordinator.observeWindow({
+      conversationKey: 'chatgpt:manual-limit',
+      coverageState: 'complete',
+      parserHealth: 'healthy',
+      tailEvidence: 'at_tail',
+      composerTokenEstimate: 0,
+      observedAt: 10,
+      observedMessages: [{
+        contentFingerprint: 'answer',
+        stableHintHash: 'answer-id',
+        role: 'assistant',
+        tokenEstimate: 500,
+        charCount: 1500,
+        observedAt: 10
+      }]
+    })
+
+    await coordinator.recordFailure({
+      conversationKey: 'chatgpt:manual-limit',
+      errorKind: 'conversation_length_limit',
+      confidence: 'medium',
+      composerTokenEstimate: 0,
+      observedAt: 20
+    })
+    await coordinator.confirmPendingFailure('chatgpt:manual-limit', false, 21)
+
+    await coordinator.recordFailure({
+      conversationKey: 'chatgpt:manual-limit',
+      errorKind: 'conversation_length_limit',
+      confidence: 'medium',
+      forcePrompt: true,
+      composerTokenEstimate: 0,
+      observedAt: 22
+    })
+
+    const state = await coordinator.loadState()
+    const generation = state.generations.find((item) => item.id === state.settings.generationId)
+    expect(
+      generation?.pendingFailureConfirmations?.some(
+        (item) => item.conversationKey === 'chatgpt:manual-limit'
+      )
+    ).toBe(true)
+  })
+
   it('records completion and failure events idempotently without error pollution', async () => {
     const coordinator = new StorageMutationCoordinator(new SlowMemoryStorage())
     await coordinator.observeWindow({

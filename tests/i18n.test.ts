@@ -23,6 +23,15 @@ describe('extension localization', () => {
     expect(Object.keys(zhTW).sort()).toEqual(expectedKeys)
   })
 
+  it('ships a structured continuation prompt in every locale', () => {
+    expect(en.continuationPrompt.message).toContain('confirmed facts')
+    expect(en.continuationPrompt.message).toContain('Continue execution')
+    expect(zhCN.continuationPrompt.message).toContain('已确认事实')
+    expect(zhCN.continuationPrompt.message).toContain('继续执行指令')
+    expect(zhTW.continuationPrompt.message).toContain('已確認事實')
+    expect(zhTW.continuationPrompt.message).toContain('繼續執行指令')
+  })
+
   it('uses explicit fallback copy outside the extension i18n runtime', () => {
     expect(t('missingMessage', 'Fallback copy')).toBe('Fallback copy')
   })

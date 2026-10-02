@@ -47,6 +47,7 @@ export interface FailureEvent {
   errorKind: ErrorKind
   confidence: EvidenceConfidence
   composerTokenEstimate: number
+  forcePrompt?: boolean
   observedAt: number
 }
 
@@ -227,6 +228,7 @@ export class StorageMutationCoordinator {
         return { state, risk: riskFor(ledger, generation, event.composerTokenEstimate) }
       }
       if (
+        !event.forcePrompt &&
         event.confidence !== 'high' &&
         ledger.dismissedFailureKeys?.includes(dismissedKey)
       ) {
@@ -385,7 +387,8 @@ export class StorageMutationCoordinator {
       const state = await loadState(this.storage)
       state.conversationControls[conversationKey] = {
         ...(state.conversationControls[conversationKey] ?? {}),
-        ...patch
+        ...patch,
+        updatedAt: Date.now()
       }
       await saveState(this.storage, state)
       return state

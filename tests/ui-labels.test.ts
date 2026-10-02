@@ -6,17 +6,18 @@ import {
 } from '../src/content/ui'
 
 describe('guard UI labels', () => {
-  it('keeps the panel focused on risk, baseline, and actions', () => {
+  it('keeps the panel focused on risk, basis, and actions', () => {
     expect(PANEL_VISIBLE_LABELS).toEqual([
       'Risk',
-      'Safe',
+      'Low risk',
       'High risk',
-      'Baseline',
-      'Details & actions',
+      'Basis',
+      'More actions',
       'Copy continuation prompt',
       'Scan to set baseline',
-      'Refresh current chat',
-      'Recalibrate',
+      'Update current chat progress',
+      'Calibrate with a limit-hit chat',
+      'Recalibrate baseline',
       'Mute this chat'
     ])
 
@@ -54,9 +55,10 @@ describe('guard UI labels', () => {
   it('keeps the monitoring panel copy short and direct', () => {
     const visibleCopy = PANEL_VISIBLE_LABELS.join('\n')
     expect(visibleCopy).toContain('Risk')
-    expect(visibleCopy).toContain('Safe')
+    expect(visibleCopy).toContain('Low risk')
     expect(visibleCopy).toContain('High risk')
-    expect(visibleCopy).toContain('Baseline')
+    expect(visibleCopy).toContain('Basis')
+    expect(visibleCopy).not.toContain('\nSafe\n')
     expect(visibleCopy).not.toContain('Learning')
     expect(visibleCopy).not.toContain('official quota progress')
     expect(visibleCopy).not.toContain('learning evidence')
