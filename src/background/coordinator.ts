@@ -121,7 +121,8 @@ export class StorageMutationCoordinator {
         parserHealth: window.parserHealth,
         now: window.observedAt
       })
-      const currentEstimatedLoad = reconcileResult.activeFingerprints.reduce((total, fingerprint) => {
+      const retainedPrefixLoad = Math.max(0, existing?.retainedPrefixLoad ?? 0)
+      const currentEstimatedLoad = retainedPrefixLoad + reconcileResult.activeFingerprints.reduce((total, fingerprint) => {
         return total + (reconcileResult.messages.find((message) => message.fingerprint === fingerprint)?.tokenEstimate ?? 0)
       }, 0)
       const snapshot: PersistedConversationLedger = {
@@ -133,6 +134,7 @@ export class StorageMutationCoordinator {
         activeFingerprints: reconcileResult.activeFingerprints,
         sequenceReliability: reconcileResult.reliability,
         currentEstimatedLoad,
+        ...(retainedPrefixLoad > 0 ? { retainedPrefixLoad } : {}),
         updatedAt: window.observedAt
       }
       if (reconcileResult.uncertainReason) {
@@ -483,9 +485,9 @@ function confirmedFailureKey(generationId: string, errorKind: ErrorKind): string
 function dismissedFailureKey(
   generationId: string,
   errorKind: ErrorKind,
-  estimatedLoad: number
+  _estimatedLoad: number
 ): string {
-  return `${generationId}:${errorKind}:${Math.round(estimatedLoad)}`
+  return `${generationId}:${errorKind}:dismissed`
 }
 
 function unique(values: string[]): string[] {
@@ -520,6 +522,7 @@ function riskFor(
       ? { failureBoundary: summary.failureBoundary }
       : {}),
     turnBuffer: summary.turnBuffer,
-    usingWarmStartPrior: summary.usingWarmStartPrior
+    usingWarmStartPrior:
+      summary.usingWarmStartPrior && summary.confirmedFailureConversations === 0
   })
 }

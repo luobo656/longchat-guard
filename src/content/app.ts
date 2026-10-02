@@ -14,6 +14,7 @@ import {
 } from '../core/storage'
 import type {
   ConversationControl,
+  MessageRecord,
   ObservedMessageRecord,
   RiskAssessment
 } from '../core/types'
@@ -25,12 +26,8 @@ import {
 } from '../core/warning-controller'
 import { createCoalescedAsyncRunner } from './coalesced-runner'
 import { readPageSnapshot } from './dom-reader'
-import {
-  scanConversationHistory,
-  type HistoryScanFailureReason,
-  type HistoryScanResult
-} from './history-scanner'
-import { GuardUi, type LearningStage } from './ui'
+import { scanConversationHistory } from './history-scanner'
+import { GuardUi, type BaselineState, type LearningStage } from './ui'
 import { t } from './i18n'
 
 const estimator = new HeuristicTokenEstimator()
@@ -40,52 +37,35 @@ const CONTINUATION_PROMPT = t(
   'Summarize the current conversation so I can continue seamlessly in a new ChatGPT chat. Preserve: the current goal, completed work, confirmed decisions, important constraints, key data/files/code state, unresolved issues, pitfalls, and next steps. Do not omit context that would affect continuation.'
 )
 
-const SCAN_DIAGNOSTICS_KEY = 'longChatGuardLastScanDiagnostics'
-const SCAN_DIAGNOSTICS_TTL_MS = 7 * 24 * 60 * 60 * 1000
-
-export interface StoredScanDiagnostics {
-  version: 2
-  recordedAt: number
-  reason: HistoryScanFailureReason
-  stages: Array<Pick<HistoryScanResult['diagnostics'][number],
-    'phase' | 'scrollTop' | 'scrollHeight' | 'clientHeight' | 'logicalTop' |
-    'scrollMode' | 'pageMessageCount' | 'observedCount' | 'totalMessageCount' | 'reason'
-  >>
-  exception?: string
-}
-
-export function buildStoredScanDiagnostics(
-  result: HistoryScanResult,
-  recordedAt: number,
-  exception?: string
-): StoredScanDiagnostics | undefined {
-  if (result.complete) return undefined
-  return {
-    version: 2,
-    recordedAt,
-    reason: result.reason ?? 'scan_limit_reached',
-    stages: result.diagnostics.slice(-6),
-    ...(exception ? { exception: exception.slice(0, 160) } : {})
+export function deriveScanSafeCompletion(
+  messages: Pick<MessageRecord, 'fingerprint' | 'role' | 'tokenEstimate'>[]
+): { assistantFingerprint: string; assistantTokenCount: number; estimatedLoad: number } | undefined {
+  let estimatedLoad = 0
+  let candidate:
+    | { assistantFingerprint: string; assistantTokenCount: number; estimatedLoad: number }
+    | undefined
+  for (const message of messages) {
+    estimatedLoad += Math.max(0, message.tokenEstimate)
+    if (message.role === 'assistant' && message.tokenEstimate > 0) {
+      candidate = {
+        assistantFingerprint: message.fingerprint,
+        assistantTokenCount: message.tokenEstimate,
+        estimatedLoad
+      }
+    }
   }
-}
-
-export function shouldDiscardStoredScanDiagnostics(
-  value: unknown,
-  now: number
-): boolean {
-  if (!value || typeof value !== 'object') return true
-  const saved = value as { version?: unknown; recordedAt?: unknown }
-  return (
-    saved.version !== 2 ||
-    typeof saved.recordedAt !== 'number' ||
-    now - saved.recordedAt > SCAN_DIAGNOSTICS_TTL_MS
-  )
+  return candidate
 }
 
 export async function startGuard(): Promise<void> {
   if (location.hostname !== 'chatgpt.com') return
 
   const initialResponse = await sendBackground({ type: 'guard.loadState' })
+  try {
+    await chrome.storage.local.remove('longChatGuardLastScanDiagnostics')
+  } catch {
+    // Legacy diagnostics are best-effort cleanup only.
+  }
   let latestState = initialResponse.state
   const fingerprinter = new WebCryptoFingerprinter(latestState.installSalt)
   let scheduleRun: (() => void) | undefined
@@ -173,7 +153,7 @@ export async function startGuard(): Promise<void> {
             reason: 'recalibrate',
             observedAt: Date.now()
           }),
-        t('toastRelearned', 'Learning restarted for the current environment')
+        t('toastRelearned', 'Existing baseline kept while recalibration starts')
       )
     },
     onToggleMute: () => {
@@ -235,32 +215,6 @@ export async function startGuard(): Promise<void> {
       })
     }
   })
-
-  const storeScanDiagnostics = async (
-    result: HistoryScanResult,
-    exception?: string
-  ): Promise<void> => {
-    try {
-      const payload = buildStoredScanDiagnostics(result, Date.now(), exception)
-      if (!payload) {
-        await chrome.storage.local.remove(SCAN_DIAGNOSTICS_KEY)
-        return
-      }
-      await chrome.storage.local.set({ [SCAN_DIAGNOSTICS_KEY]: payload })
-    } catch {
-      // Diagnostics are optional and must never block the user flow.
-    }
-  }
-
-  try {
-    const savedDiagnostics = await chrome.storage.local.get(SCAN_DIAGNOSTICS_KEY)
-    const saved = savedDiagnostics[SCAN_DIAGNOSTICS_KEY]
-    if (saved && shouldDiscardStoredScanDiagnostics(saved, Date.now())) {
-      await chrome.storage.local.remove(SCAN_DIAGNOSTICS_KEY)
-    }
-  } catch {
-    // Diagnostics are optional and must never block monitoring startup.
-  }
 
   const processPage = async (): Promise<void> => {
     if (historyScanInProgress) return
@@ -436,7 +390,6 @@ export async function startGuard(): Promise<void> {
       }
 
       const summary = summarizeGeneration(generation)
-      const learningStage = deriveLearningStage(summary)
       const control = latestState.conversationControls[conversationKey] ?? {}
       const userTurn = countActiveUserTurns(persistedSnapshot)
       const displayedLevel = stabilizeRiskLevel(
@@ -478,8 +431,8 @@ export async function startGuard(): Promise<void> {
           : summary.independentConversations > 0
             ? 'calibrated'
             : 'cold',
-        learningStage,
-        hasRiskBoundary: hasLearnedRiskBoundary(summary),
+        baselineState: deriveBaselineState(summary),
+        hasRiskBoundary: hasUsableBaseline(summary),
         showScanAction: shouldShowScanAction(summary),
         muted: effectiveControl.muted ?? false,
         pendingFailureConfirmation
@@ -522,7 +475,6 @@ export async function startGuard(): Promise<void> {
     ui.setHistoryScanBusy(true)
     try {
       const result = await scanConversationHistory(document, observePageMessages)
-      await storeScanDiagnostics(result)
       if (!result.complete) {
         ui.showToast(historyScanFailureMessage(result.reason))
         return
@@ -590,20 +542,43 @@ export async function startGuard(): Promise<void> {
         latestState = growthResponse.state
       }
 
-      const failureResponse = await sendBackground({
-        type: 'guard.recordFailure',
-        event: {
-          conversationKey,
-          errorKind: 'conversation_length_limit',
-          confidence: 'medium',
-          composerTokenEstimate: 0,
-          observedAt: now
+      if (strongCoverage) {
+        const safeCompletion = deriveScanSafeCompletion(messages)
+        if (safeCompletion) {
+          const completionResponse = await sendBackground({
+            type: 'guard.recordCompletion',
+            event: {
+              conversationKey,
+              ...safeCompletion,
+              observedAt: now
+            }
+          })
+          latestState = completionResponse.state
         }
-      })
-      latestState = failureResponse.state
-      const activeGeneration = latestState.generations.find(
+      }
+
+      let activeGeneration = latestState.generations.find(
         (item) => item.id === latestState.settings.generationId
       )
+      let activeSummary = activeGeneration ? summarizeGeneration(activeGeneration) : undefined
+      if (!activeSummary?.failureBoundary) {
+        const failureResponse = await sendBackground({
+          type: 'guard.recordFailure',
+          event: {
+            conversationKey,
+            errorKind: 'conversation_length_limit',
+            confidence: 'medium',
+            composerTokenEstimate: 0,
+            observedAt: now
+          }
+        })
+        latestState = failureResponse.state
+        activeGeneration = latestState.generations.find(
+          (item) => item.id === latestState.settings.generationId
+        )
+        activeSummary = activeGeneration ? summarizeGeneration(activeGeneration) : undefined
+      }
+
       const awaitingLimitConfirmation =
         activeGeneration?.pendingFailureConfirmations?.some(
           (item) => item.conversationKey === conversationKey
@@ -612,30 +587,23 @@ export async function startGuard(): Promise<void> {
       if (awaitingLimitConfirmation) {
         focusPendingConfirmationAfterRender = true
         ui.showToast(
-          t('toastScanConfirm', 'Scan complete. Confirm whether this chat reached the length limit.')
+          t(
+            'toastScanConfirm',
+            'Scan complete. A usable baseline is ready. If this chat hit the length limit, confirm it below.'
+          )
         )
       } else if (result.attachmentCount > 0) {
         ui.showToast(
-          t('toastScanAttachments', 'Scan complete. Attachment-related data was kept with lower weight.')
+          t('toastScanAttachments', 'Scan complete. Current progress was refreshed; attachment data is handled conservatively.')
         )
       } else if (!parserHealthy) {
         ui.showToast(
-          t('toastScanRoleUncertain', 'Scan complete. Some message roles were uncertain, so learning weight was reduced.')
+          t('toastScanRoleUncertain', 'Scan complete. Current progress was refreshed with conservative handling for uncertain roles.')
         )
       } else {
-        ui.showToast(t('toastScanComplete', 'Full scan complete'))
+        ui.showToast(t('toastScanComplete', 'Scan complete. Current progress refreshed.'))
       }
-    } catch (error) {
-      const exception = error instanceof Error ? error.message : String(error)
-      await storeScanDiagnostics({
-        complete: false,
-        reason: 'scan_limit_reached',
-        observedMessages: [],
-        messageCount: 0,
-        attachmentCount: 0,
-        unknownRoleCount: 0,
-        diagnostics: []
-      }, exception)
+    } catch {
       ui.showToast(
         t('toastScanFailed', 'Full scan did not finish. Please try again later.')
       )
@@ -777,22 +745,28 @@ export function deriveLearningStage(
   return stable ? 'stable' : 'calibrating'
 }
 
-export function hasLearnedRiskBoundary(
+export function deriveBaselineState(
   summary: ReturnType<typeof summarizeGeneration>
-): boolean {
-  if (summary.usingWarmStartPrior) return false
-  const hasLocalEvidence =
-    summary.confirmedSafeConversations > 0 ||
-    summary.confirmedFailureConversations > 0
+): BaselineState {
   const hasBoundary =
     summary.safeBoundary !== undefined || summary.failureBoundary !== undefined
-  return hasLocalEvidence && hasBoundary
+  if (!hasBoundary) return 'none'
+  if (summary.confirmedFailureConversations > 0) return 'confirmed'
+  if (summary.confirmedSafeConversations > 0) return 'safe'
+  if (summary.usingWarmStartPrior) return 'inherited'
+  return 'safe'
+}
+
+export function hasUsableBaseline(
+  summary: ReturnType<typeof summarizeGeneration>
+): boolean {
+  return deriveBaselineState(summary) !== 'none'
 }
 
 export function shouldShowScanAction(
-  summary: ReturnType<typeof summarizeGeneration>
+  _summary: ReturnType<typeof summarizeGeneration>
 ): boolean {
-  return summary.confirmedFailureConversations === 0
+  return true
 }
 
 async function sendBackground(

@@ -2,10 +2,14 @@
 
 ## Unreleased
 
-- Collapsed learning status and secondary controls under a compact localized “Details & actions” section so the default panel stays focused on the risk track.
-- Changed the risk track to a neutral gray learning state until the current calibration generation has learned a real local safe or failure boundary.
-- Kept warm-start priors visually neutral until new local evidence establishes a boundary; once established, the green-to-yellow-to-red track and moving marker activate normally.
-- No new permissions and no change to the underlying L/S/F/B risk thresholds.
+- A complete healthy history scan now establishes a usable local safe baseline immediately; if the scanned chat actually reached the conversation-length limit, confirming that upgrades the baseline with a failure ceiling.
+- “Scan current chat” stays available after calibration so users can refresh the current conversation estimate at any time.
+- Replaced the ambiguous user-facing “Learning” state with clear baseline states: Not set / Ready / Confirmed / Reused. Background calibration can continue without blocking normal use.
+- Recalibration and version upgrades reuse the existing local baseline instead of making the risk track look empty again.
+- Collapsed baseline details and secondary controls under the localized “Details & actions” section so the default panel stays focused on the risk track.
+- Schema 8 compacts local storage to bounded recent conversation-length evidence, keeps only minimal anonymous message hashes/roles/length estimates needed for reconciliation, and preserves aggregate prefix load when old tail records are trimmed.
+- Removed persisted scan-diagnostic logs and history-scan console debug output; legacy diagnostic data is deleted on startup.
+- No raw chat text is persisted, no account name/email is stored, no new permissions were added, and the underlying L/S/F/B risk thresholds are unchanged.
 
 ## 2.0.2 - 2026-10-01
 

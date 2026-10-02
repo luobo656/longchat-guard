@@ -147,9 +147,6 @@ export async function scanHistorySource(
     }
     diagnostics.push(event)
     if (diagnostics.length > MAX_DIAGNOSTICS) diagnostics.shift()
-    if (typeof chrome !== 'undefined' && chrome.runtime?.id) {
-      console.debug('[LongChat Guard][history-scan]', event)
-    }
   }
 
   const moveSurface = (top: number): void => {

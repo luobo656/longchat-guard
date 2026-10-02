@@ -103,9 +103,7 @@ function matchObservedWindow(
       contentFingerprint: item.contentFingerprint,
       role: item.role,
       tokenEstimate: item.tokenEstimate,
-      charCount: item.charCount,
-      observedAt: item.observedAt,
-      localBranchId: 'active'
+      observedAt: item.observedAt
     }
     if (item.stableHintHash) record.stableHintHash = item.stableHintHash
     if (item.ordinalHint !== undefined) record.ordinalHint = item.ordinalHint
@@ -148,13 +146,9 @@ function updateMatchedRecord(record: MessageRecord, observed: ObservedMessageRec
     contentFingerprint: observed.contentFingerprint,
     role: observed.role,
     tokenEstimate: observed.tokenEstimate,
-    charCount: observed.charCount,
     lastObservedAt: observed.observedAt
   }
   if (observed.stableHintHash) updated.stableHintHash = observed.stableHintHash
-  if (observed.ordinalHint !== undefined) updated.ordinalHint = observed.ordinalHint
-  if (observed.hasCode !== undefined) updated.hasCode = observed.hasCode
-  if (observed.attachmentCount !== undefined) updated.attachmentCount = observed.attachmentCount
   return updated
 }
 

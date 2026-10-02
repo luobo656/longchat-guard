@@ -22,10 +22,10 @@ export interface MessageRecord {
   stableHintHash?: string
   role: 'user' | 'assistant' | 'unknown'
   tokenEstimate: number
-  charCount: number
+  charCount?: number
   observedAt: number
   lastObservedAt?: number
-  localBranchId: string
+  localBranchId?: string
   ordinalHint?: number
   hasCode?: boolean
   attachmentCount?: number
@@ -64,6 +64,7 @@ export interface PersistedConversationLedger {
   sequenceReliability?: 'reliable' | 'uncertain'
   sequenceUncertainReason?: string
   currentEstimatedLoad: number
+  retainedPrefixLoad?: number
   lastObservedUserMessageAt?: number
   completedAssistantFingerprints?: string[]
   confirmedFailureFingerprints?: string[]

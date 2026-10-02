@@ -6,16 +6,17 @@ import {
 } from '../src/content/ui'
 
 describe('guard UI labels', () => {
-  it('keeps the 2.0 panel focused on risk, learning, and actions', () => {
+  it('keeps the panel focused on risk, baseline, and actions', () => {
     expect(PANEL_VISIBLE_LABELS).toEqual([
       'Risk',
       'Safe',
       'High risk',
-      'Learning',
+      'Baseline',
       'Details & actions',
       'Copy continuation prompt',
-      'Scan current chat',
-      'Relearn',
+      'Scan to set baseline',
+      'Refresh current chat',
+      'Recalibrate',
       'Mute this chat'
     ])
 
@@ -55,6 +56,8 @@ describe('guard UI labels', () => {
     expect(visibleCopy).toContain('Risk')
     expect(visibleCopy).toContain('Safe')
     expect(visibleCopy).toContain('High risk')
+    expect(visibleCopy).toContain('Baseline')
+    expect(visibleCopy).not.toContain('Learning')
     expect(visibleCopy).not.toContain('official quota progress')
     expect(visibleCopy).not.toContain('learning evidence')
     expect(visibleCopy).not.toContain('rule')

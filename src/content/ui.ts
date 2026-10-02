@@ -2,6 +2,7 @@ import type { RiskLevel } from '../core/types'
 import { t } from './i18n'
 
 export type LearningStage = 'learning' | 'initial' | 'calibrating' | 'stable'
+export type BaselineState = 'none' | 'safe' | 'confirmed' | 'inherited'
 
 export interface GuardUiModel {
   conversationKey?: string
@@ -9,7 +10,7 @@ export interface GuardUiModel {
   trendScore: number
   estimatedLoad: number
   learningMode: 'cold' | 'warm' | 'calibrated'
-  learningStage: LearningStage
+  baselineState: BaselineState
   hasRiskBoundary: boolean
   showScanAction: boolean
   muted: boolean
@@ -33,11 +34,12 @@ export const PANEL_VISIBLE_LABELS = [
   'Risk',
   'Safe',
   'High risk',
-  'Learning',
+  'Baseline',
   'Details & actions',
   'Copy continuation prompt',
-  'Scan current chat',
-  'Relearn',
+  'Scan to set baseline',
+  'Refresh current chat',
+  'Recalibrate',
   'Mute this chat'
 ] as const
 
@@ -79,6 +81,8 @@ export class GuardUi {
   private readonly destroyGlobalHook = (): void => this.destroy()
   private mode: 'monitoring' | 'consent' | 'disabled' = 'monitoring'
   private open = false
+  private previousBaselineState: BaselineState | undefined
+  private historyScanBusy = false
 
   constructor(private readonly callbacks: GuardUiCallbacks) {
     const globalState = globalThis as typeof globalThis & {
@@ -142,11 +146,24 @@ export class GuardUi {
     setText(
       this.shadow,
       'current-load',
-      currentLengthLabel(model.riskLevel, model.learningMode)
+      currentLengthLabel(model.riskLevel, model.baselineState)
     )
-    setText(this.shadow, 'learning', learningLabel(model.learningStage))
+    setText(this.shadow, 'baseline', baselineLabel(model.baselineState))
+    const baselineHint = requireElement<HTMLElement>(this.shadow, '[data-role="baseline-hint"]')
+    baselineHint.hidden = model.baselineState !== 'none'
+    const advanced = requireElement<HTMLDetailsElement>(this.shadow, '[data-role="advanced-details"]')
+    if (model.baselineState === 'none') advanced.open = true
+    else if (this.previousBaselineState === 'none') advanced.open = false
+    this.previousBaselineState = model.baselineState
 
-    button(this.shadow, 'scan-history').hidden = !model.showScanAction
+    const scan = button(this.shadow, 'scan-history')
+    scan.hidden = !model.showScanAction
+    scan.disabled = this.historyScanBusy
+    scan.textContent = this.historyScanBusy
+      ? t('actionScanning', 'Scanning…')
+      : model.baselineState === 'none'
+        ? t('actionScanBaseline', 'Scan to set baseline')
+        : t('actionRefreshCurrent', 'Refresh current chat')
 
     const pending = requireElement<HTMLElement>(this.shadow, '[data-role="pending-confirm"]')
     pending.hidden = !model.pendingFailureConfirmation
@@ -180,11 +197,14 @@ export class GuardUi {
   }
 
   setHistoryScanBusy(busy: boolean): void {
+    this.historyScanBusy = busy
     const scan = button(this.shadow, 'scan-history')
     scan.disabled = busy
     scan.textContent = busy
       ? t('actionScanning', 'Scanning…')
-      : t('actionScanCurrent', 'Scan current chat')
+      : this.previousBaselineState === 'none'
+        ? t('actionScanBaseline', 'Scan to set baseline')
+        : t('actionRefreshCurrent', 'Refresh current chat')
   }
 
   focusPendingConfirmation(): void {
@@ -204,8 +224,9 @@ export class GuardUi {
       trendScore: 0,
       estimatedLoad: 0,
       learningMode,
-      learningStage: learningMode === 'calibrated' ? 'initial' : 'learning',
-      hasRiskBoundary: false,
+      baselineState:
+        learningMode === 'cold' ? 'none' : learningMode === 'warm' ? 'inherited' : 'safe',
+      hasRiskBoundary: learningMode !== 'cold',
       showScanAction: true,
       muted: false,
       pendingFailureConfirmation: false
@@ -293,6 +314,8 @@ function template(): string {
       .advanced-body { padding:0 8px 8px; }
       .advanced-body .metric { margin-top:8px; background:#fff; }
       .advanced-body .actions { margin-top:8px; }
+      .baseline-hint { margin:8px 2px 0; color:#666; font-size:11px; line-height:1.45; }
+      .baseline-hint[hidden] { display:none; }
       .consent-copy { margin:0; padding-left:18px; color:#444; }
       .consent-copy li { margin:6px 0; }
       .actions { display:grid; grid-template-columns:1fr; gap:6px; margin-top:9px; }
@@ -315,6 +338,7 @@ function template(): string {
         .advanced summary { color:#d2d2d2; }
         .advanced[open] summary { border-bottom-color:#3a3a3a; }
         .advanced-body .metric { background:#252525; }
+        .baseline-hint { color:#b9b9b9; }
         .metric span,.footer { color:#a9a9a9; }
         button.action { background:#2b2b2b; color:#f3f3f3; border-color:#444; }
         button.action:hover:not(:disabled) { background:#363636; }
@@ -326,7 +350,7 @@ function template(): string {
       <div class="panel" data-role="panel" hidden>
         <div class="section" data-role="monitor-panel">
           <div class="title">LongChat Guard</div>
-          <div class="trend" data-role="trend"><div class="risk-head"><span>${t('labelRisk', 'Risk')}</span><strong data-value="current-load">${t('riskLearning', 'Learning')}</strong></div><div class="track" data-role="risk-track"><div class="thumb"></div></div><div class="risk-scale"><span>${t('labelSafe', 'Safe')}</span><span>${t('labelHighRisk', 'High risk')}</span></div></div>
+          <div class="trend" data-role="trend"><div class="risk-head"><span>${t('labelRisk', 'Risk')}</span><strong data-value="current-load">${t('riskBaselineNeeded', 'Set baseline')}</strong></div><div class="track" data-role="risk-track"><div class="thumb"></div></div><div class="risk-scale"><span>${t('labelSafe', 'Safe')}</span><span>${t('labelHighRisk', 'High risk')}</span></div></div>
           <div class="pending" data-role="pending-confirm" hidden>
             <strong>${t('limitQuestion', 'Did this chat reach the limit?')}</strong>
             <div class="actions">
@@ -337,10 +361,11 @@ function template(): string {
           <details class="advanced" data-role="advanced-details">
             <summary>${t('detailsActions', 'Details & actions')}</summary>
             <div class="advanced-body">
-              <div class="metric"><span>${t('labelLearning', 'Learning')}</span><strong data-value="learning">${t('learningLearning', 'Learning')}</strong></div>
+              <p class="baseline-hint" data-role="baseline-hint">${t('baselineHint', 'Open a complete old chat or the current chat, then scan it to set a baseline.')}</p>
+              <div class="metric"><span>${t('labelBaseline', 'Baseline')}</span><strong data-value="baseline">${t('baselineNone', 'Not set')}</strong></div>
               <div class="actions">
                 <button class="action primary" data-action="copy">${t('actionCopyContinuation', 'Copy continuation prompt')}</button>
-                <button class="action" data-action="scan-history">${t('actionScanCurrent', 'Scan current chat')}</button>
+                <button class="action" data-action="scan-history">${t('actionScanBaseline', 'Scan to set baseline')}</button>
                 <button class="action" data-action="learn">${t('actionRelearn', 'Relearn')}</button>
                 <button class="action" data-action="mute">${t('actionMute', 'Mute this chat')}</button>
               </div>
@@ -369,11 +394,11 @@ function template(): string {
   `
 }
 
-function learningLabel(stage: LearningStage): string {
-  if (stage === 'initial') return t('learningInitial', 'Initial setup')
-  if (stage === 'calibrating') return t('learningCalibrating', 'Calibrating')
-  if (stage === 'stable') return t('learningStable', 'Stable')
-  return t('learningLearning', 'Learning')
+function baselineLabel(state: BaselineState): string {
+  if (state === 'confirmed') return t('baselineConfirmed', 'Confirmed')
+  if (state === 'inherited') return t('baselineInherited', 'Reused')
+  if (state === 'safe') return t('baselineReady', 'Ready')
+  return t('baselineNone', 'Not set')
 }
 
 function clampTrendScore(score: number): number {
@@ -382,26 +407,25 @@ function clampTrendScore(score: number): number {
 }
 
 function statusLabel(model: GuardUiModel): string {
-  if (model.riskLevel === 'unreliable' && model.learningMode === 'calibrated') {
-    return t('riskRecognizing', 'Checking')
-  }
+  if (model.baselineState === 'none') return t('riskBaselineNeeded', 'Set baseline')
+  if (model.riskLevel === 'unreliable') return t('riskRecognizing', 'Checking')
   if (model.riskLevel === 'normal') return t('riskNormal', 'Normal')
   if (model.riskLevel === 'long') return t('riskLong', 'Long')
   if (model.riskLevel === 'organize') return t('riskOrganize', 'Near risk')
   if (model.riskLevel === 'high') return t('riskHigh', 'High risk')
-  return t('riskLearning', 'Learning')
+  return t('riskRecognizing', 'Checking')
 }
 
 function currentLengthLabel(
   level: RiskLevel,
-  learningMode: GuardUiModel['learningMode']
+  baselineState: BaselineState = 'safe'
 ): string {
+  if (baselineState === 'none') return t('riskBaselineNeeded', 'Set baseline')
   if (level === 'normal') return t('riskNormal', 'Normal')
   if (level === 'long') return t('riskLong', 'Long')
   if (level === 'organize') return t('riskOrganize', 'Near risk')
   if (level === 'high') return t('riskHigh', 'High risk')
-  if (learningMode === 'calibrated') return t('riskRecognizing', 'Checking')
-  return t('riskLearning', 'Learning')
+  return t('riskRecognizing', 'Checking')
 }
 
 export function shouldClosePanelForPointerPath(

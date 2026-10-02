@@ -154,18 +154,62 @@ describe('chrome local storage persistence model', () => {
 
     const state = await loadState(storage)
 
-    expect(state.schemaVersion).toBeGreaterThanOrEqual(7)
+    expect(state.schemaVersion).toBeGreaterThanOrEqual(8)
     expect(state.installSalt).toBe('keep-me')
     expect(state.generations[0]?.recentAssistantTokenCounts).toEqual([900, 1800])
     expect(state.generations[0]?.growthHistoryConversationKeys).toEqual(['chatgpt:one'])
     expect(state.generations[0]?.environmentConflictKeys).toEqual([])
     expect(state.generations[0]?.samples[0]?.firstConfirmedFailureLoad).toBe(77324)
+    expect(state.generations[0]?.samples.some((sample) =>
+      sample.conversationKey === 'chatgpt:one' && sample.highestConfirmedSafeLoad === 2700
+    )).toBe(true)
     expect(state.ledgers['chatgpt:one']?.completedAssistantFingerprints).toEqual([])
     expect(state.ledgers['chatgpt:one']?.dismissedFailureKeys).toEqual([])
     expect(state.conversationControls).toEqual({})
     expect(state.generations[0]?.verificationFactor).toBe(1)
     expect(hasRequiredPrivacyConsent(state.settings)).toBe(true)
     expect(state.settings.privacyConsentedAt).toBe(77)
+  })
+
+  it('compacts persisted conversation state to recent anonymous length evidence', async () => {
+    const storage = new MemoryStorage()
+    const initial = await loadState(storage)
+    for (let index = 0; index < 12; index += 1) {
+      await upsertLedgerSnapshot(storage, {
+        conversationKey: `chatgpt:${index}`,
+        generationId: initial.settings.generationId,
+        coverageState: 'complete',
+        parserHealth: 'healthy',
+        messages: Array.from({ length: 40 }, (_, messageIndex) => ({
+          fingerprint: `m-${index}-${messageIndex}`,
+          contentFingerprint: `h-${index}-${messageIndex}`,
+          role: messageIndex % 2 === 0 ? 'user' as const : 'assistant' as const,
+          tokenEstimate: 10,
+          charCount: 999,
+          observedAt: index * 100 + messageIndex,
+          localBranchId: 'active',
+          ordinalHint: messageIndex,
+          hasCode: true,
+          attachmentCount: 3
+        })),
+        activeFingerprints: Array.from({ length: 40 }, (_, messageIndex) => `m-${index}-${messageIndex}`),
+        currentEstimatedLoad: 400,
+        updatedAt: index + 1
+      })
+    }
+
+    const reloaded = await loadState(storage)
+    expect(Object.keys(reloaded.ledgers)).toHaveLength(8)
+    expect(reloaded.ledgers['chatgpt:0']).toBeUndefined()
+    const latest = reloaded.ledgers['chatgpt:11']!
+    expect(latest.messages).toHaveLength(32)
+    expect(latest.retainedPrefixLoad).toBe(80)
+    expect(latest.currentEstimatedLoad).toBe(400)
+    expect(latest.messages[0]).not.toHaveProperty('charCount')
+    expect(latest.messages[0]).not.toHaveProperty('localBranchId')
+    expect(latest.messages[0]).not.toHaveProperty('ordinalHint')
+    expect(latest.messages[0]).not.toHaveProperty('hasCode')
+    expect(latest.messages[0]).not.toHaveProperty('attachmentCount')
   })
 
   it('records affirmative privacy consent and keeps declined consent disabled', async () => {

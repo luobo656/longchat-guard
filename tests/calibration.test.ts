@@ -8,8 +8,9 @@ import {
   upsertConversationSample
 } from '../src/core/calibration'
 import {
+  deriveBaselineState,
   deriveLearningStage,
-  hasLearnedRiskBoundary,
+  hasUsableBaseline,
   shouldShowScanAction
 } from '../src/content/app'
 
@@ -235,7 +236,9 @@ describe('calibration', () => {
   })
 
   it('moves learning presentation from initial calibration to stable only with broad safe and failure evidence', () => {
-    expect(hasLearnedRiskBoundary(summarizeGeneration(createGeneration('empty-stage', 0)))).toBe(false)
+    const emptySummary = summarizeGeneration(createGeneration('empty-stage', 0))
+    expect(deriveBaselineState(emptySummary)).toBe('none')
+    expect(hasUsableBaseline(emptySummary)).toBe(false)
     let generation = createGeneration('stage', 1)
     expect(deriveLearningStage(summarizeGeneration(generation))).toBe('learning')
 
@@ -245,7 +248,8 @@ describe('calibration', () => {
       parserHealth: 'healthy', observedAt: 2
     })
     expect(deriveLearningStage(summarizeGeneration(generation))).toBe('initial')
-    expect(hasLearnedRiskBoundary(summarizeGeneration(generation))).toBe(true)
+    expect(deriveBaselineState(summarizeGeneration(generation))).toBe('confirmed')
+    expect(hasUsableBaseline(summarizeGeneration(generation))).toBe(true)
 
     for (let index = 0; index < 5; index += 1) {
       generation = recordSuccessfulAssistantCompletion(generation, {
@@ -266,7 +270,7 @@ describe('calibration', () => {
     expect(deriveLearningStage(summarizeGeneration(generation))).toBe('stable')
   })
 
-  it('hides manual scan after confirmed F and shows it again for a fresh generation', () => {
+  it('keeps manual scan available and reuses the prior baseline during recalibration', () => {
     let generation = createGeneration('scan-action', 1)
     expect(shouldShowScanAction(summarizeGeneration(generation))).toBe(true)
     generation = recordFailureObservation(generation, {
@@ -279,10 +283,12 @@ describe('calibration', () => {
       parserHealth: 'healthy',
       observedAt: 2
     })
-    expect(shouldShowScanAction(summarizeGeneration(generation))).toBe(false)
+    expect(shouldShowScanAction(summarizeGeneration(generation))).toBe(true)
     const relearned = createGeneration('scan-action-2', 3, generation)
-    expect(hasLearnedRiskBoundary(summarizeGeneration(relearned))).toBe(false)
-    expect(shouldShowScanAction(summarizeGeneration(relearned))).toBe(true)
+    const relearnedSummary = summarizeGeneration(relearned)
+    expect(deriveBaselineState(relearnedSummary)).toBe('inherited')
+    expect(hasUsableBaseline(relearnedSummary)).toBe(true)
+    expect(shouldShowScanAction(relearnedSummary)).toBe(true)
   })
 
   it('uses a robust low failure quantile so one extreme low outlier does not define F by itself', () => {

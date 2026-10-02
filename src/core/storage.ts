@@ -1,4 +1,4 @@
-import { createGeneration } from './calibration'
+import { createGeneration, upsertConversationSample } from './calibration'
 import { createInstallSalt } from './fingerprinter'
 import type {
   CalibrationGeneration,
@@ -30,8 +30,14 @@ export interface LocalStorageArea {
 
 const STATE_KEY = 'conversationGuardState'
 const DEFAULT_GENERATION_ID = 'default-generation'
-export const CURRENT_SCHEMA_VERSION = 7
+export const CURRENT_SCHEMA_VERSION = 8
 export const REQUIRED_PRIVACY_CONSENT_VERSION = 1
+const MAX_PERSISTED_LEDGERS = 8
+const MAX_BOUNDARY_SAMPLES = 24
+const MAX_GROWTH_KEYS = 32
+const MAX_COMPLETION_KEYS = 32
+const MAX_FAILURE_KEYS = 8
+const MAX_LEDGER_MESSAGE_RECORDS = 32
 
 export async function loadState(storage: LocalStorageArea): Promise<PersistedState> {
   const result = await storage.get(STATE_KEY)
@@ -151,6 +157,7 @@ export function normalizeState(raw: PersistedState): PersistedState {
     ])
   )
   if ((raw.schemaVersion ?? 0) < 7) {
+    // 2.0.x migration: preserve reply-growth evidence from existing local ledgers.
     const eligibleLedgers = Object.values(ledgers).filter((ledger) =>
       ledger.generationId === generationId &&
       (ledger.coverageState === 'complete' || ledger.coverageState === 'mostly_complete') &&
@@ -178,17 +185,140 @@ export function normalizeState(raw: PersistedState): PersistedState {
     }
   }
 
+  if ((raw.schemaVersion ?? 0) < 8) {
+    generations = generations.map((generation) => {
+      if (generation.id !== generationId) return generation
+      let migrated = generation
+      for (const ledger of Object.values(ledgers)) {
+        if (
+          ledger.generationId !== generationId ||
+          ledger.coverageState !== 'complete' ||
+          ledger.parserHealth !== 'healthy'
+        ) {
+          continue
+        }
+        const recordsByFingerprint = new Map(
+          ledger.messages.map((message) => [message.fingerprint, message])
+        )
+        let cumulativeLoad = Math.max(0, ledger.retainedPrefixLoad ?? 0)
+        let safeLoad: number | undefined
+        for (const fingerprint of ledger.activeFingerprints) {
+          const message = recordsByFingerprint.get(fingerprint)
+          if (!message) continue
+          cumulativeLoad += Math.max(0, message.tokenEstimate)
+          if (message.role === 'assistant') safeLoad = cumulativeLoad
+        }
+        if (safeLoad === undefined) continue
+        migrated = upsertConversationSample(migrated, {
+          conversationKey: ledger.conversationKey,
+          generationId: migrated.id,
+          highestConfirmedSafeLoad: safeLoad,
+          coverageState: 'complete',
+          parserHealth: 'healthy',
+          successEvidenceQuality: 'complete',
+          updatedAt: ledger.updatedAt
+        })
+      }
+      return migrated
+    })
+  }
+
+  const selectedGeneration =
+    generations.find((generation) => generation.id === generationId) ??
+    generations.at(-1) ??
+    createInitialGeneration(generationId, now)
+  const activeGeneration = compactGeneration(selectedGeneration)
+  const compactedLedgers = compactLedgers(ledgers)
+  const conversationControls = raw.conversationControls ?? {}
+
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     installSalt: raw.installSalt,
     settings: {
       enabled: raw.settings?.enabled ?? true,
-      generationId,
+      generationId: activeGeneration.id,
       ...consentSettings(raw.settings)
     },
-    generations,
-    ledgers,
-    conversationControls: raw.conversationControls ?? {}
+    generations: [activeGeneration],
+    ledgers: compactedLedgers,
+    conversationControls
+  }
+}
+
+function compactGeneration(generation: CalibrationGeneration): CalibrationGeneration {
+  return {
+    ...generation,
+    samples: [...generation.samples]
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, MAX_BOUNDARY_SAMPLES),
+    recentAssistantTokenCounts: (generation.recentAssistantTokenCounts ?? []).slice(-32),
+    growthHistoryConversationKeys: unique(
+      generation.growthHistoryConversationKeys ?? []
+    ).slice(-MAX_GROWTH_KEYS),
+    environmentConflictKeys: unique(generation.environmentConflictKeys ?? []).slice(-8),
+    pendingFailureConfirmations: (generation.pendingFailureConfirmations ?? []).slice(-4)
+  }
+}
+
+function compactLedgers(
+  ledgers: Record<string, PersistedConversationLedger>
+): Record<string, PersistedConversationLedger> {
+  return Object.fromEntries(
+    Object.values(ledgers)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, MAX_PERSISTED_LEDGERS)
+      .map((ledger) => [ledger.conversationKey, compactLedger(ledger)])
+  )
+}
+
+function compactLedger(ledger: PersistedConversationLedger): PersistedConversationLedger {
+  const recordsByFingerprint = new Map(
+    ledger.messages.map((message) => [message.fingerprint, message])
+  )
+  const requestedActive = unique(ledger.activeFingerprints)
+  const activeRecords = requestedActive
+    .map((fingerprint) => recordsByFingerprint.get(fingerprint))
+    .filter((message): message is NonNullable<typeof message> => Boolean(message))
+  const sourceRecords = activeRecords.length > 0 ? activeRecords : ledger.messages.slice(-MAX_LEDGER_MESSAGE_RECORDS)
+  const basePrefixLoad = Math.max(
+    0,
+    ledger.retainedPrefixLoad ??
+      ledger.currentEstimatedLoad - activeRecords.reduce((sum, message) => sum + message.tokenEstimate, 0)
+  )
+  const retainedRecords = sourceRecords.slice(-MAX_LEDGER_MESSAGE_RECORDS)
+  const droppedLoad = sourceRecords
+    .slice(0, Math.max(0, sourceRecords.length - retainedRecords.length))
+    .reduce((sum, message) => sum + Math.max(0, message.tokenEstimate), 0)
+  const retainedPrefixLoad = Math.max(0, basePrefixLoad + droppedLoad)
+  const messages = retainedRecords.map((message) => ({
+    fingerprint: message.fingerprint,
+    ...(message.contentFingerprint
+      ? { contentFingerprint: message.contentFingerprint }
+      : {}),
+    ...(message.stableHintHash ? { stableHintHash: message.stableHintHash } : {}),
+    role: message.role,
+    tokenEstimate: message.tokenEstimate,
+    observedAt: message.observedAt
+  }))
+  const activeFingerprints = messages.map((message) => message.fingerprint)
+
+  return {
+    conversationKey: ledger.conversationKey,
+    generationId: ledger.generationId,
+    coverageState: ledger.coverageState,
+    parserHealth: ledger.parserHealth,
+    messages,
+    activeFingerprints,
+    currentEstimatedLoad: ledger.currentEstimatedLoad,
+    ...(retainedPrefixLoad > 0 ? { retainedPrefixLoad } : {}),
+    completedAssistantFingerprints: unique(
+      ledger.completedAssistantFingerprints ?? []
+    ).slice(-MAX_COMPLETION_KEYS),
+    confirmedFailureFingerprints: unique(
+      ledger.confirmedFailureFingerprints ?? []
+    ).slice(-MAX_FAILURE_KEYS),
+    dismissedFailureKeys: unique(ledger.dismissedFailureKeys ?? []).slice(-MAX_FAILURE_KEYS),
+    updatedAt: ledger.updatedAt
   }
 }
 
