@@ -14,6 +14,7 @@
   "labelSafe": { "message": "安全" },
   "labelHighRisk": { "message": "高風險" },
   "labelLearning": { "message": "學習" },
+  "detailsActions": { "message": "詳細資訊與操作" },
 
   "learningInitial": { "message": "初步完成" },
   "learningCalibrating": { "message": "校準中" },

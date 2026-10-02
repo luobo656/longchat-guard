@@ -479,6 +479,7 @@ export async function startGuard(): Promise<void> {
             ? 'calibrated'
             : 'cold',
         learningStage,
+        hasRiskBoundary: hasLearnedRiskBoundary(summary),
         showScanAction: shouldShowScanAction(summary),
         muted: effectiveControl.muted ?? false,
         pendingFailureConfirmation
@@ -774,6 +775,18 @@ export function deriveLearningStage(
     summary.independentConversations >=
       CALIBRATION_DEFAULTS.minIndependentBoundaryConversationsForStable
   return stable ? 'stable' : 'calibrating'
+}
+
+export function hasLearnedRiskBoundary(
+  summary: ReturnType<typeof summarizeGeneration>
+): boolean {
+  if (summary.usingWarmStartPrior) return false
+  const hasLocalEvidence =
+    summary.confirmedSafeConversations > 0 ||
+    summary.confirmedFailureConversations > 0
+  const hasBoundary =
+    summary.safeBoundary !== undefined || summary.failureBoundary !== undefined
+  return hasLocalEvidence && hasBoundary
 }
 
 export function shouldShowScanAction(

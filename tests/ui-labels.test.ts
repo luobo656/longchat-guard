@@ -12,6 +12,7 @@ describe('guard UI labels', () => {
       'Safe',
       'High risk',
       'Learning',
+      'Details & actions',
       'Copy continuation prompt',
       'Scan current chat',
       'Relearn',

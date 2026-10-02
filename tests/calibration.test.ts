@@ -7,7 +7,11 @@ import {
   summarizeGeneration,
   upsertConversationSample
 } from '../src/core/calibration'
-import { deriveLearningStage, shouldShowScanAction } from '../src/content/app'
+import {
+  deriveLearningStage,
+  hasLearnedRiskBoundary,
+  shouldShowScanAction
+} from '../src/content/app'
 
 describe('calibration', () => {
   it('uses independent conversation boundaries instead of per-turn averaging', () => {
@@ -231,6 +235,7 @@ describe('calibration', () => {
   })
 
   it('moves learning presentation from initial calibration to stable only with broad safe and failure evidence', () => {
+    expect(hasLearnedRiskBoundary(summarizeGeneration(createGeneration('empty-stage', 0)))).toBe(false)
     let generation = createGeneration('stage', 1)
     expect(deriveLearningStage(summarizeGeneration(generation))).toBe('learning')
 
@@ -240,6 +245,7 @@ describe('calibration', () => {
       parserHealth: 'healthy', observedAt: 2
     })
     expect(deriveLearningStage(summarizeGeneration(generation))).toBe('initial')
+    expect(hasLearnedRiskBoundary(summarizeGeneration(generation))).toBe(true)
 
     for (let index = 0; index < 5; index += 1) {
       generation = recordSuccessfulAssistantCompletion(generation, {
@@ -275,6 +281,7 @@ describe('calibration', () => {
     })
     expect(shouldShowScanAction(summarizeGeneration(generation))).toBe(false)
     const relearned = createGeneration('scan-action-2', 3, generation)
+    expect(hasLearnedRiskBoundary(summarizeGeneration(relearned))).toBe(false)
     expect(shouldShowScanAction(summarizeGeneration(relearned))).toBe(true)
   })
 

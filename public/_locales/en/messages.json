@@ -14,6 +14,7 @@
   "labelSafe": { "message": "Safe" },
   "labelHighRisk": { "message": "High risk" },
   "labelLearning": { "message": "Learning" },
+  "detailsActions": { "message": "Details & actions" },
 
   "learningInitial": { "message": "Initial setup" },
   "learningCalibrating": { "message": "Calibrating" },

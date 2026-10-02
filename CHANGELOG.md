@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Collapsed learning status and secondary controls under a compact localized “Details & actions” section so the default panel stays focused on the risk track.
+- Changed the risk track to a neutral gray learning state until the current calibration generation has learned a real local safe or failure boundary.
+- Kept warm-start priors visually neutral until new local evidence establishes a boundary; once established, the green-to-yellow-to-red track and moving marker activate normally.
+- No new permissions and no change to the underlying L/S/F/B risk thresholds.
+
 ## 2.0.2 - 2026-10-01
 
 - Finalized the LongChat Guard icon: transparent background, green chat-bubble main shape, white conversation lines, and an orange shield accent.

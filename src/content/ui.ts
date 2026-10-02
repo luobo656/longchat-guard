@@ -10,6 +10,7 @@ export interface GuardUiModel {
   estimatedLoad: number
   learningMode: 'cold' | 'warm' | 'calibrated'
   learningStage: LearningStage
+  hasRiskBoundary: boolean
   showScanAction: boolean
   muted: boolean
   pendingFailureConfirmation: boolean
@@ -33,6 +34,7 @@ export const PANEL_VISIBLE_LABELS = [
   'Safe',
   'High risk',
   'Learning',
+  'Details & actions',
   'Copy continuation prompt',
   'Scan current chat',
   'Relearn',
@@ -130,8 +132,12 @@ export class GuardUi {
     this.statusDot.dataset.risk = model.riskLevel
     const trend = requireElement<HTMLElement>(this.shadow, '[data-role="trend"]')
     trend.dataset.risk = model.riskLevel
+    trend.dataset.boundaryReady = String(model.hasRiskBoundary)
     const riskTrack = requireElement<HTMLElement>(this.shadow, '[data-role="risk-track"]')
-    riskTrack.style.setProperty('--risk-position', `${clampTrendScore(model.trendScore)}%`)
+    riskTrack.style.setProperty(
+      '--risk-position',
+      `${model.hasRiskBoundary ? clampTrendScore(model.trendScore) : 0}%`
+    )
 
     setText(
       this.shadow,
@@ -199,6 +205,7 @@ export class GuardUi {
       estimatedLoad: 0,
       learningMode,
       learningStage: learningMode === 'calibrated' ? 'initial' : 'learning',
+      hasRiskBoundary: false,
       showScanAction: true,
       muted: false,
       pendingFailureConfirmation: false
@@ -272,9 +279,20 @@ function template(): string {
       .risk-scale { display:flex; justify-content:space-between; margin-top:5px; padding:0 1px; color:rgba(255,255,255,.46); font-size:9px; }
       .trend[data-risk="unreliable"] .track { filter:grayscale(1); opacity:.45; }
       .trend[data-risk="unreliable"] .thumb { background:#d8d8d8; }
+      .trend[data-boundary-ready="false"] .track { background:linear-gradient(90deg,#72777c 0%,#91969a 50%,#a8acaf 100%); filter:none; opacity:.72; }
+      .trend[data-boundary-ready="false"] .thumb { background:#e3e3e3; box-shadow:0 2px 6px rgba(0,0,0,.2),0 0 0 1px rgba(255,255,255,.25); }
       .pending { margin-top:10px; border-radius:10px; padding:10px; background:#fff8e6; border:1px solid #f4d58d; }
       .pending[hidden] { display:none; }
       .section[hidden] { display:none; }
+      .advanced { margin-top:8px; border:1px solid #ececec; border-radius:9px; background:#fafafa; overflow:hidden; }
+      .advanced summary { min-height:34px; padding:8px 10px; display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer; list-style:none; color:#555; font-size:11px; font-weight:650; user-select:none; }
+      .advanced summary::-webkit-details-marker { display:none; }
+      .advanced summary::after { content:"⌄"; color:#8a8a8a; font-size:15px; line-height:1; transform:translateY(-1px); transition:transform .16s ease; }
+      .advanced[open] summary::after { transform:rotate(180deg) translateY(1px); }
+      .advanced[open] summary { border-bottom:1px solid #ececec; }
+      .advanced-body { padding:0 8px 8px; }
+      .advanced-body .metric { margin-top:8px; background:#fff; }
+      .advanced-body .actions { margin-top:8px; }
       .consent-copy { margin:0; padding-left:18px; color:#444; }
       .consent-copy li { margin:6px 0; }
       .actions { display:grid; grid-template-columns:1fr; gap:6px; margin-top:9px; }
@@ -293,6 +311,10 @@ function template(): string {
       @media (prefers-color-scheme: dark) {
         .pill,.panel { background:rgba(35,35,35,.96); color:#f1f1f1; border-color:rgba(255,255,255,.14); }
         .metric { background:#2c2c2c; border-color:#3a3a3a; }
+        .advanced { background:#2c2c2c; border-color:#3a3a3a; }
+        .advanced summary { color:#d2d2d2; }
+        .advanced[open] summary { border-bottom-color:#3a3a3a; }
+        .advanced-body .metric { background:#252525; }
         .metric span,.footer { color:#a9a9a9; }
         button.action { background:#2b2b2b; color:#f3f3f3; border-color:#444; }
         button.action:hover:not(:disabled) { background:#363636; }
@@ -305,7 +327,6 @@ function template(): string {
         <div class="section" data-role="monitor-panel">
           <div class="title">LongChat Guard</div>
           <div class="trend" data-role="trend"><div class="risk-head"><span>${t('labelRisk', 'Risk')}</span><strong data-value="current-load">${t('riskLearning', 'Learning')}</strong></div><div class="track" data-role="risk-track"><div class="thumb"></div></div><div class="risk-scale"><span>${t('labelSafe', 'Safe')}</span><span>${t('labelHighRisk', 'High risk')}</span></div></div>
-          <div class="metric"><span>${t('labelLearning', 'Learning')}</span><strong data-value="learning">${t('learningLearning', 'Learning')}</strong></div>
           <div class="pending" data-role="pending-confirm" hidden>
             <strong>${t('limitQuestion', 'Did this chat reach the limit?')}</strong>
             <div class="actions">
@@ -313,12 +334,18 @@ function template(): string {
               <button class="action" data-action="confirm-no">${t('limitNo', 'No')}</button>
             </div>
           </div>
-          <div class="actions">
-            <button class="action primary" data-action="copy">${t('actionCopyContinuation', 'Copy continuation prompt')}</button>
-            <button class="action" data-action="scan-history">${t('actionScanCurrent', 'Scan current chat')}</button>
-            <button class="action" data-action="learn">${t('actionRelearn', 'Relearn')}</button>
-            <button class="action" data-action="mute">${t('actionMute', 'Mute this chat')}</button>
-          </div>
+          <details class="advanced" data-role="advanced-details">
+            <summary>${t('detailsActions', 'Details & actions')}</summary>
+            <div class="advanced-body">
+              <div class="metric"><span>${t('labelLearning', 'Learning')}</span><strong data-value="learning">${t('learningLearning', 'Learning')}</strong></div>
+              <div class="actions">
+                <button class="action primary" data-action="copy">${t('actionCopyContinuation', 'Copy continuation prompt')}</button>
+                <button class="action" data-action="scan-history">${t('actionScanCurrent', 'Scan current chat')}</button>
+                <button class="action" data-action="learn">${t('actionRelearn', 'Relearn')}</button>
+                <button class="action" data-action="mute">${t('actionMute', 'Mute this chat')}</button>
+              </div>
+            </div>
+          </details>
         </div>
         <div class="section" data-role="consent-panel" hidden>
           <div class="title">${t('consentTitle', 'Enable local long-chat alerts')}</div>
