@@ -1,124 +1,170 @@
-# LongChat Guard 2.0 架构基线
+# LongChat Guard 架构基线（Unreleased）
 
-## 1. 技术栈
+## 1. 技术栈与边界
 
-- Chrome / Edge
+- Chrome / Microsoft Edge
 - Manifest V3
-- TypeScript
-- Vite
+- TypeScript + Vite
 - Vitest
+- `storage` permission
+- `https://chatgpt.com/*` host permission
+- 无服务端、无 OpenAI API Key、无云同步
 
-目标是纯浏览器本地扩展，无服务器、无网络后端、无 OpenAI API Key。
-
-## 2. 模块
+## 2. 数据流
 
 ```text
-chatgpt.com
-  -> Page Adapter
-  -> Ephemeral Content Processor
-  -> Anonymous Conversation Ledger
-  -> Coverage Tracker
-  -> Calibration Engine
-  -> Risk Engine
-  -> Notification Controller
-  -> Shadow DOM status pill
+ChatGPT DOM
+  -> dom-reader
+  -> page-adapter
+  -> Environment / Uncertainty reader
+  -> content/app
+  -> background StorageMutationCoordinator
+        -> sequence-reconciler
+        -> calibration
+        -> product-state
+        -> risk-engine
+        -> storage
+  -> unified GuardUiModel
+  -> Shadow DOM pill/panel
 ```
 
-## 3. Page Adapter
+产品不再由 BaselineState / ReferenceAction / RiskLevel 三套状态分别控制 UI。统一领域维度为 MeasurementState、CalibrationState、RiskState。
 
-Page Adapter 负责：
+## 3. Page Adapter 与 MeasurementState
 
-- 判断是否为 `chatgpt.com`
-- 识别 conversation id
-- 识别 user / assistant 消息
-- 识别可见错误
-- 输出 parser health
+`dom-reader.ts` 负责读取当前 DOM 可见消息、Composer、可见错误、生成状态和 tail evidence；不持久化原始文字。
 
-不得以 OpenAI 未公开 backend API 作为核心路径。解析失败必须 fail-closed，不显示安全结论。
+`page-adapter.ts` 输出 coverage/parser health。随后 `product-state.ts` 将 coverage、parser、sequence 和 DOM support 归约为：
 
-## 4. Coverage 生命周期
+- unavailable
+- partial
+- complete
+- uncertain
 
-Coverage 与风险位置分离。2.0 不用 coverage 给风险分数加权；Coverage 只控制成功 completion 能否成为 confirmed safe `S`，以及完整历史是否可信。
+只有 complete 可进入风险计算。degraded parser 不再允许“正常”。
 
-`complete` 只能来自：
+## 4. Calibration
 
-- 已持久化 complete 的同一 conversation 刷新恢复
-- 真正空白新聊天页 armed 后，观察到用户首条消息，再迁移到 `/c/<id>`
+`calibration.ts` 管理三类证据：
 
-不得把以下情况标为 complete：
+- Safe evidence S：内部一致性证据。
+- EmpiricalFailureReference R：strong / conservative / provisional。
+- TurnGrowthSample：完整可观察一轮的 before/after/delta。
 
-- 首页点击历史会话
-- 直接打开旧 `/c/<id>`
-- 只加载到历史尾部
-- parser degraded / unreliable
+显式校准通过 `guard.commitCalibration` 原子提交，不创建 pending confirmation。
 
-## 5. L / S / F / B Calibration + Risk Engine
+被动检测长度上限通过 `recordFailureObservation` 只创建 pending。用户接受后才调用 `recordConfirmedFailureReference`；pending 保存检测时的 coverage/parser/uncertainty/environment，避免用户确认时把后续更好的页面状态错误升级为 strong。
 
-2.0 核心经验量：
+provisional R 不进入有效 CalibrationState。
 
-- `L = currentEstimatedLoad`
-- `S = safeBoundary`：complete + healthy 的稳定成功回复形成，同会话取最高值
-- `F = failureBoundary`：confirmed conversation-length-limit 的质量加权鲁棒低分位
-- `B = turnBuffer`：近期 assistant 增长的高分位；正常完成自动追加，完整扫描按 conversation/generation 只 seed 一次
+## 5. Risk Engine
 
-风险级别不再累加人工权重。有 `F+B` 时：`L+B >= F` 为 high，`L+2B >= F` 为 organize，`L+3B >= F` 为 long，否则 normal。只有 `S` 没 `F` 时，超过 S 最多 long。没有 S/F 时保持 normal/learning。parser unreliable 唯一直接进入 unreliable。
+`assessRisk()` 的第一层是资格 gate：
 
-`trendScore` 与告警严重度独立：有 F 时为本地经验位置 `L/F`；只有 S 时仅作弱参考；无边界时保持左端。
+```text
+measurement != complete
+or calibration not calibrated/calibrated_conservative
+or no usable failure reference
+=> unknown
+```
 
-环境换代只由独立矛盾证据触发：已有 F+B 时，至少两个独立会话出现“失败比旧 F 早一个 B”或“安全结果比旧 F 高一个 B”，才自动新建 generation。
+可用后：
 
-## 6. UI
+```text
+baseLoad = L + composerDraftLoad
+projectedLoad = baseLoad + G
+```
 
-UI 使用 Shadow DOM。默认只显示状态胶囊。
+G 来自非 uncertain 的 whole-turn delta p80。少于最小样本数时 reserve 不 ready，不构造人为的三段预警带。
 
-点击胶囊后显示：
+S 不参与 normal/long/organize/high 判定。
 
-- “风险”卡：简短状态 + 彩色渐变轨道 + 白色当前位置圆点
-- 轨道位置由独立 `trendScore` 驱动；固定渐变从绿色过渡到红色，只标“安全 / 高风险”
-- 分阶段学习状态仅显示：学习中 / 初步完成 / 校准中 / 已稳定
-- 未学到当前 generation 的 confirmed F 时显示“扫描当前会话”；学到 F 后自动隐藏
-- 复制续接提示词
-- 重新学习
-- 本会话不提醒
-- 扫描诊断仅在内部本地存储用于排错，不提供用户可见入口
+风险结论与视觉位置分开：`RiskState` 回答是否有资格给出 normal/long/organize/high；`referencePositionScore` 只表示当前本地负载相对 empirical failure reference 的位置，并驱动 16 段视觉轨道。环境无法验证时，低负载仍可保持 RiskState=unknown，但只要 measurement complete 且当前 calibration 可用，referencePositionScore 仍可显示本地历史参考位置；这不会被解释成官方额度或安全认证。
 
-“重新学习”创建新 Generation，旧 generation 保留为后台历史；新代没有 confirmed F，因此扫描按钮重新出现。warm-start 只作弱先验，当前 generation 的新证据优先，若新证据与旧边界冲突则旧边界退出当前计算。
+## 6. Generation 与 EnvironmentSignature
 
-`risk.score` 在 2.0 只编码 UI/提醒严重度，不再是加权预测模型。用户可见轨道单独使用 `trendScore`。轨道不展示计算规则、数字或阈值；parser unreliable 时灰化并 fail-closed。
+Generation 用于隔离校准环境。EnvironmentSignature 只包含：
 
-完整扫描若生成待确认的长度上限样本，下一次 UI render 自动聚焦确认卡。正常回复的稳定 completion 继续通过 `recordCompletion` 自动累积 confirmed safe 样本；confirmed safe 仅接受 complete coverage + healthy parser，并按 conversation 去重、保留该会话最高安全负载。
+- parserSchemaVersion
+- measurementSchemaVersion
+- 可可靠读取时的 modelHint
 
-## 7. Internationalization / Brand Identity
+modelHint 的缺失与明确冲突分开处理：校准时 modelHint 已知、当前暂时不可读 → environment_unknown；校准时 modelHint 本来就不可读 → EnvironmentConfidence=unverified，历史 R 只能用于参考位置和提前预警，不能认证 Normal；双方 modelHint 已知且不同，或 parser/measurement schema 不同 → mismatch/stale。
 
-Manifest 使用 `__MSG_extensionName__` / `__MSG_extensionDescription__` 与 `default_locale: en`，并提供 `_locales/en`、`_locales/zh_CN`、`_locales/zh_TW`。
+`startNewGeneration(recalibrate/environment_change)` 创建空 samples + 空 turnGrowthSamples。旧 R/S 仅写入 warmStartPrior，属于 stale prior；旧 Assistant-only growth 不迁入新 G。
 
-- canonical brand 始终是 `LongChat Guard`
-- 简中 store/manifest display name 为 `LongChat Guard · 长会话预警`
-- 繁中 store/manifest display name 为 `LongChat Guard · 長對話預警`
-- toolbar action title 只使用 `LongChat Guard`
-- UI 文案通过 `chrome.i18n.getMessage` 读取，测试环境使用英文 fallback
+环境 signature 明确冲突、change-point 建议或只有 prior 时，CalibrationState=stale。
 
-官网和仓库发现性文件使用同一 canonical identity，并通过 JSON-LD、canonical/hreflang、FAQ、`llms.txt`、AI discovery profile、GitHub/Chrome Web Store 互链强化实体一致性。
+## 7. Storage schema 10
 
-## 8. Storage
+Schema 10 的 ledger 新增：
 
-允许持久化：
+- ledgerRevision
+- observationEpoch
+- sequenceReliability
+- uncertaintySources
+- environmentSignature
+- durable completion/failure/dismissed evidence
 
-- install salt
-- extension settings
-- anonymous message fingerprint
-- token / char estimate
-- branch metadata
-- conversation statistics
-- generation / calibration metadata
-- per-conversation reminder control
-- failure-only last-scan diagnostics：仅失败原因与最后少量滚动结构指标，不含 URL/正文，7 天自动过期；扫描成功立即删除
+`mergeLedgerSnapshots()`：
 
-禁止持久化：
+- latest-only：currentEstimatedLoad、coverageState、parserHealth、activeFingerprints、sequence、uncertaintySources、environmentSignature、generationId。
+- union：messages、completedAssistantFingerprints、confirmedFailureFingerprints、dismissedFailureKeys。
+- max：ledgerRevision、observationEpoch、updatedAt。
 
-- raw message text
-- composer draft text
-- assistant raw response
-- attachment raw text
-- user email / name
-- API keys
+`observeWindow` 需要调用方携带 `baseRevision`。baseRevision 与当前 ledgerRevision 不同即返回 `staleObservation`，不写旧测量。
+
+Completion/Failure event 也携带 expectedLedgerRevision，避免旧标签页追加旧证据。
+
+跨标签页的 `chrome.storage.onChanged` 只用于重新读取状态并本地重绘 UI，绝不触发新的 observation 写入。这样既能同步 mute/calibration，又不会形成 “storage change → observe → write → storage change” 的反馈回路。
+
+## 8. Migration
+
+Schema 9 及更旧状态升级为 10：
+
+- conversation references 继续统一转换为 install-salted SHA-256 pseudonymous key。
+- `firstConfirmedFailureLoad` 迁移为 `empiricalFailureLoad`。
+- legacy strong/conservative 质量可保留；无法映射的质量降为 provisional。
+- 旧环境信息缺失，因此旧有效 R 迁移后在当前产品状态中表现为 stale，而不是自动视为当前 calibration。
+- 旧 `recentAssistantTokenCounts` 不迁移为 TurnGrowthSample。
+- 旧 `hasUnmeasuredAttachments` 只在 migration 时转换为 uncertaintySources；新 schema 不再让 attachment 永久粘住整个会话。
+- migration 可重复运行，结果幂等。
+
+## 9. History Scan Transactions
+
+完整历史扫描有两个明确分开的用途，共用同一套 head/tail、虚拟窗口拼接和 fail-closed scanner，但提交语义不同。
+
+**Calibration scan**：显式“用此会话校准”创建 ActiveCalibrationScan，并在可靠完整读取后同时更新当前会话 ledger 与 empirical failure reference。
+
+- scanSessionId
+- raw/pseudonymous conversation key
+- expectedGenerationId
+- expectedLedgerRevision
+
+扫描结束前会再次验证 conversation identity；Background commit 再验证 generation/revision。任一改变则拒绝提交。刷新/extension reload 会销毁 content script 内的 scan session，因此没有可提交的半成品。
+
+**Measurement recovery scan**：用于已经存在可用提醒基准、但当前普通旧历史会话只有 partial/uncertain measurement 的情况。它同样记录 conversation identity、expectedGenerationId、expectedLedgerRevision，并在完整读取后只提交该会话的 authoritative complete/reliable ledger；不得写 empirical failure reference、不得增加 calibration sample、不得创建 pending confirmation。这样旧会话可以恢复自己的 L，而不会被误当作上限样本。
+
+Scanner 继续使用稳定 head/tail、虚拟窗口重叠、有限恢复和 fail-closed 策略。
+
+## 10. UI
+
+`GuardUiModel` 直接携带三维领域状态。
+
+`shouldRenderRiskTrack()` 在 UI 层再次 hard gate，基础资格为：
+
+```text
+measurement=complete
+and calibration in {calibrated, calibrated_conservative}
+and trackAvailable=true
+```
+
+在此基础上，`risk != unknown` 时正常渲染轨道；唯一例外是 `EnvironmentConfidence=unverified`，此时即使低负载仍为 `RiskState=unknown`，也可以渲染 `referencePositionScore` 表示本地历史参考位置，但不得认证为 Normal。environment_unknown / stale / uncalibrated 或 measurement 非 complete 时仍隐藏轨道。
+
+Overflow menu 使用 fixed positioning、trigger anchoring、viewport clamp；键盘 ArrowUp/ArrowDown/Home/End/Escape 与 focus restoration 保留。
+
+## 11. 隐私
+
+Raw conversation text、Composer text 和附件内容只在内存瞬时处理。Storage 只保存 pseudonymous key、匿名 fingerprints、本地估算和状态元数据。扫描诊断不含 URL、正文或原始 fingerprint。
+
+Manifest 权限仍为 `storage` + `https://chatgpt.com/*`。

@@ -88,11 +88,18 @@ export class AnonymousConversationLedger {
     return {
       conversationKey: input.conversationKey,
       generationId: input.generationId,
+      ledgerRevision: 1,
+      observationEpoch: input.updatedAt,
       coverageState: input.coverageState,
       parserHealth: input.parserHealth,
       messages: this.recordsArray(),
       activeFingerprints: this.activeSequence(),
+      sequenceReliability: 'reliable',
       currentEstimatedLoad: this.estimatedActiveLoad(),
+      uncertaintySources: [],
+      completedAssistantFingerprints: [],
+      confirmedFailureFingerprints: [],
+      dismissedFailureKeys: [],
       updatedAt: input.updatedAt
     }
   }

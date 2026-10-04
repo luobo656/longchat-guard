@@ -2,16 +2,25 @@
 
 ## Unreleased
 
-- A complete healthy history scan establishes a usable local reference baseline immediately; normal scans no longer force a conversation-limit confirmation.
-- Split manual scanning into clear purposes: establish/update the current chat estimate versus calibrate with a chat that actually reached the conversation-length limit.
-- Explicit high-confidence length-limit errors can confirm the failure boundary automatically; otherwise the dedicated limit-calibration flow asks for user confirmation.
-- Replaced engineering-heavy copy with user-facing language: Low risk → High risk, Basis, More actions, Update current chat progress, Recalibrate baseline, and contextual next-step advice for long / near-risk / high-risk states.
-- High or near-risk transitions automatically surface the action area once so the continuation action is easy to reach without permanently expanding the panel.
-- Recalibration and version upgrades reuse the existing local baseline instead of making the risk track look empty again.
-- Schema 8 compacts local storage to bounded recent conversation-length evidence, keeps only minimal anonymous message hashes/roles/length estimates needed for reconciliation, preserves aggregate prefix load when old tail records are trimmed, and bounds per-conversation UI control state.
-- Failed history scans keep only the latest bounded structural diagnostic tail in local storage; each new failure overwrites the previous record and data older than seven days is deleted. No raw chat text is included.
-- Expanded the three-language continuation prompt into a structured handoff package covering goals, completed work, decisions, constraints, exact code/file/platform state, unresolved issues, failed attempts, next actions, risks, and verified-vs-inferred status.
-- No account name/email is stored, no new permissions were added, and the underlying L/S/F/B risk thresholds are unchanged.
+- Rebuilt product state around `MeasurementState`, `CalibrationState`, and `RiskState`; unknown, partial, stale, or uncalibrated conditions can no longer be presented as “Normal”.
+- Replaced the old safe-boundary-driven UI contract with an empirical failure-reference contract. Safe evidence is now internal consistency/change-point evidence only and never unlocks the full risk track.
+- Removed the user-facing `scan_baseline -> scan_limit -> confirmation` calibration flow. A user who opens a historical chat they know reached the conversation-length limit now clicks “Calibrate with this chat” once; one complete reliable scan directly establishes a strong or conservative empirical failure reference.
+- Restored old-chat usability without reintroducing the old two-step calibration flow: when a normal historical chat cannot be measured from its currently loaded DOM, “Read full current chat” performs a separate full-history measurement transaction that refreshes only that chat's ledger/load and leaves the existing empirical failure reference and calibration evidence unchanged.
+- Kept pending confirmation only for passively detected possible conversation-length-limit events; explicit calibration never asks the user to confirm the same intent twice.
+- Added true pre-send risk input from the unsent Composer draft. Draft text remains transient and is not persisted.
+- Replaced Assistant-only growth learning with whole-turn `L_before -> L_after` samples. Uncertain attachment/tool/search turns are excluded from the usable turn-growth reserve distribution, and legacy Assistant-only samples are not migrated as new evidence.
+- Added observable `EnvironmentSignature` metadata and stale-prior semantics. Recalibration creates a fresh generation with no inherited current failure reference or growth distribution; old evidence remains guidance only.
+- Added schema 10 ledger revisions and observation epochs plus generation/revision guards. Stale same-conversation tabs cannot overwrite newer load, coverage, parser, sequence, active-branch, completion, or failure state.
+- Real Edge validation exposed and fixed a cross-tab storage feedback loop: storage-change listeners now refresh state/UI without creating a new observation write.
+- Rewrote ledger merge semantics: current measurement fields are latest-only, durable completion/failure/dismissal evidence is unioned, and revision/timestamps are monotonic.
+- Added scan-session transactions. Conversation changes, generation changes, or ledger changes during a history scan fail closed and cannot commit partial calibration.
+- Replaced the sticky attachment boolean with current uncertainty-source evidence including attachments and identifiable tool/search/code/voice/image context. Branching away from an attachment no longer permanently contaminates the conversation.
+- Tightened parser/sequence fail-closed behavior: degraded/unreliable parsing or uncertain sequence produces `RiskState=unknown` and hides the full risk track.
+- Restored the compact green-to-red 16-segment risk track as the primary visual feedback for any complete measurement with a usable current calibration. The track now explicitly represents position against the local historical failure reference, not official ChatGPT capacity. Model-unverified low-load chats remain non-Normal while still showing reference position; elevated warnings use the normal Long/Near risk/High risk labels instead of adding “(conservative)” to the primary status.
+- Updated the overflow menu to remain trigger-anchored, viewport-clamped, keyboard accessible, and preferentially positioned away from the primary risk card.
+- Storage still uses install-salted SHA-256 pseudonymous conversation identifiers; documentation no longer describes them as absolute anonymity. Raw chat, Composer, attachment, and tool-result text remain unpersisted and unuploaded.
+- Added product-state and end-to-end state-transition integration coverage for first run, safe-only evidence, explicit/conservative calibration, ordinary historical-chat measurement recovery, stale environment/generation, reload, scan transaction failure, Composer risk, whole-turn growth, and multi-tab stale writes.
+- No new browser permissions were added; package/manifest version remains 2.0.2 while this work stays Unreleased.
 
 ## 2.0.2 - 2026-10-01
 

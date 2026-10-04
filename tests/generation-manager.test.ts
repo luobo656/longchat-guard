@@ -1,110 +1,100 @@
 import { describe, expect, it } from 'vitest'
 import {
   createGeneration,
-  summarizeGeneration,
-  upsertConversationSample
+  recordConfirmedFailureReference,
+  recordTurnGrowth
 } from '../src/core/calibration'
 import {
   clearLearningData,
-  restoreGeneration,
   startNewGeneration
 } from '../src/core/generation-manager'
-import { assessRisk } from '../src/core/risk-engine'
 import type { PersistedState } from '../src/core/storage'
 
-function calibratedState(): PersistedState {
-  let generation = createGeneration('g1', 1)
-  generation.createdReason = 'initial'
-  generation = upsertConversationSample(generation, {
-    conversationKey: 'c1',
-    generationId: 'g1',
-    highestConfirmedSafeLoad: 90000,
-    firstConfirmedFailureLoad: 100000,
-    coverageState: 'complete',
-    parserHealth: 'healthy',
-    updatedAt: 2
-  })
+const env = {
+  parserSchemaVersion: 'chatgpt-dom-2026-10-v2',
+  measurementSchemaVersion: 2,
+  modelHint: 'GPT Fixture'
+} as const
+
+function stateWith(generation = createGeneration('g1', 1)): PersistedState {
   return {
-    schemaVersion: 4,
-    installSalt: 'keep-salt',
-    settings: { enabled: true, generationId: 'g1' },
+    schemaVersion: 10,
+    installSalt: 'salt',
+    settings: { enabled: true, generationId: generation.id },
     generations: [generation],
-    conversationControls: {},
-    ledgers: {
-      'chatgpt:c1': {
-        conversationKey: 'chatgpt:c1',
-        generationId: 'g1',
-        coverageState: 'complete',
-        parserHealth: 'healthy',
-        messages: [],
-        activeFingerprints: [],
-        currentEstimatedLoad: 90000,
-        updatedAt: 2
-      }
-    }
+    ledgers: {},
+    conversationControls: {}
   }
 }
 
 describe('generation manager', () => {
-  it('starts a new environment generation without copying old samples', () => {
-    const before = calibratedState()
-    const after = startNewGeneration(before, 'environment_change', 10)
-    const current = after.generations.find(
-      (generation) => generation.id === after.settings.generationId
-    )
-    const old = after.generations.find((generation) => generation.id === 'g1')
-
-    expect(old?.archivedAt).toBe(10)
-    expect(current?.createdReason).toBe('environment_change')
-    expect(current?.samples).toEqual([])
-    expect(current?.warmStartedFrom).toBe('g1')
-    expect(current?.warmStartPrior?.sourceGenerationId).toBe('g1')
-
-    const summary = summarizeGeneration(current!)
-    expect(summary.usingWarmStartPrior).toBe(true)
-    expect(summary.confidence).toBeLessThanOrEqual(0.3)
-  })
-
-  it('restores an old generation with reduced verification confidence', () => {
-    const started = startNewGeneration(calibratedState(), 'recalibrate', 10)
-    const restored = restoreGeneration(started, 'g1', 20)
-    const active = restored.generations.find((generation) => generation.id === 'g1')
-
-    expect(restored.settings.generationId).toBe('g1')
-    expect(active?.archivedAt).toBeUndefined()
-    expect(active?.verificationFactor).toBeLessThanOrEqual(0.6)
-    expect(summarizeGeneration(active!).confidence).toBeLessThan(
-      summarizeGeneration(calibratedState().generations[0]!).confidence
-    )
-  })
-
-  it('clears learning while preserving installation identity and enabled setting', () => {
-    const cleared = clearLearningData(calibratedState(), 20)
-
-    expect(cleared.installSalt).toBe('keep-salt')
-    expect(cleared.settings.enabled).toBe(true)
-    expect(cleared.ledgers).toEqual({})
-    expect(cleared.generations).toHaveLength(1)
-    expect(cleared.generations[0]?.samples).toEqual([])
-    expect(cleared.generations[0]?.createdReason).toBe('initial')
-  })
-
-  it('keeps a weak warm-start prior from creating a strong warning by itself', () => {
-    const result = assessRisk({
-      currentLoad: 300000,
-      composerLoad: 0,
-      expectedAssistantGrowth: 0,
-      safetyMargin: 0,
-      coverage: 'complete',
+  it('recalibration carries only stale prior reference evidence', () => {
+    let generation = createGeneration('g1', 1)
+    generation = recordConfirmedFailureReference(generation, {
+      conversationKey: 'limit',
+      generationId: 'g1',
+      estimatedLoad: 60_000,
+      errorKind: 'conversation_length_limit',
+      coverageState: 'complete',
       parserHealth: 'healthy',
-      confidence: 0.2,
-      estimatedRiskStart: 85000,
-      estimatedHighRisk: 100000,
-      usingWarmStartPrior: true
+      sequenceReliability: 'reliable',
+      uncertaintySources: [],
+      environmentSignature: env,
+      observedAt: 2
+    })
+    generation = recordTurnGrowth(generation, {
+      conversationKey: 'growth',
+      generationId: 'g1',
+      beforeLoad: 1_000,
+      afterLoad: 3_000,
+      delta: 2_000,
+      uncertain: false,
+      uncertaintySources: [],
+      observedAt: 3
     })
 
-    expect(['normal', 'long']).toContain(result.level)
-    expect(result.level).not.toBe('organize')
-    expect(result.level).not.toBe('high')
+    const next = startNewGeneration(
+      stateWith(generation),
+      'recalibrate',
+      10
+    )
+    const active = next.generations[0]!
+
+    expect(active.createdReason).toBe('recalibrate')
+    expect(active.warmStartPrior?.failureReference?.load).toBe(60_000)
+    expect(active.samples).toEqual([])
+    expect(active.turnGrowthSamples).toEqual([])
+    expect(active.environmentSignature).toBeUndefined()
+  })
+
+  it('environment changes also force a fresh generation', () => {
+    const next = startNewGeneration(
+      stateWith(),
+      'environment_change',
+      20
+    )
+    expect(next.generations[0]?.createdReason).toBe(
+      'environment_change'
+    )
+    expect(next.settings.generationId).toBe(
+      next.generations[0]?.id
+    )
+  })
+
+  it('clear learning removes calibration, ledgers and controls', () => {
+    const state = stateWith()
+    state.ledgers = {
+      old: {} as never
+    }
+    state.conversationControls = {
+      old: { muted: true }
+    }
+
+    const cleared = clearLearningData(state, 30)
+    expect(cleared.generations).toHaveLength(1)
+    expect(cleared.generations[0]?.samples).toEqual([])
+    expect(cleared.generations[0]?.warmStartPrior).toBeUndefined()
+    expect(cleared.ledgers).toEqual({})
+    expect(cleared.conversationControls).toEqual({})
   })
 })

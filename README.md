@@ -10,61 +10,104 @@
 **Official project site:** https://luobo656.github.io/longchat-guard/ · [简体中文](https://luobo656.github.io/longchat-guard/zh/) · [繁體中文](https://luobo656.github.io/longchat-guard/zh-tw/)
 **Install:** [Chrome Web Store](https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop) · **Source:** https://github.com/luobo656/longchat-guard
 
-LongChat Guard 是一个面向 Chrome / Edge 的开源 Manifest V3 扩展，用于 **ChatGPT 长会话预警、长对话风险提醒和续接**。2.0 采用本地经验模型：根据已确认安全的会话、已确认达到长度上限的会话，以及你平时 Assistant 单轮回复的增长情况，判断当前长会话离本机经验风险区域还有多远。它不会读取 OpenAI 官方“剩余额度”，也不宣称知道精确会话上限。
+LongChat Guard 是一个面向 Chrome / Microsoft Edge 的开源 Manifest V3 扩展。它根据浏览器本地可观测的 ChatGPT 长会话证据，提供**经验风险预警**和续接辅助。它不是 OpenAI 官方 context-limit、token-limit 或剩余额度仪表盘，也不会声称知道服务端真实上下文容量。
 
-LongChat Guard is an open-source, local-first Chrome/Edge extension for **ChatGPT long-conversation warnings**. It learns empirical browser-side safe/failure boundaries and typical assistant-reply growth, then gives simple risk states and a continuation workflow. It is **not** an official OpenAI quota or token-limit meter.
+LongChat Guard is an open-source, local-first Chrome/Edge extension for empirical ChatGPT long-conversation warnings. It is **not** an official OpenAI quota, token-limit, or context-window meter.
 
 ![LongChat Guard icon](./public/icons/icon128.png)
 
+## 当前 Unreleased 产品模型
+
+LongChat Guard 将“能不能判断”和“风险是什么”分开：
+
+- **MeasurementState**：`unavailable / partial / complete / uncertain`
+- **CalibrationState**：`uncalibrated / calibrating / calibrated_conservative / calibrated / stale`
+- **RiskState**：`unknown / normal / long / organize / high`
+
+核心 invariant：
+
+> 没有完整可靠的测量，或没有当前环境可用的经验失败参考，就只能是 `unknown`，绝不能显示“正常”。
+
+因此完整绿色→黄色→橙色→红色风险轨道只会在 measurement complete 且 strong/conservative calibration 可用时出现。
+
 ## 核心功能
 
-- **一眼看懂的风险位置**：完整彩色风险轨道 + 当前位置圆点，只显示正常、偏长、接近风险、高风险等简短状态。
-- **本地自动学习**：从已确认安全边界、已确认失败边界和典型回复增长中持续校准，不依赖固定“魔法阈值”。
-- **长会话续接**：一键复制结构化续接提示词，把目标、决定、约束、代码/文件状态和待办带到新会话。
-- **旧会话辅助学习**：尚未建立失败边界时，可完整扫描一个已达到上限的历史会话并由用户确认。
-- **自动适应环境变化**：出现多个独立矛盾证据时开启新的学习代际，而不是永久相信旧边界。
-- **低打扰控制**：支持重新学习和本会话静音。
-- **三语本地化**：English / 简体中文 / 繁體中文；canonical brand 始终是 **LongChat Guard**。
-- **明确隐私同意**：用户主动同意前，不读取或处理 ChatGPT 会话正文。
+- **信息诚实的风险状态**：未校准时显示“未校准”，parser/sequence 不可靠时显示“暂时无法判断”，旧参考不能证明仍有效时显示“基准可能失效”。
+- **一次校准**：打开一个你明确知道曾达到 ChatGPT 会话长度上限的历史会话，点击一次“用此会话校准”。该点击本身就是用户确认，不再执行“扫描当前会话 → 再扫描上限会话 → 再 Yes/No”的旧流程。
+- **经验失败参考**：完整可靠、无已识别不可测上下文的样本形成 strong reference；含附件/工具等不可精确计量上下文的确定上限样本形成 conservative reference；不完整证据只保留为 provisional，不产生确定性风险。
+- **发送前预警**：尚未发送的 Composer 草稿进入 projected risk；输入足够长时可以在按发送之前升级风险。
+- **整轮增长学习**：增长缓冲来自 `L_before -> L_after` 的 whole-turn delta，而不是只学习 Assistant 单条回复长度。
+- **多标签页一致性**：ledgerRevision / observationEpoch + background revision guard 阻止旧标签页把新状态写回旧值。
+- **扫描事务**：完整历史校准绑定 scan session、conversation、generation 与 ledger revision；中途变化就 fail closed，不提交半成品。
+- **本地续接**：接近风险或高风险时可复制结构化续接提示词。
+- **三语 UI**：English / 简体中文 / 繁體中文；canonical brand 始终是 **LongChat Guard**。
 
-## 方法与指南
+## 校准是怎么工作的？
 
-- [LongChat Guard 2.0.2 风险判断方法](https://luobo656.github.io/longchat-guard/zh/methodology/)
-- [ChatGPT 会话太长了怎么办？](https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-conversation-too-long/)
-- [ChatGPT 长会话插件怎么选？](https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-long-conversation-extension/)
-- [English methodology](https://luobo656.github.io/longchat-guard/methodology/)
-- [English long-conversation extension guide](https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-extension/)
+普通聊天无需用户操作。扩展会在后台观察当前本地可测负载、测量完整度和整轮增长。
 
-## 它解决什么问题？
+第一次需要建立经验失败参考时：
 
-当 ChatGPT 对话持续很久时，用户通常真正想知道的不是一个未经证实的 token 数，而是：**现在是否值得整理、总结或开启新会话？** LongChat Guard 给这个决策提供本地经验信号。
+1. 打开一个你自己确认过去真正达到过 conversation-length limit 的历史会话。
+2. 点击 **“用此会话校准”**。
+3. 扩展只扫描一次完整历史。
+4. 扫描可靠则直接建立 strong 或 conservative 的本地经验失败参考。
+5. 如果完整性、parser 或序列不可靠，则明确告诉你本次样本不可用，不会伪造参考。
 
-常见表达包括 ChatGPT 长会话预警、长对话提醒、conversation length monitor、context window warning、long chat guard 和 privacy-first ChatGPT extension。这些都是使用场景描述，不代表本项目能够读取 OpenAI 官方 token 额度或精确 context-window 上限。
+扩展被动看到“可能的 conversation-length-limit”时仍可以单独询问是否用该事件校准；这条 pending-confirmation 路径不属于显式校准流程。
+
+## 风险方法
+
+内部主要使用：
+
+- `L`：当前本地可测会话负载。
+- `S`：成功证据，只用于内部一致性/环境漂移检查，不让 UI 进入“正常”。
+- `R`：EmpiricalFailureReference，本地经验失败参考，不等于 OpenAI 官方上限。
+- `G`：TurnGrowthReserve，由可靠 whole-turn delta 学习。
+
+发送前：
+
+```text
+baseLoad = CurrentLoad + ComposerDraftLoad
+projectedLoad = baseLoad + TurnGrowthReserve
+```
+
+当 R 和 G 都可用时，风险按距离 R 还剩大约 3 / 2 / 1 个本地典型整轮增长缓冲进入偏长 / 接近风险 / 高风险。G 尚未学够时，不人为制造预警带；只在达到本地 R 时进入高风险。
+
+UI 不显示 token 数、K 值、百分比或任何会被理解成 OpenAI 官方额度的数值。
 
 ## 隐私与权限
 
 LongChat Guard 没有服务器、账号系统、云同步或 OpenAI API Key。
 
-首次启用监测前，扩展会明确说明数据处理方式。只有用户点击“同意并开始”后，内容脚本才会在浏览器内瞬时读取当前 ChatGPT 页面可见内容，用于本地趋势估算与本地加盐指纹计算。
+首次启用前会明确请求同意。只有用户点击“同意并开始”后，内容脚本才会在本机瞬时读取当前 ChatGPT 页面可见内容和 Composer，用于：
+
+- 本地负载估算
+- 本地 fingerprint
+- measurement/parser 判断
+- whole-turn growth
+- empirical calibration/risk
 
 不会持久化：
 
 - 用户聊天正文
 - Assistant 回答正文
 - Composer 草稿正文
-- 附件正文
+- 附件/文件正文
+- 工具/搜索结果正文
 - 姓名、邮箱或 API Key
+- raw ChatGPT conversation ID
 
-不会把聊天内容上传给开发者、第三方或扩展服务器。
+持久化会话标识是由本安装 salt 派生的 SHA-256 **pseudonymous identifier**。它降低 raw conversation ID 的直接暴露，但不被描述为对拥有同一浏览器 profile 与 install salt 的本机攻击者“绝对匿名”。
 
-Manifest V3 权限保持最小化：
+Manifest V3 权限：
 
-- `storage`：保存本地匿名学习数据、校准信息和提醒设置。
+- `storage`：保存本地 pseudonymous 状态、校准证据与提醒设置。
 - `https://chatgpt.com/*`：仅在 ChatGPT 网页端运行。
 
 完整说明见 [PRIVACY.md](./PRIVACY.md)。
 
-## 安装
+## 安装与开发
 
 ### 从源码构建
 
@@ -79,37 +122,29 @@ npm run build
 
 ### Chrome / Edge 本地加载
 
-1. 打开扩展管理页。
-2. 开启“开发人员模式”。
+1. 打开浏览器扩展管理页。
+2. 开启开发人员模式。
 3. 选择“加载已解压的扩展”。
-4. 选择项目的 `dist/` 目录。
-5. 打开 `https://chatgpt.com/`，完成首次隐私确认后开始使用。
-
-## 开发
+4. 选择项目的 `dist/`。
+5. 打开 `https://chatgpt.com/`，完成首次隐私确认。
 
 推荐 Node.js 20+。
 
-```bash
-npm install
-npm run typecheck
-npm test
-npm run build
-```
+构建还会验证：
 
-构建流程会额外检查：
-
-- content script 为可直接加载的 classic bundle
-- Manifest V3 权限没有意外扩大
+- content script 是浏览器可直接加载的 classic bundle
+- Manifest V3 权限未意外扩大
 - 必需图标与构建产物完整
 
-更多开发约束：
+开发约束：
 
 - [PRODUCT_BASELINE.md](./PRODUCT_BASELINE.md)
 - [ARCHITECTURE.md](./ARCHITECTURE.md)
 - [ACCEPTANCE.md](./ACCEPTANCE.md)
+- [MANUAL_QA.md](./MANUAL_QA.md)
 - [CONTRIBUTING.md](./CONTRIBUTING.md)
 
-面向搜索引擎、AI 助手和检索系统的项目说明：
+面向搜索引擎和 AI 检索的项目说明：
 
 - [llms.txt](./llms.txt)
 - [AI_DISCOVERY.md](./AI_DISCOVERY.md)
@@ -120,22 +155,22 @@ npm run build
 
 LongChat Guard 2.x 只面向 `chatgpt.com` 网页端，不包含：
 
-- 下一轮 token 预测
+- 官方 context-window / quota meter
 - 精确 token / K 值 / 百分比 / 官方剩余额度
 - Codex、CLI、API 或其他 AI 网站适配
-- 云账号、云同步或服务端
-- 自动代用户发送消息
+- 云账号、云同步或服务端聊天分析
+- 自动代用户发送消息或自动创建新对话
 - OpenAI / ChatGPT 官方 Logo 或任何暗示官方关系的品牌处理
 
 ## 品牌
 
-canonical brand 始终是 **LongChat Guard**，品牌本身不翻译。英文展示名为 **LongChat Guard**，简体中文为 **LongChat Guard · 长会话预警**，繁体中文为 **LongChat Guard · 長對話預警**。图标使用最终原创构图：透明背景、绿色聊天气泡作为主体、三条白色对话线、右下橙色守护盾牌；不使用外部方形底板或盾牌对勾。
+Canonical brand 始终是 **LongChat Guard**。英文展示名为 **LongChat Guard**，简体中文为 **LongChat Guard · 长会话预警**，繁体中文为 **LongChat Guard · 長對話預警**。
 
-`ChatGPT` 仅用于说明本项目当前支持的网站和使用场景。本项目与 OpenAI 没有隶属、赞助、认可或维护关系。
+`ChatGPT` 仅用于说明当前支持的网站和使用场景。本项目与 OpenAI 没有隶属、赞助、认可或维护关系。
 
 ## 开源
 
-MIT License。欢迎提交 Issue 和 Pull Request。提交代码前请运行：
+MIT License。提交代码前请运行：
 
 ```bash
 npm run typecheck

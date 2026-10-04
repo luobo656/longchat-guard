@@ -1,135 +1,109 @@
-# LongChat Guard 2.0 验收基线
+# LongChat Guard Unreleased 验收基线
 
-## A. 构建与范围
+## A. 构建与权限
 
-- [ ] Chrome 可加载 MV3 扩展
-- [ ] Edge 可加载同一构建产物
-- [ ] 仅在 `https://chatgpt.com/*` 注入核心逻辑
-- [ ] TypeScript strict 通过
-- [ ] Vitest 自动化测试通过
-- [ ] Vite 构建成功
-- [ ] `dist/manifest.json`、`dist/background.js`、`dist/content.js` 存在
-- [ ] content script 为可直接加载的 classic script，不包含顶层 ESM `import` / `export`
-- [ ] 不新增权限，不申请 `<all_urls>`、cookies、history、webRequest 等非必要权限
+- [ ] `npm run typecheck` 通过。
+- [ ] `npm test` 全绿。
+- [ ] `npm run build` 通过。
+- [ ] `npm run verify:dist` 通过。
+- [ ] `git diff --check` 通过。
+- [ ] Manifest 仍为 MV3，版本保持 2.0.2。
+- [ ] permissions 仅包含 `storage`；host permission 仅 `https://chatgpt.com/*`。
+- [ ] `release/` 未被修改或加入本轮提交。
 
-## B. 2.0 用户界面
+## B. 产品 invariants
 
-- [ ] 未同意隐私说明前只显示一次性隐私同意卡
-- [ ] 同意卡文案包含：仅在本机读取当前 ChatGPT 页面内容用于长会话趋势判断；不上传；不保存聊天正文；可通过卸载扩展/清除扩展数据删除本地数据
-- [ ] 只有“同意并开始”构成 affirmative consent
-- [ ] 点击“暂不开启”后显示灰色小胶囊“未启用”，不自动反复弹同意卡
-- [ ] 未同意前不调用 `readPageSnapshot`
-- [ ] 未同意前不做 fingerprint 或 token 估算
-- [ ] 未同意前不注册会话观察 MutationObserver 或发送监听
-- [ ] 默认只显示状态胶囊
-- [ ] 点击胶囊后主信息只显示风险卡、学习状态和必要操作，不显示规则说明或统计解释
-- [ ] 风险状态只显示正常 / 偏长 / 接近风险 / 高风险 / 识别中
-- [ ] 风险轨道使用绿色到红色的固定渐变背景，白色圆点表示当前位置，圆点位置随 `trendScore` 平滑移动
-- [ ] 轨道只显示“安全 / 高风险”，不显示数字、比例、阈值或计算规则
-- [ ] 新会话负载远低于已学习风险起点时，即使 coverage incomplete、置信度较低，圆点也必须保持靠近左端；这些不确定性只影响告警决策
-- [ ] unreliable 轨道明显灰化并 fail-closed
-- [ ] 学习状态按证据分为学习中 / 初步完成 / 校准中 / 已稳定；单个失败样本不得直接显示“已稳定”
-- [ ] 主面板不显示学习样本数、附件说明、校准置信度或其他规则性说明
-- [ ] 用户界面不显示 token / tokens
-- [ ] 用户界面不显示 `≈数字`
-- [ ] 用户界面不显示数字 + K
-- [ ] 用户界面不显示阈值、百分比或可被理解为官方额度的数据
-- [ ] 主面板不显示冗长免责声明或规则说明
-- [ ] 面板操作只提供复制续接提示词、扫描当前会话、重新学习、本会话不提醒；不提供扫描诊断或开发者工具入口
-- [ ] 当前 generation 已有 confirmed F 后隐藏“扫描当前会话”；点击“重新学习”创建新 generation 后扫描按钮重新显示
-- [ ] 面板展开在右下胶囊上方、右侧对齐，窄屏不出屏
-- [ ] 点击页面其他位置收起面板
-- [ ] 点击 Shadow DOM 内部、胶囊、面板或按钮不收起
-- [ ] Escape 收起面板
-- [ ] 完整扫描后若出现长度上限确认卡，面板自动打开并将确认卡滚动到可见区域、聚焦主要确认按钮
-- [ ] 不显示下一轮预测
-- [ ] 不显示统计完整性卡片
-- [ ] 不显示校准置信度百分比
-- [ ] 不显示确认安全至
-- [ ] 不显示历史风险区
-- [ ] 不显示太早 / 正好 / 太晚
-- [ ] 不显示 5 轮后提醒
-- [ ] 不显示套餐/环境已变化、重新校准、恢复上一档案、清除全部学习数据
+- [ ] 没有 usable empirical failure reference 时 RiskState 不是 normal。
+- [ ] 没有 usable empirical failure reference 时不渲染完整风险轨道。
+- [ ] MeasurementState unavailable/partial/uncertain 时 RiskState=unknown。
+- [ ] S-only 仍是 uncalibrated。
+- [ ] provisional failure reference 不产生确定性风险。
+- [ ] stale prior 不产生确定性风险。
+- [ ] conservative failure reference 可用于风险，但 UI 明确“提醒会更保守”。
+- [ ] RiskState 与 referencePositionScore 分离：environment unverified + 低负载仍不得 Normal，但可以显示相对本地历史参考的位置。
 
-## C. Coverage
+## C. 校准流程
 
-- [ ] 真正空白新聊天页：无 conversation id 且无消息时 armed
-- [ ] armed 状态下用户发送首条消息后，迁移到 `/c/<id>` 的该会话标为 complete
-- [ ] 从首页点击历史会话不能继承 complete
-- [ ] 刷新已持久化 complete 的会话保持 complete
-- [ ] 直接打开旧 `/c/id` 标为 incomplete，除非此前已持久化 complete
-- [ ] incomplete 时继续在内部保守处理，不能因此把结果变得更乐观；主面板不显示常驻旧会话警告
+- [ ] 普通新会话无需任何扫描动作。
+- [ ] 显式“用此会话校准”只需一次用户动作 + 一次完整扫描。
+- [ ] 显式校准不再二次询问“是否到过上限”。
+- [ ] complete+healthy+reliable+无 uncertainty → strong R。
+- [ ] complete+healthy+reliable+有 uncertainty → conservative R。
+- [ ] incomplete / parser 不可靠 / scan 不完整 → 不写 usable R。
+- [ ] Passive length-limit detection 只创建 pending confirmation。
+- [ ] Passive confirmation 使用检测时的 measurement metadata，不因后续页面状态更好而升级。
 
-## D. 2.0 L/S/F/B 风险逻辑
+## D. 发送前风险与整轮增长
 
-- [ ] L 只取当前会话本地负载；composer 草稿、固定 expected growth、feedbackBias 不参与风险决策
-- [ ] S 只来自 complete coverage + healthy parser 的稳定 assistant completion；同会话只保留最高安全负载
-- [ ] F 只来自 confirmed conversation-length-limit；多个失败使用质量加权鲁棒低分位，单个极端低值不得完全支配 F
-- [ ] B 来自近期 assistant 增长高分位；稳定 completion 自动学习，完整历史扫描按 conversation/generation 去重 seed
-- [ ] 有 F+B 时按距离 F 还剩 3 / 2 / 1 个 B 分别进入 long / organize / high；L>=F 必须 high
-- [ ] 只有 S 没 F 时最多 long；没有 S/F 时不得伪造 organize/high
-- [ ] coverage incomplete / 低置信度不得把短新会话抬到 long/organize/high
-- [ ] parser unreliable 时 fail-closed；其他 parser/coverage 状态不通过人工加分推高风险
-- [ ] trendScore 与告警 severity 分离；有 F 时直接反映 L/F 的本地经验位置
+- [ ] Composer draft 被实时估算并进入 risk input。
+- [ ] 超长 draft 能在发送前提高 projected risk。
+- [ ] G 来自 `L_before -> L_after` 的 whole-turn delta。
+- [ ] 有附件/工具/搜索等 uncertainty 的 turn growth 不进入 usable G 分布。
+- [ ] 旧 Assistant-only B 不迁移成新 G。
 
-## E. 学习、换代与迁移
+## E. Storage / Multi-tab
 
-- [ ] 多个独立 complete + healthy 会话自动累积 S；同一会话只更新最高 S
-- [ ] 只有明确 conversation length 类错误可更新 F，其他错误不得污染 F
-- [ ] 已稳定要求当前 generation 同时存在 S、F、B，confirmed safe conversations >= 2，独立边界会话 >= 4
-- [ ] 已有 F+B 时，单个环境冲突不得换代；至少两个独立 conflict key 才自动新 generation
-- [ ] early-failure conflict 与 above-F safe conflict 两条链路都能自动换代，并将当前观察 seed 到新 generation
-- [ ] warm-start prior 不得单独制造 organize/high；当前新证据与旧 prior 冲突时旧边界退出当前计算
-- [ ] schema >= 7 的迁移保留 install salt、隐私同意、ledgers 和既有 S/F samples；旧完整账本可回填 B，无需用户重新扫描
+- [ ] ledgerRevision / observationEpoch 持久化。
+- [ ] stale baseRevision observation 不写 storage。
+- [ ] stale completion/failure event 不写证据。
+- [ ] storage.onChanged 只能只读刷新 UI，不能再次触发 observation 写入风暴。
+- [ ] current load / coverage / parser / sequence / active branch 采用 latest-only。
+- [ ] completion/failure/dismissed evidence union，不被 full scan 或另一个 tab 覆盖丢失。
+- [ ] Scan commit 有 generation + ledger revision guard。
+- [ ] Storage migration 幂等。
 
-## F. 隐私
+## F. Parser / Coverage / Uncertainty
 
-- [ ] `chrome.storage.local` 中无用户聊天正文
-- [ ] 成功扫描不保留诊断；失败只保存最近一次原因与最后少量结构指标，不含 URL、聊天正文或消息指纹明文，并在 7 天后自动删除
-- [ ] 无 assistant 原文
-- [ ] 无 composer 草稿正文
-- [ ] 无附件正文
-- [ ] 无邮箱、姓名、API Key
-- [ ] fingerprint 使用本地随机 salt
-- [ ] 旧安装 schema migration 默认未同意
-- [ ] `settings.privacyConsentVersion=1` 与 `privacyConsentedAt` 仅在同意后写入
-- [ ] 页面内容 locally processed, never transmitted to developer/server
-- [ ] 文档说明卸载扩展或清除扩展数据可删除本地数据
+- [ ] parser degraded/unreliable → MeasurementState uncertain。
+- [ ] sequence unreliable → MeasurementState uncertain。
+- [ ] coverage incomplete/mostly_complete → MeasurementState partial。
+- [ ] attachment uncertainty 不永久粘住被 branch 掉后的新活动序列。
+- [ ] tool/search/code/voice/generated-image 只在可识别实际上下文时记录，不因工具栏按钮误判。
 
-## G. 品牌、本地化与 GEO
+## G. UI
 
-- [ ] canonical brand 始终为 `LongChat Guard`，任何 locale 都不得把品牌翻译成“龙查卫队”等名称
-- [ ] 英文 display name 为 `LongChat Guard`
-- [ ] 简体中文 display name 为 `LongChat Guard · 长会话预警`
-- [ ] 繁体中文 display name 为 `LongChat Guard · 長對話預警`
-- [ ] manifest 使用 `__MSG_extensionName__` / `__MSG_extensionDescription__`、`default_locale: en` 和 `_locales/en|zh_CN|zh_TW`
-- [ ] action title 在所有语言中固定为 `LongChat Guard`
-- [ ] 普通用户可见 UI 在 en / zh_CN / zh_TW 下都有本地化文案，不出现混合语言主界面
-- [ ] README、官网、商店 listing、FAQ、llms.txt、AI discovery profile 对产品定义、品牌、隐私和官方关系保持一致
-- [ ] 官网 JSON-LD 的 SoftwareApplication 版本与发布版本一致，并互链 GitHub 与 Chrome Web Store canonical sources
-- [ ] GEO 页面提供直接问答、可引用事实和 canonical source links，不通过关键词堆砌伪造相关性
+- [ ] 未校准显示“未校准”，不能显示“正常”。
+- [ ] 未校准说明当前长度已识别但需要历史上限会话校准。
+- [ ] “用此会话校准”明确仅用于用户确认到过长度上限的历史会话。
+- [ ] 正在校准有持续状态。
+- [ ] 校准失败有持续 inline notice。
+- [ ] parser/sequence 失败显示“暂时无法判断”。
+- [ ] 已有可用提醒基准时，普通旧历史会话若 measurement 为 partial/uncertain，应提供唯一恢复动作“完整读取当前会话”；帮助文案明确“用于确定这个旧会话的当前风险，不会修改提醒基准”。
+- [ ] 旧会话测量恢复成功后，只更新该 conversation ledger/L；empirical failure reference、calibration samples、generation、growth samples 和 pending confirmations 必须保持不变。
+- [ ] stale 显示“基准可能失效”。
+- [ ] strong calibration 显示“基准已建立”语义并可显示风险轨道。
+- [ ] conservative calibration 明确说明“提醒会更保守”。
+- [ ] 可用 calibration + complete measurement 恢复原 16 段绿色→黄色→橙色→红色轨道；轨道只表示本地历史参考位置，不显示百分比/token/官方额度。
+- [ ] environment unverified + low load：主状态“模型环境未确认”，16 段轨道仍显示当前位置，但绝不能显示“正常”。
+- [ ] environment unverified + long/organize/high：主状态使用“偏长 / 接近风险 / 高风险”，不追加“（保守）”后缀；辅助说明简短注明当前模型未确认、进度按本地历史参考计算。
+- [ ] Overflow menu 不改变 panel height，优先不遮挡风险卡，键盘导航和 focus restoration 可用。
+- [ ] Overflow menu 的“本会话不提醒 / 恢复提醒”只更新该 pseudonymous conversation control，操作后菜单文案同步切换，不改变 calibration / R / G。
+- [ ] UI 不显示 token、K 值、百分比或“官方额度”式精度。
 
-## H. 品牌图标与 manifest
+## H. Privacy
 
-- [ ] `public/icons/icon.svg` 存在并为透明背景、绿色聊天气泡主形、白色对话线、右下橙色守护盾牌的原创高对比构图；无外部方形底板、无盾牌对勾
-- [ ] `public/icons/icon16.png`、`icon32.png`、`icon48.png`、`icon128.png` 存在
-- [ ] 图标不含 ChatGPT/OpenAI logo、六结标志、字母或文字
-- [ ] `manifest.icons` 与 `action.default_icon` 指向存在的图标路径
-- [ ] manifest name / description / action title 使用 i18n message placeholder；各 locale 解析后品牌规则符合 G 节，action title 始终为 `LongChat Guard`
-- [ ] name/description 不暗示 OpenAI 官方关系
-- [ ] MV3 权限最小，仅 `storage` 与 `https://chatgpt.com/*`
-- [ ] manifest version 为 `2.0.2`
+- [ ] 同意前不读 ChatGPT 正文、不 fingerprint、不估算、不启动 MutationObserver。
+- [ ] 不持久化用户/Assistant/Composer/附件正文。
+- [ ] 不上传聊天正文。
+- [ ] 不存姓名/邮箱/API key。
+- [ ] raw conversation ID 不持久化。
+- [ ] 文档使用“install-salted pseudonymous identifier”，不把它描述为不可关联的绝对匿名标识。
+- [ ] failed scan diagnostics 最多 7 天且不含 URL/正文/raw fingerprint。
 
-## I. 发布阻断
+## I. Real Browser E2E
 
-出现任一情况不得发布 2.0：
+真实 Edge/Chrome 开发扩展必须至少验证：
 
-1. 聊天正文进入持久化存储或日志
-2. 上传聊天正文
-3. 在用户界面显示具体 token 数、近似 token 数、K 数、阈值、百分比或官方额度式数据
-4. 旧会话被错误标为完整
-5. 解析失败后仍显示绿色安全状态
-6. 非长度错误污染 Failure Ceiling
-7. Branch / 编辑 / 重新生成明显重复累计
-8. Chrome 或 Edge 任一无法正常加载
-9. 图标、名称或描述暗示官方关系
+- [ ] A 无校准：未校准、无完整风险轨道、无 Normal。
+- [ ] B 普通新会话：自动监测，不需要扫描建立 S。
+- [ ] C 已知历史上限会话：一次“用此会话校准”直接完成 strong/conservative calibration。
+- [ ] C2 普通旧历史会话：在已有 R 的前提下，若初始为 partial/uncertain，点击“完整读取当前会话”后 measurement 变 complete/reliable，并使用原 R 重新计算该会话风险；不得改变 R。
+- [ ] D attachment calibration：显示保守基准且风险轨道可用。
+- [ ] E 当前 L==R：高风险。
+- [ ] E2 model-unverified：低负载仍非 Normal 但显示中间参考位置；L==R 时显示高风险且 16 段轨道满格。
+- [ ] F 超长 composer：发送前风险变化。
+- [ ] G 页面/扩展 reload：状态一致。
+- [ ] H 同会话双 tab：旧 revision 不覆盖新状态。
+- [ ] I parser/sequence unreliable：暂时无法判断，绝不 Normal。
+- [ ] J 重新校准：旧参考变 stale prior，风险轨道隐藏。
+- [ ] K Overflow menu：原生鼠标点击可见菜单并执行“本会话不提醒 / 恢复提醒”，状态持久化且可恢复。

@@ -1,353 +1,301 @@
 import { describe, expect, it } from 'vitest'
 import {
   createGeneration,
+  recordConfirmedFailureReference,
   recordFailureObservation,
   recordSuccessfulAssistantCompletion,
-  seedGrowthHistory,
-  summarizeGeneration,
-  upsertConversationSample
+  recordTurnGrowth,
+  summarizeGeneration
 } from '../src/core/calibration'
-import {
-  deriveBaselineState,
-  deriveLearningStage,
-  hasUsableBaseline,
-  shouldShowScanAction
-} from '../src/content/app'
 
-describe('calibration', () => {
-  it('uses independent conversation boundaries instead of per-turn averaging', () => {
-    let generation = createGeneration('g1', 1)
-    generation = upsertConversationSample(generation, {
-      conversationKey: 'a',
-      generationId: 'g1',
-      highestConfirmedSafeLoad: 96000,
-      firstConfirmedFailureLoad: 102000,
-      coverageState: 'complete',
-      parserHealth: 'healthy',
-      successEvidenceQuality: 'complete',
-      updatedAt: 2
-    })
-    generation = upsertConversationSample(generation, {
-      conversationKey: 'b',
-      generationId: 'g1',
-      highestConfirmedSafeLoad: 99000,
-      firstConfirmedFailureLoad: 105000,
-      coverageState: 'complete',
-      parserHealth: 'healthy',
-      successEvidenceQuality: 'complete',
-      updatedAt: 3
-    })
+const env = {
+  parserSchemaVersion: 'chatgpt-dom-2026-10-v2',
+  measurementSchemaVersion: 2,
+  modelHint: 'GPT Fixture'
+} as const
 
-    const summary = summarizeGeneration(generation)
-    expect(summary.safeFloor).toBe(99000)
-    expect(summary.failureCeiling).toBe(102000)
-    expect(summary.independentConversations).toBe(2)
-  })
+const envWithoutModel = {
+  parserSchemaVersion: env.parserSchemaVersion,
+  measurementSchemaVersion: env.measurementSchemaVersion
+} as const
 
-  it('updates the same conversation instead of multiplying its weight', () => {
-    let generation = createGeneration('g1', 1)
-    generation = upsertConversationSample(generation, {
-      conversationKey: 'a',
-      generationId: 'g1',
-      highestConfirmedSafeLoad: 50000,
-      coverageState: 'complete',
-      parserHealth: 'healthy',
-      successEvidenceQuality: 'complete',
-      updatedAt: 2
-    })
-    generation = upsertConversationSample(generation, {
-      conversationKey: 'a',
-      generationId: 'g1',
-      highestConfirmedSafeLoad: 90000,
-      coverageState: 'complete',
-      parserHealth: 'healthy',
-      successEvidenceQuality: 'complete',
-      updatedAt: 3
-    })
-    expect(generation.samples).toHaveLength(1)
-    expect(summarizeGeneration(generation).safeFloor).toBe(90000)
-  })
-
-  it('keeps safe-floor-only estimated risk start at the confirmed safe floor', () => {
-    let generation = createGeneration('g1', 1)
-    generation = upsertConversationSample(generation, {
-      conversationKey: 'a',
-      generationId: 'g1',
-      highestConfirmedSafeLoad: 90000,
-      coverageState: 'complete',
-      parserHealth: 'healthy',
-      updatedAt: 2
-    })
-    const summary = summarizeGeneration(generation)
-    expect(summary.safeFloor).toBe(90000)
-    expect(summary.failureCeiling).toBeUndefined()
-    expect(summary.estimatedRiskStart).toBeGreaterThanOrEqual(90000)
-  })
-
-  it('records successful completions idempotently per conversation sample and keeps max safe floor', () => {
-    let generation = createGeneration('g1', 1)
-    generation = recordSuccessfulAssistantCompletion(generation, {
-      conversationKey: 'a',
-      generationId: 'g1',
-      estimatedLoad: 1000,
-      assistantTokenCount: 100,
-      assistantFingerprint: 'r1',
-      coverageState: 'complete',
-      parserHealth: 'healthy',
-      observedAt: 2
-    })
-    generation = recordSuccessfulAssistantCompletion(generation, {
-      conversationKey: 'a',
-      generationId: 'g1',
-      estimatedLoad: 1500,
-      assistantTokenCount: 200,
-      assistantFingerprint: 'r2',
-      coverageState: 'complete',
-      parserHealth: 'healthy',
-      observedAt: 3
-    })
-
-    expect(generation.samples).toHaveLength(1)
-    expect(summarizeGeneration(generation).safeFloor).toBe(1500)
-  })
-
-  it('does not let incomplete success establish a confirmed safe floor', () => {
-    let complete = createGeneration('g1', 1)
-    let incomplete = createGeneration('g1', 1)
-    complete = recordSuccessfulAssistantCompletion(complete, {
-      conversationKey: 'a',
-      generationId: 'g1',
-      estimatedLoad: 1000,
-      assistantTokenCount: 100,
-      assistantFingerprint: 'r1',
-      coverageState: 'complete',
-      parserHealth: 'healthy',
-      observedAt: 2
-    })
-    incomplete = recordSuccessfulAssistantCompletion(incomplete, {
-      conversationKey: 'b',
-      generationId: 'g1',
-      estimatedLoad: 1000,
-      assistantTokenCount: 100,
-      assistantFingerprint: 'r1',
-      coverageState: 'incomplete',
-      parserHealth: 'healthy',
-      observedAt: 2
-    })
-
-    expect(summarizeGeneration(incomplete).confidence).toBeLessThan(summarizeGeneration(complete).confidence)
-    expect(summarizeGeneration(incomplete).safeFloor).toBeUndefined()
-    expect(summarizeGeneration(incomplete).confirmedSafeConversations).toBe(0)
-  })
-
-  it('requires multiple independent complete successes before safe-floor-only strong warnings are enabled', () => {
-    let generation = createGeneration('g1', 1)
-    generation = recordSuccessfulAssistantCompletion(generation, {
-      conversationKey: 'a',
-      generationId: 'g1',
-      estimatedLoad: 1600,
-      assistantTokenCount: 200,
-      assistantFingerprint: 'r1',
-      coverageState: 'complete',
-      parserHealth: 'healthy',
-      observedAt: 2
-    })
-    let summary = summarizeGeneration(generation)
-    expect(summary.safeFloor).toBe(1600)
-    expect(summary.confirmedSafeConversations).toBe(1)
-    expect(summary.safeFloorEvidenceReady).toBe(false)
-
-    generation = recordSuccessfulAssistantCompletion(generation, {
-      conversationKey: 'b',
-      generationId: 'g1',
-      estimatedLoad: 1800,
-      assistantTokenCount: 180,
-      assistantFingerprint: 'r2',
-      coverageState: 'complete',
-      parserHealth: 'healthy',
-      observedAt: 3
-    })
-    summary = summarizeGeneration(generation)
-    expect(summary.safeFloor).toBe(1800)
-    expect(summary.confirmedSafeConversations).toBe(2)
-    expect(summary.safeFloorEvidenceReady).toBe(true)
-  })
-
-  it('only high confidence conversation length failure updates failure ceiling', () => {
+describe('calibration evidence model', () => {
+  it('keeps passive length errors pending instead of creating a usable failure reference', () => {
     let generation = createGeneration('g1', 1)
     generation = recordFailureObservation(generation, {
-      conversationKey: 'a',
+      conversationKey: 'chat',
       generationId: 'g1',
-      estimatedLoad: 2000,
+      estimatedLoad: 50_000,
       errorKind: 'conversation_length_limit',
-      confidence: 'medium',
+      confidence: 'high',
       coverageState: 'complete',
       parserHealth: 'healthy',
+      sequenceReliability: 'reliable',
+      uncertaintySources: [],
+      environmentSignature: env,
       observedAt: 2
     })
-    expect(summarizeGeneration(generation).failureCeiling).toBeUndefined()
+
     expect(generation.pendingFailureConfirmations).toHaveLength(1)
-
-    generation = recordFailureObservation(generation, {
-      conversationKey: 'a',
-      generationId: 'g1',
-      estimatedLoad: 2000,
-      errorKind: 'conversation_length_limit',
-      confidence: 'high',
-      coverageState: 'complete',
-      parserHealth: 'healthy',
-      observedAt: 3
-    })
-    expect(summarizeGeneration(generation).failureCeiling).toBe(2000)
+    expect(summarizeGeneration(generation).failureReference).toBeUndefined()
   })
 
-  it('does not let usage or network errors pollute failure ceiling', () => {
+  it('records explicit complete attachment-free calibration as a strong reference', () => {
     let generation = createGeneration('g1', 1)
-    for (const errorKind of ['model_usage_limit', 'network_error', 'file_error'] as const) {
-      generation = recordFailureObservation(generation, {
-        conversationKey: errorKind,
-        generationId: 'g1',
-        estimatedLoad: 2000,
-        errorKind,
-        confidence: 'high',
-        coverageState: 'complete',
-        parserHealth: 'healthy',
-        observedAt: 2
-      })
-    }
-    expect(summarizeGeneration(generation).failureCeiling).toBeUndefined()
-  })
-
-  it('contradictory safe and failure bounds reduce confidence and keep conservative reasons', () => {
-    let generation = createGeneration('g1', 1)
-    generation = upsertConversationSample(generation, {
-      conversationKey: 'a',
-      generationId: 'g1',
-      highestConfirmedSafeLoad: 5000,
-      firstConfirmedFailureLoad: 3000,
-      coverageState: 'complete',
-      parserHealth: 'healthy',
-      updatedAt: 2
-    })
-    const summary = summarizeGeneration(generation)
-    expect(summary.contradictory).toBe(true)
-    expect(summary.confidence).toBeLessThan(0.4)
-    expect(summary.reasons).toContain('contradictory_safe_and_failure_bounds')
-  })
-
-  it('moves learning presentation from initial calibration to stable only with broad safe and failure evidence', () => {
-    const emptySummary = summarizeGeneration(createGeneration('empty-stage', 0))
-    expect(deriveBaselineState(emptySummary)).toBe('none')
-    expect(hasUsableBaseline(emptySummary)).toBe(false)
-    let generation = createGeneration('stage', 1)
-    expect(deriveLearningStage(summarizeGeneration(generation))).toBe('learning')
-
-    generation = recordFailureObservation(generation, {
-      conversationKey: 'failure', generationId: 'stage', estimatedLoad: 100000,
-      errorKind: 'conversation_length_limit', confidence: 'high', coverageState: 'complete',
-      parserHealth: 'healthy', observedAt: 2
-    })
-    expect(deriveLearningStage(summarizeGeneration(generation))).toBe('initial')
-    expect(deriveBaselineState(summarizeGeneration(generation))).toBe('confirmed')
-    expect(hasUsableBaseline(summarizeGeneration(generation))).toBe(true)
-
-    for (let index = 0; index < 5; index += 1) {
-      generation = recordSuccessfulAssistantCompletion(generation, {
-        conversationKey: `safe-${index}`,
-        generationId: 'stage',
-        estimatedLoad: 50000 + index * 1000,
-        assistantTokenCount: 500,
-        assistantFingerprint: `safe-${index}-tail`,
-        coverageState: 'complete',
-        parserHealth: 'healthy',
-        observedAt: 3 + index
-      })
-      if (index === 0) {
-        expect(deriveLearningStage(summarizeGeneration(generation))).toBe('calibrating')
-      }
-    }
-
-    expect(deriveLearningStage(summarizeGeneration(generation))).toBe('stable')
-  })
-
-  it('keeps manual scan available and reuses the prior baseline during recalibration', () => {
-    let generation = createGeneration('scan-action', 1)
-    expect(shouldShowScanAction(summarizeGeneration(generation))).toBe(true)
-    generation = recordFailureObservation(generation, {
+    generation = recordConfirmedFailureReference(generation, {
       conversationKey: 'limit',
-      generationId: 'scan-action',
-      estimatedLoad: 77324,
+      generationId: 'g1',
+      estimatedLoad: 60_000,
       errorKind: 'conversation_length_limit',
-      confidence: 'high',
       coverageState: 'complete',
       parserHealth: 'healthy',
+      sequenceReliability: 'reliable',
+      uncertaintySources: [],
+      environmentSignature: env,
       observedAt: 2
     })
-    expect(shouldShowScanAction(summarizeGeneration(generation))).toBe(true)
-    const relearned = createGeneration('scan-action-2', 3, generation)
-    const relearnedSummary = summarizeGeneration(relearned)
-    expect(deriveBaselineState(relearnedSummary)).toBe('inherited')
-    expect(hasUsableBaseline(relearnedSummary)).toBe(true)
-    expect(shouldShowScanAction(relearnedSummary)).toBe(true)
+
+    const summary = summarizeGeneration(generation)
+    expect(summary.failureReference).toEqual({
+      load: 60_000,
+      quality: 'strong',
+      sourceConversationCount: 1
+    })
+    expect(generation.environmentSignature).toEqual(env)
   })
 
-  it('uses a robust low failure quantile so one extreme low outlier does not define F by itself', () => {
-    let generation = createGeneration('robust-f', 1)
-    for (const [index, load] of [1000, 78000, 80000, 82000].entries()) {
-      generation = recordFailureObservation(generation, {
-        conversationKey: `failure-${index}`,
-        generationId: 'robust-f',
-        estimatedLoad: load,
-        errorKind: 'conversation_length_limit',
-        confidence: 'high',
-        coverageState: 'complete',
-        parserHealth: 'healthy',
+  it('downgrades an otherwise strong model-unverified calibration to conservative', () => {
+    let generation = createGeneration('g1', 1)
+    generation = recordConfirmedFailureReference(generation, {
+      conversationKey: 'limit-model-unverified',
+      generationId: 'g1',
+      estimatedLoad: 60_000,
+      errorKind: 'conversation_length_limit',
+      coverageState: 'complete',
+      parserHealth: 'healthy',
+      sequenceReliability: 'reliable',
+      uncertaintySources: [],
+      environmentSignature: envWithoutModel,
+      observedAt: 2
+    })
+
+    expect(summarizeGeneration(generation).failureReference).toEqual({
+      load: 60_000,
+      quality: 'conservative',
+      sourceConversationCount: 1
+    })
+  })
+
+  it('records complete attachment-bearing calibration as conservative', () => {
+    let generation = createGeneration('g1', 1)
+    generation = recordConfirmedFailureReference(generation, {
+      conversationKey: 'limit-with-file',
+      generationId: 'g1',
+      estimatedLoad: 52_000,
+      errorKind: 'conversation_length_limit',
+      coverageState: 'complete',
+      parserHealth: 'healthy',
+      sequenceReliability: 'reliable',
+      uncertaintySources: ['attachment'],
+      environmentSignature: env,
+      observedAt: 2
+    })
+
+    expect(
+      summarizeGeneration(generation).failureReference?.quality
+    ).toBe('conservative')
+  })
+
+  it('keeps incomplete or degraded calibration provisional and unusable', () => {
+    let generation = createGeneration('g1', 1)
+    generation = recordConfirmedFailureReference(generation, {
+      conversationKey: 'partial-limit',
+      generationId: 'g1',
+      estimatedLoad: 40_000,
+      errorKind: 'conversation_length_limit',
+      coverageState: 'mostly_complete',
+      parserHealth: 'healthy',
+      sequenceReliability: 'reliable',
+      uncertaintySources: [],
+      environmentSignature: env,
+      observedAt: 2
+    })
+
+    const summary = summarizeGeneration(generation)
+    expect(summary.failureReference).toBeUndefined()
+    expect(summary.provisionalFailureReference).toBe(40_000)
+    expect(generation.environmentSignature).toBeUndefined()
+  })
+
+  it('keeps sequence-uncertain calibration provisional even when coverage and parser look healthy', () => {
+    let generation = createGeneration('g1', 1)
+    generation = recordConfirmedFailureReference(generation, {
+      conversationKey: 'uncertain-sequence-limit',
+      generationId: 'g1',
+      estimatedLoad: 41_000,
+      errorKind: 'conversation_length_limit',
+      coverageState: 'complete',
+      parserHealth: 'healthy',
+      sequenceReliability: 'uncertain',
+      uncertaintySources: [],
+      environmentSignature: env,
+      observedAt: 2
+    })
+
+    const summary = summarizeGeneration(generation)
+    expect(summary.failureReference).toBeUndefined()
+    expect(summary.provisionalFailureReference).toBe(41_000)
+  })
+
+  it('keeps successful completions as internal safe evidence only', () => {
+    let generation = createGeneration('g1', 1)
+    generation = recordSuccessfulAssistantCompletion(generation, {
+      conversationKey: 'safe',
+      generationId: 'g1',
+      estimatedLoad: 45_000,
+      assistantFingerprint: 'assistant-1',
+      coverageState: 'complete',
+      parserHealth: 'healthy',
+      sequenceReliability: 'reliable',
+      uncertaintySources: [],
+      environmentSignature: env,
+      observedAt: 2
+    })
+
+    const summary = summarizeGeneration(generation)
+    expect(summary.safeEvidenceLoad).toBe(45_000)
+    expect(summary.failureReference).toBeUndefined()
+  })
+
+  it('learns the reserve from whole-turn deltas and ignores uncertain samples', () => {
+    let generation = createGeneration('g1', 1)
+    for (const [index, delta] of [100, 200, 300].entries()) {
+      generation = recordTurnGrowth(generation, {
+        conversationKey: `chat-${index}`,
+        generationId: 'g1',
+        beforeLoad: 1_000,
+        afterLoad: 1_000 + delta,
+        delta,
+        uncertain: false,
+        uncertaintySources: [],
         observedAt: 10 + index
       })
     }
-    const summary = summarizeGeneration(generation)
-    expect(summary.failureBoundary).toBeGreaterThan(1000)
-    expect(summary.failureBoundary).toBeLessThan(78000)
-  })
-
-  it('learns B from a high quantile of recent assistant growth and seeds history once per conversation', () => {
-    let generation = createGeneration('growth', 1)
-    generation = seedGrowthHistory(generation, 'chatgpt:old', [100, 200, 300, 400, 500])
-    const first = summarizeGeneration(generation)
-    expect(first.turnBuffer).toBe(500)
-    expect(generation.growthHistoryConversationKeys).toEqual(['chatgpt:old'])
-
-    generation = seedGrowthHistory(generation, 'chatgpt:old', [9999])
-    expect(summarizeGeneration(generation).turnBuffer).toBe(500)
-    expect(generation.growthHistoryConversationKeys).toEqual(['chatgpt:old'])
-  })
-
-  it('records one independent early-failure conflict only when F and B make it meaningful', () => {
-    let generation = createGeneration('g1', 1)
-    generation = recordFailureObservation(generation, {
-      conversationKey: 'old',
+    generation = recordTurnGrowth(generation, {
+      conversationKey: 'tool-chat',
       generationId: 'g1',
-      estimatedLoad: 10000,
-      errorKind: 'conversation_length_limit',
-      confidence: 'high',
-      coverageState: 'complete',
-      parserHealth: 'healthy',
+      beforeLoad: 1_000,
+      afterLoad: 11_000,
+      delta: 10_000,
+      uncertain: true,
+      uncertaintySources: ['tool_result'],
+      observedAt: 20
+    })
+
+    const summary = summarizeGeneration(generation)
+    expect(summary.growthReserveReady).toBe(true)
+    expect(summary.growthReserve).toBe(300)
+  })
+
+  it('does not call the growth reserve ready before enough whole turns exist', () => {
+    let generation = createGeneration('g1', 1)
+    generation = recordTurnGrowth(generation, {
+      conversationKey: 'one',
+      generationId: 'g1',
+      beforeLoad: 100,
+      afterLoad: 500,
+      delta: 400,
+      uncertain: false,
+      uncertaintySources: [],
       observedAt: 2
     })
-    generation = seedGrowthHistory(generation, 'growth-source', [1000])
-    generation = recordFailureObservation(generation, {
-      conversationKey: 'new',
-      generationId: 'g1',
-      estimatedLoad: 8000,
+
+    expect(summarizeGeneration(generation).growthReserveReady).toBe(false)
+  })
+
+  it('starts a new generation with stale prior evidence but no inherited growth distribution', () => {
+    let previous = createGeneration('old', 1)
+    previous = recordConfirmedFailureReference(previous, {
+      conversationKey: 'old-limit',
+      generationId: 'old',
+      estimatedLoad: 70_000,
       errorKind: 'conversation_length_limit',
+      coverageState: 'complete',
+      parserHealth: 'healthy',
+      sequenceReliability: 'reliable',
+      uncertaintySources: [],
+      environmentSignature: env,
+      observedAt: 2
+    })
+    previous = recordTurnGrowth(previous, {
+      conversationKey: 'old-growth',
+      generationId: 'old',
+      beforeLoad: 10_000,
+      afterLoad: 12_000,
+      delta: 2_000,
+      uncertain: false,
+      uncertaintySources: [],
+      observedAt: 3
+    })
+
+    const next = createGeneration('new', 4, previous)
+    expect(next.warmStartPrior?.failureReference).toEqual({
+      load: 70_000,
+      quality: 'strong'
+    })
+    expect(next.turnGrowthSamples).toEqual([])
+    expect(summarizeGeneration(next).failureReference).toBeUndefined()
+  })
+
+  it('never lets non-length errors create pending or failure evidence', () => {
+    let generation = createGeneration('g1', 1)
+    generation = recordFailureObservation(generation, {
+      conversationKey: 'network',
+      generationId: 'g1',
+      estimatedLoad: 1_000,
+      errorKind: 'network_error',
       confidence: 'high',
       coverageState: 'complete',
       parserHealth: 'healthy',
+      sequenceReliability: 'reliable',
+      uncertaintySources: [],
+      environmentSignature: env,
+      observedAt: 2
+    })
+
+    expect(generation.pendingFailureConfirmations).toEqual([])
+    expect(summarizeGeneration(generation).failureReference).toBeUndefined()
+  })
+
+  it('prefers strong references over lower conservative references', () => {
+    let generation = createGeneration('g1', 1)
+    generation = recordConfirmedFailureReference(generation, {
+      conversationKey: 'conservative',
+      generationId: 'g1',
+      estimatedLoad: 45_000,
+      errorKind: 'conversation_length_limit',
+      coverageState: 'complete',
+      parserHealth: 'healthy',
+      sequenceReliability: 'reliable',
+      uncertaintySources: ['attachment'],
+      environmentSignature: env,
+      observedAt: 2
+    })
+    generation = recordConfirmedFailureReference(generation, {
+      conversationKey: 'strong',
+      generationId: 'g1',
+      estimatedLoad: 60_000,
+      errorKind: 'conversation_length_limit',
+      coverageState: 'complete',
+      parserHealth: 'healthy',
+      sequenceReliability: 'reliable',
+      uncertaintySources: [],
+      environmentSignature: env,
       observedAt: 3
     })
-    expect(generation.id).toBe('g1')
-    expect(generation.environmentConflictKeys).toEqual(['failure:new'])
-    expect(generation.suspiciousChangeCount).toBe(1)
-    expect(generation.changePointSuggested).toBe(false)
+
+    const summary = summarizeGeneration(generation)
+    expect(summary.failureReference?.quality).toBe('strong')
+    expect(summary.failureReference?.load).toBe(60_000)
   })
 })

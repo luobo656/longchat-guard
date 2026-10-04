@@ -1,324 +1,473 @@
 import { describe, expect, it } from 'vitest'
 import { StorageMutationCoordinator } from '../src/background/coordinator'
 import { summarizeGeneration } from '../src/core/calibration'
+import { anonymizeConversationKey } from '../src/core/fingerprinter'
+import {
+  deriveCalibrationState,
+  deriveMeasurementState
+} from '../src/core/product-state'
 import type { LocalStorageArea } from '../src/core/storage'
 
-class SlowMemoryStorage implements LocalStorageArea {
+class MemoryStorage implements LocalStorageArea {
   private readonly values = new Map<string, unknown>()
 
-  async get(keys?: string[] | Record<string, unknown> | string | null): Promise<Record<string, unknown>> {
-    await delay(2)
-    if (typeof keys === 'string') return { [keys]: this.values.get(keys) }
-    return Object.fromEntries(this.values.entries())
+  async get(
+    keys?: string[] | Record<string, unknown> | string | null
+  ): Promise<Record<string, unknown>> {
+    if (typeof keys === 'string') {
+      return { [keys]: this.values.get(keys) }
+    }
+    return Object.fromEntries(this.values)
   }
 
   async set(items: Record<string, unknown>): Promise<void> {
-    await delay(2)
     for (const [key, value] of Object.entries(items)) {
       this.values.set(key, value)
     }
   }
 }
 
-describe('storage mutation coordinator', () => {
-  it('serializes concurrent tab upserts without dropping anonymous messages', async () => {
-    const coordinator = new StorageMutationCoordinator(new SlowMemoryStorage())
-    await coordinator.loadState()
+const env = {
+  parserSchemaVersion: 'chatgpt-dom-2026-10-v2',
+  measurementSchemaVersion: 2,
+  modelHint: 'GPT Fixture'
+} as const
 
-    const [first, second] = await Promise.all([
-      coordinator.upsertLedger({
-        conversationKey: 'chatgpt:shared',
-        generationId: 'stale-tab-generation',
-        coverageState: 'incomplete',
-        parserHealth: 'healthy',
-        messages: [
-          {
-            fingerprint: 'tab-a-message',
-            role: 'user',
-            tokenEstimate: 10,
-            charCount: 40,
-            observedAt: 1,
-            localBranchId: 'active'
-          }
-        ],
-        activeFingerprints: ['tab-a-message'],
-        currentEstimatedLoad: 10,
-        updatedAt: 1
-      }),
-      coordinator.upsertLedger({
-        conversationKey: 'chatgpt:shared',
-        generationId: 'another-stale-tab-generation',
-        coverageState: 'incomplete',
-        parserHealth: 'healthy',
-        messages: [
-          {
-            fingerprint: 'tab-b-message',
-            role: 'assistant',
-            tokenEstimate: 30,
-            charCount: 120,
-            observedAt: 2,
-            localBranchId: 'active'
-          }
-        ],
-        activeFingerprints: ['tab-b-message'],
-        currentEstimatedLoad: 30,
-        updatedAt: 2
-      })
-    ])
+function message(
+  id: string,
+  role: 'user' | 'assistant',
+  tokenEstimate: number,
+  observedAt = 1
+) {
+  return {
+    contentFingerprint: id,
+    stableHintHash: id,
+    role,
+    tokenEstimate,
+    charCount: tokenEstimate * 4,
+    observedAt
+  }
+}
 
-    const finalState = second.state.ledgers['chatgpt:shared']
-      ? second.state
-      : first.state
-    const ledger = finalState.ledgers['chatgpt:shared']
-
-    expect(ledger?.messages.map((message) => message.fingerprint).sort()).toEqual([
-      'tab-a-message',
-      'tab-b-message'
-    ])
-    expect(ledger?.generationId).toBe(finalState.settings.generationId)
-  })
-
-  it('merges the same stable-hint message observed by two tabs into one instance', async () => {
-    const coordinator = new StorageMutationCoordinator(new SlowMemoryStorage())
-    await Promise.all([
-      coordinator.observeWindow({
-        conversationKey: 'chatgpt:stable',
-        coverageState: 'complete',
-        parserHealth: 'healthy',
-        tailEvidence: 'at_tail',
-        composerTokenEstimate: 0,
-        observedAt: 10,
-        observedMessages: [
-          {
-            contentFingerprint: 'same-content',
-            stableHintHash: 'stable-hint',
-            role: 'assistant',
-            tokenEstimate: 20,
-            charCount: 80,
-            observedAt: 10
-          }
-        ]
-      }),
-      coordinator.observeWindow({
-        conversationKey: 'chatgpt:stable',
-        coverageState: 'complete',
-        parserHealth: 'healthy',
-        tailEvidence: 'at_tail',
-        composerTokenEstimate: 0,
-        observedAt: 11,
-        observedMessages: [
-          {
-            contentFingerprint: 'same-content',
-            stableHintHash: 'stable-hint',
-            role: 'assistant',
-            tokenEstimate: 20,
-            charCount: 80,
-            observedAt: 11
-          }
-        ]
-      })
-    ])
-
-    const final = await coordinator.loadState()
-    const ledger = final.ledgers['chatgpt:stable']
-
-    expect(ledger?.messages).toHaveLength(1)
-    expect(ledger?.activeFingerprints).toHaveLength(1)
-    expect(ledger?.currentEstimatedLoad).toBe(20)
-  })
-
-  it('returns risk after observeWindow without using composer as a risk input', async () => {
-    const coordinator = new StorageMutationCoordinator(new SlowMemoryStorage())
-    const result = await coordinator.observeWindow({
-      conversationKey: 'chatgpt:risk',
-      coverageState: 'complete',
-      parserHealth: 'healthy',
-      tailEvidence: 'at_tail',
-      composerTokenEstimate: 50,
-      observedAt: 10,
-      observedMessages: [
-        {
-          contentFingerprint: 'user',
-          role: 'user',
-          tokenEstimate: 100,
-          charCount: 300,
-          observedAt: 10
-        }
-      ]
-    })
-
-    expect(result.snapshot.currentEstimatedLoad).toBe(100)
-    expect(result.risk.predictedNextTurnLoad).toBe(100)
-  })
-
-  it('accumulates safe boundaries across independent complete conversations', async () => {
-    const coordinator = new StorageMutationCoordinator(new SlowMemoryStorage())
-    for (const [conversationKey, load] of [['chatgpt:safe-a', 40000], ['chatgpt:safe-b', 52000]] as const) {
-      await coordinator.observeWindow({
-        conversationKey,
-        coverageState: 'complete',
-        parserHealth: 'healthy',
-        tailEvidence: 'at_tail',
-        composerTokenEstimate: 0,
-        observedAt: load,
-        observedMessages: [{
-          contentFingerprint: conversationKey,
-          stableHintHash: `${conversationKey}-tail`,
-          role: 'assistant',
-          tokenEstimate: load,
-          charCount: load * 3,
-          observedAt: load
-        }]
-      })
-      await coordinator.recordCompletion({
-        conversationKey,
-        assistantFingerprint: `stable:${conversationKey}-tail`,
-        estimatedLoad: load,
-        assistantTokenCount: 500,
-        observedAt: load + 1
-      })
-    }
-
-    const state = await coordinator.loadState()
-    const generation = state.generations.find((item) => item.id === state.settings.generationId)
-    const safeSamples = generation?.samples.filter(
-      (sample) => sample.highestConfirmedSafeLoad !== undefined
-    ) ?? []
-    expect(safeSamples).toHaveLength(2)
-    expect(safeSamples.map((sample) => sample.highestConfirmedSafeLoad).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([40000, 52000])
-  })
-
-  it('seeds historical assistant growth only once per conversation', async () => {
-    const coordinator = new StorageMutationCoordinator(new SlowMemoryStorage())
-    await coordinator.seedGrowthHistory({
-      conversationKey: 'chatgpt:history',
-      tokenCounts: [100, 200, 300],
-      observedAt: 1
-    })
-    await coordinator.seedGrowthHistory({
-      conversationKey: 'chatgpt:history',
-      tokenCounts: [9999],
-      observedAt: 2
-    })
-    const state = await coordinator.loadState()
-    const generation = state.generations.find((item) => item.id === state.settings.generationId)!
-    expect(generation.growthHistoryConversationKeys).toEqual(['chatgpt:history'])
-    expect(generation.recentAssistantTokenCounts).toEqual([100, 200, 300])
-    expect(summarizeGeneration(generation).turnBuffer).toBe(300)
-  })
-
-  it('allows explicit limit calibration to re-prompt after a previous dismissal', async () => {
-    const coordinator = new StorageMutationCoordinator(new SlowMemoryStorage())
-    await coordinator.observeWindow({
-      conversationKey: 'chatgpt:manual-limit',
-      coverageState: 'complete',
-      parserHealth: 'healthy',
-      tailEvidence: 'at_tail',
-      composerTokenEstimate: 0,
-      observedAt: 10,
-      observedMessages: [{
-        contentFingerprint: 'answer',
-        stableHintHash: 'answer-id',
-        role: 'assistant',
-        tokenEstimate: 500,
-        charCount: 1500,
-        observedAt: 10
-      }]
-    })
-
-    await coordinator.recordFailure({
-      conversationKey: 'chatgpt:manual-limit',
-      errorKind: 'conversation_length_limit',
-      confidence: 'medium',
-      composerTokenEstimate: 0,
-      observedAt: 20
-    })
-    await coordinator.confirmPendingFailure('chatgpt:manual-limit', false, 21)
-
-    await coordinator.recordFailure({
-      conversationKey: 'chatgpt:manual-limit',
-      errorKind: 'conversation_length_limit',
-      confidence: 'medium',
-      forcePrompt: true,
-      composerTokenEstimate: 0,
-      observedAt: 22
-    })
-
-    const state = await coordinator.loadState()
-    const generation = state.generations.find((item) => item.id === state.settings.generationId)
-    expect(
-      generation?.pendingFailureConfirmations?.some(
-        (item) => item.conversationKey === 'chatgpt:manual-limit'
+async function observe(
+  coordinator: StorageMutationCoordinator,
+  input: {
+    conversationKey: string
+    baseRevision: number
+    observationEpoch: number
+    tokens: number
+    composer?: number
+    uncertaintySources?: Array<'attachment' | 'tool_result'>
+  }
+) {
+  const state = await coordinator.loadState()
+  const result = await coordinator.observeWindow({
+    conversationKey: input.conversationKey,
+    coverageState: 'complete',
+    parserHealth: 'healthy',
+    tailEvidence: 'at_tail',
+    observedMessages: [
+      message(
+        'stable-main',
+        'user',
+        input.tokens,
+        input.observationEpoch
       )
-    ).toBe(true)
+    ],
+    composerTokenEstimate: input.composer ?? 0,
+    environmentSignature: env,
+    uncertaintySources: input.uncertaintySources ?? [],
+    expectedGenerationId: state.settings.generationId,
+    baseRevision: input.baseRevision,
+    observationEpoch: input.observationEpoch,
+    observedAt: input.observationEpoch
+  })
+  if (!result.snapshot || !result.risk) {
+    throw new Error('expected_observation_result')
+  }
+  return {
+    ...result,
+    snapshot: result.snapshot,
+    risk: result.risk
+  }
+}
+
+describe('storage mutation coordinator state transitions', () => {
+  it('rejects an old tab observation instead of overwriting a newer ledger', async () => {
+    const coordinator = new StorageMutationCoordinator(
+      new MemoryStorage()
+    )
+
+    const first = await observe(coordinator, {
+      conversationKey: 'chatgpt:same',
+      baseRevision: 0,
+      observationEpoch: 10,
+      tokens: 100
+    })
+    expect(first.snapshot.ledgerRevision).toBe(1)
+
+    const second = await observe(coordinator, {
+      conversationKey: 'chatgpt:same',
+      baseRevision: 1,
+      observationEpoch: 20,
+      tokens: 200
+    })
+    expect(second.snapshot.ledgerRevision).toBe(2)
+    expect(second.snapshot.currentEstimatedLoad).toBe(200)
+
+    const stale = await observe(coordinator, {
+      conversationKey: 'chatgpt:same',
+      baseRevision: 1,
+      observationEpoch: 15,
+      tokens: 50
+    })
+
+    expect(stale.staleObservation).toBe(true)
+    expect(stale.snapshot.ledgerRevision).toBe(2)
+    expect(stale.snapshot.currentEstimatedLoad).toBe(200)
   })
 
-  it('records completion and failure events idempotently without error pollution', async () => {
-    const coordinator = new StorageMutationCoordinator(new SlowMemoryStorage())
-    await coordinator.observeWindow({
-      conversationKey: 'chatgpt:events',
+  it('rejects stale observation, completion, and failure events from an old generation', async () => {
+    const coordinator = new StorageMutationCoordinator(
+      new MemoryStorage()
+    )
+    const first = await observe(coordinator, {
+      conversationKey: 'chatgpt:generation-race',
+      baseRevision: 0,
+      observationEpoch: 10,
+      tokens: 1_000
+    })
+    const oldGenerationId = first.state.settings.generationId
+    const oldRevision = first.snapshot.ledgerRevision
+
+    const reset = await coordinator.startGeneration(
+      'recalibrate',
+      20
+    )
+    const newGenerationId = reset.settings.generationId
+    expect(newGenerationId).not.toBe(oldGenerationId)
+
+    const staleObservation = await coordinator.observeWindow({
+      conversationKey: 'chatgpt:generation-race',
       coverageState: 'complete',
       parserHealth: 'healthy',
       tailEvidence: 'at_tail',
-      composerTokenEstimate: 0,
-      observedAt: 10,
       observedMessages: [
-        {
-          contentFingerprint: 'answer',
-          stableHintHash: 'answer-id',
-          role: 'assistant',
-          tokenEstimate: 120,
-          charCount: 360,
-          observedAt: 10
-        }
-      ]
-    })
-    await coordinator.recordCompletion({
-      conversationKey: 'chatgpt:events',
-      assistantFingerprint: 'stable:answer-id',
-      estimatedLoad: 120,
-      assistantTokenCount: 120,
-      observedAt: 20
-    })
-    await coordinator.recordCompletion({
-      conversationKey: 'chatgpt:events',
-      assistantFingerprint: 'stable:answer-id',
-      estimatedLoad: 120,
-      assistantTokenCount: 120,
+        message('stale-user', 'user', 2_000, 21)
+      ],
+      composerTokenEstimate: 0,
+      environmentSignature: env,
+      uncertaintySources: [],
+      expectedGenerationId: oldGenerationId,
+      baseRevision: oldRevision,
+      observationEpoch: 21,
       observedAt: 21
     })
-    await coordinator.recordFailure({
-      conversationKey: 'chatgpt:events',
-      errorKind: 'network_error',
-      confidence: 'high',
-      composerTokenEstimate: 0,
+    expect(staleObservation.staleObservation).toBe(true)
+
+    await coordinator.recordCompletion({
+      conversationKey: 'chatgpt:generation-race',
+      assistantFingerprint: 'stale-assistant',
+      beforeTurnLoad: 500,
+      expectedGenerationId: oldGenerationId,
+      expectedLedgerRevision: oldRevision,
       observedAt: 22
     })
     await coordinator.recordFailure({
-      conversationKey: 'chatgpt:events',
+      conversationKey: 'chatgpt:generation-race',
       errorKind: 'conversation_length_limit',
       confidence: 'high',
-      composerTokenEstimate: 10,
+      composerTokenEstimate: 0,
+      expectedGenerationId: oldGenerationId,
+      expectedLedgerRevision: oldRevision,
       observedAt: 23
     })
-    await coordinator.recordFailure({
-      conversationKey: 'chatgpt:events',
+
+    const final = await coordinator.loadState()
+    const generation = final.generations[0]!
+    expect(final.settings.generationId).toBe(newGenerationId)
+    expect(generation.samples).toEqual([])
+    expect(generation.turnGrowthSamples).toEqual([])
+    expect(generation.pendingFailureConfirmations).toEqual([])
+  })
+
+  it('explicit calibration creates a usable reference in one atomic commit without pending confirmation', async () => {
+    const coordinator = new StorageMutationCoordinator(
+      new MemoryStorage()
+    )
+    const initial = await coordinator.loadState()
+
+    const result = await coordinator.commitCalibration({
+      conversationKey: 'chatgpt:known-limit',
+      expectedGenerationId: initial.settings.generationId,
+      expectedLedgerRevision: 0,
+      scanSessionId: 'scan-1',
+      environmentSignature: env,
+      uncertaintySources: [],
+      observedMessages: [
+        message('u1', 'user', 20_000),
+        message('a1', 'assistant', 40_000)
+      ],
+      observedAt: 10
+    })
+
+    const generation = result.state.generations[0]!
+    const summary = summarizeGeneration(generation)
+    expect(summary.failureReference).toEqual({
+      load: 60_000,
+      quality: 'strong',
+      sourceConversationCount: 1
+    })
+    expect(generation.pendingFailureConfirmations).toEqual([])
+    expect(
+      deriveCalibrationState({
+        generation,
+        currentEnvironment: env
+      })
+    ).toBe('calibrated')
+  })
+
+  it('explicit attachment calibration becomes conservative but usable', async () => {
+    const coordinator = new StorageMutationCoordinator(
+      new MemoryStorage()
+    )
+    const initial = await coordinator.loadState()
+
+    const result = await coordinator.commitCalibration({
+      conversationKey: 'chatgpt:attachment-limit',
+      expectedGenerationId: initial.settings.generationId,
+      expectedLedgerRevision: 0,
+      scanSessionId: 'scan-attachment',
+      environmentSignature: env,
+      uncertaintySources: ['attachment'],
+      observedMessages: [
+        {
+          ...message('u1', 'user', 25_000),
+          attachmentCount: 1
+        },
+        message('a1', 'assistant', 25_000)
+      ],
+      observedAt: 10
+    })
+
+    const generation = result.state.generations[0]!
+    expect(
+      summarizeGeneration(generation).failureReference?.quality
+    ).toBe('conservative')
+    expect(
+      deriveCalibrationState({
+        generation,
+        currentEnvironment: env
+      })
+    ).toBe('calibrated_conservative')
+  })
+
+  it('passive length detection creates pending confirmation but no usable failure reference', async () => {
+    const coordinator = new StorageMutationCoordinator(
+      new MemoryStorage()
+    )
+    const observed = await observe(coordinator, {
+      conversationKey: 'chatgpt:passive',
+      baseRevision: 0,
+      observationEpoch: 10,
+      tokens: 5_000
+    })
+
+    const result = await coordinator.recordFailure({
+      conversationKey: 'chatgpt:passive',
       errorKind: 'conversation_length_limit',
       confidence: 'high',
-      composerTokenEstimate: 10,
-      observedAt: 24
+      composerTokenEstimate: 0,
+      expectedGenerationId: observed.state.settings.generationId,
+      expectedLedgerRevision: observed.snapshot.ledgerRevision,
+      observedAt: 11
     })
-    const state = await coordinator.loadState()
-    const generation = state.generations.find((item) => item.id === state.settings.generationId)
-    const sample = generation?.samples.find((item) => item.conversationKey === 'chatgpt:events')
 
-    expect(generation?.recentAssistantTokenCounts).toEqual([120])
-    expect(sample?.highestConfirmedSafeLoad).toBe(120)
-    expect(sample?.firstConfirmedFailureLoad).toBe(130)
-    expect(state.ledgers['chatgpt:events']?.confirmedFailureFingerprints).toHaveLength(1)
+    const generation = result.state.generations[0]!
+    expect(generation.pendingFailureConfirmations).toHaveLength(1)
+    expect(summarizeGeneration(generation).failureReference).toBeUndefined()
+    expect(
+      deriveMeasurementState({
+        supported: true,
+        ledger: observed.snapshot
+      })
+    ).toBe('complete')
+  })
+
+  it('accepting a passive confirmation creates the reference and does not re-prompt the same error', async () => {
+    const coordinator = new StorageMutationCoordinator(
+      new MemoryStorage()
+    )
+    const observed = await observe(coordinator, {
+      conversationKey: 'chatgpt:passive',
+      baseRevision: 0,
+      observationEpoch: 10,
+      tokens: 5_000
+    })
+    await coordinator.recordFailure({
+      conversationKey: 'chatgpt:passive',
+      errorKind: 'conversation_length_limit',
+      confidence: 'medium',
+      composerTokenEstimate: 0,
+      expectedGenerationId: observed.state.settings.generationId,
+      expectedLedgerRevision: observed.snapshot.ledgerRevision,
+      observedAt: 11
+    })
+    const accepted = await coordinator.confirmPendingFailure(
+      'chatgpt:passive',
+      true,
+      12
+    )
+
+    expect(
+      summarizeGeneration(accepted.state.generations[0]!)
+        .failureReference?.load
+    ).toBe(5_000)
+
+    const repeated = await coordinator.recordFailure({
+      conversationKey: 'chatgpt:passive',
+      errorKind: 'conversation_length_limit',
+      confidence: 'high',
+      composerTokenEstimate: 0,
+      expectedGenerationId: observed.state.settings.generationId,
+      expectedLedgerRevision: observed.snapshot.ledgerRevision,
+      observedAt: 13
+    })
+    expect(
+      repeated.state.generations[0]?.pendingFailureConfirmations
+    ).toEqual([])
+  })
+
+  it('composer text can make projected risk high before send', async () => {
+    const coordinator = new StorageMutationCoordinator(
+      new MemoryStorage()
+    )
+    const initial = await coordinator.loadState()
+    await coordinator.commitCalibration({
+      conversationKey: 'chatgpt:limit',
+      expectedGenerationId: initial.settings.generationId,
+      expectedLedgerRevision: 0,
+      scanSessionId: 'scan-limit',
+      environmentSignature: env,
+      uncertaintySources: [],
+      observedMessages: [
+        message('lu', 'user', 50_000),
+        message('la', 'assistant', 50_000)
+      ],
+      observedAt: 10
+    })
+
+    const before = await observe(coordinator, {
+      conversationKey: 'chatgpt:current',
+      baseRevision: 0,
+      observationEpoch: 20,
+      tokens: 90_000,
+      composer: 0
+    })
+    expect(before.risk.state).toBe('normal')
+
+    const withDraft = await observe(coordinator, {
+      conversationKey: 'chatgpt:current',
+      baseRevision: before.snapshot.ledgerRevision,
+      observationEpoch: 21,
+      tokens: 90_000,
+      composer: 10_001
+    })
+    expect(withDraft.risk.state).toBe('high')
+    expect(withDraft.snapshot.ledgerRevision).toBe(
+      before.snapshot.ledgerRevision
+    )
+    expect(withDraft.risk.reasons).toContain(
+      'composer_draft_included'
+    )
+  })
+
+  it('records whole-turn growth from before-send load to completed load', async () => {
+    const coordinator = new StorageMutationCoordinator(
+      new MemoryStorage()
+    )
+    const first = await observe(coordinator, {
+      conversationKey: 'chatgpt:growth',
+      baseRevision: 0,
+      observationEpoch: 10,
+      tokens: 1_000
+    })
+    const second = await coordinator.observeWindow({
+      conversationKey: 'chatgpt:growth',
+      coverageState: 'complete',
+      parserHealth: 'healthy',
+      tailEvidence: 'at_tail',
+      observedMessages: [
+        message('stable-main', 'user', 1_000, 11),
+        message('a1', 'assistant', 2_000, 11)
+      ],
+      composerTokenEstimate: 0,
+      environmentSignature: env,
+      uncertaintySources: [],
+      expectedGenerationId: first.state.settings.generationId,
+      baseRevision: first.snapshot.ledgerRevision,
+      observationEpoch: 11,
+      observedAt: 11
+    })
+    if (!second.snapshot) throw new Error('expected_second_snapshot')
+
+    await coordinator.recordCompletion({
+      conversationKey: 'chatgpt:growth',
+      assistantFingerprint: second.snapshot.activeFingerprints.at(-1)!,
+      beforeTurnLoad: 1_000,
+      expectedGenerationId: second.state.settings.generationId,
+      expectedLedgerRevision: second.snapshot.ledgerRevision,
+      observedAt: 12
+    })
+
+    const state = await coordinator.loadState()
+    expect(state.generations[0]?.turnGrowthSamples[0]?.delta).toBe(
+      2_000
+    )
+  })
+
+  it('persists mute controls under the pseudonymous conversation key', async () => {
+    const coordinator = new StorageMutationCoordinator(
+      new MemoryStorage()
+    )
+    const initial = await coordinator.loadState()
+    const updated = await coordinator.updateControl(
+      'chatgpt:mute-me',
+      { muted: true }
+    )
+    const key = await anonymizeConversationKey(
+      'chatgpt:mute-me',
+      initial.installSalt
+    )
+
+    expect(updated.conversationControls[key]).toMatchObject({
+      muted: true
+    })
+    expect(updated.conversationControls['chatgpt:mute-me']).toBeUndefined()
+
+    const reloaded = await coordinator.loadState()
+    expect(reloaded.conversationControls[key]?.muted).toBe(true)
+  })
+
+  it('stores only pseudonymous conversation keys', async () => {
+    const coordinator = new StorageMutationCoordinator(
+      new MemoryStorage()
+    )
+    const state = await coordinator.loadState()
+    await observe(coordinator, {
+      conversationKey: 'chatgpt:private-id',
+      baseRevision: 0,
+      observationEpoch: 10,
+      tokens: 100
+    })
+    const reloaded = await coordinator.loadState()
+    const key = await anonymizeConversationKey(
+      'chatgpt:private-id',
+      state.installSalt
+    )
+    expect(reloaded.ledgers[key]).toBeDefined()
+    expect(JSON.stringify(reloaded)).not.toContain(
+      'chatgpt:private-id'
+    )
   })
 })
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}

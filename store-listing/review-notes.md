@@ -2,9 +2,9 @@
 
 ## Single Purpose
 
-The extension provides local long-conversation trend warnings on `https://chatgpt.com/*`.
+LongChat Guard provides local long-conversation risk warnings on `https://chatgpt.com/*`.
 
-On first use, before reading conversation content, the extension presents an in-product privacy disclosure. Monitoring begins only after the user affirmatively selects “Agree and start / 同意并开始”. Selecting “Not now / 暂不开启” leaves monitoring disabled.
+On first use, before reading conversation content, the extension presents an in-product privacy disclosure. Monitoring begins only after the user affirmatively chooses “Agree and start / 同意并开始 / 同意並開始”. Choosing “Not now / 暂不开启 / 暫不啟用” leaves monitoring disabled.
 
 ## Permissions
 
@@ -17,20 +17,28 @@ It does not request `<all_urls>`, cookies, history, webRequest, tabs, or scripti
 
 ## No Remote Backend
 
-There is no server, no fetch/XHR backend call, no OpenAI API integration, and no API key.
+There is no server, fetch/XHR analytics backend, OpenAI API integration, or API key.
 
 ## Local User Data Handling
 
-Visible ChatGPT conversation text is processed transiently in the user's browser only after affirmative consent. Raw conversation text, assistant text, composer drafts, and attachment text are not persisted. No conversation data is transmitted to the developer or a server. Locally stored anonymous fingerprints, learned boundary metadata, and assistant-growth estimates are used only for the extension's single purpose. Successful history scans leave no diagnostic record; a failed scan can retain a bounded local structural diagnostic for up to 7 days with no conversation URL or raw chat text.
+After consent, visible ChatGPT text and the unsent Composer draft may be processed transiently in the browser for local estimates and empirical risk. Raw conversation text, assistant text, Composer text, attachment/file contents, and tool/search result text are not persisted and are not transmitted.
+
+Stored identifiers are install-salted SHA-256 **pseudonymous** conversation identifiers and pseudonymous message fingerprints. The extension also stores local measurement/calibration metadata, whole-turn growth samples, and reminder controls. Successful history scans leave no diagnostic record; a failed scan may retain one bounded local structural diagnostic for up to 7 days with no conversation URL or raw text.
 
 ## No Official Quota Claims
 
-The UI does not display token counts, percentages, K values, remaining quota, or official limits. LongChat Guard learns empirical browser-side safe/failure boundaries and typical assistant-reply growth, then shows simple local risk states. These are not OpenAI-provided limits.
+LongChat Guard does not display token counts, percentages, K values, remaining quota, or an official OpenAI context limit.
+
+Risk becomes determinate only after the current chat is measured reliably and the user has a usable local empirical failure reference. Without that reference the UI says “Not calibrated / 未校准 / 未校準” rather than “Normal”, and the full green-to-red risk track is hidden.
+
+A user can establish the local empirical reference by opening a historical chat they personally know reached the conversation-length limit and clicking “Calibrate with this chat / 用此会话校准 / 用此對話校準” once. The extension scans the full history once and either stores a strong/conservative local reference or reports that the sample could not be measured reliably.
+
+Whole-turn growth is learned from reliable before/after conversation-load deltas. It is not an OpenAI-provided quota or official limit.
 
 ## Localization / Brand
 
-The canonical brand is always `LongChat Guard`. Localized display names are `LongChat Guard` (English), `LongChat Guard · 长会话预警` (Simplified Chinese), and `LongChat Guard · 長對話預警` (Traditional Chinese). The brand itself is not translated. All three locales use Manifest V3 i18n resources.
+The canonical brand is always `LongChat Guard`. Localized display names are `LongChat Guard` (English), `LongChat Guard · 长会话预警` (Simplified Chinese), and `LongChat Guard · 長對話預警` (Traditional Chinese).
 
 ## Trademark Notice
 
-The icon is original and does not use OpenAI or ChatGPT logos. The extension is not affiliated with OpenAI.
+The icon is original and does not use OpenAI or ChatGPT logos. LongChat Guard is not affiliated with OpenAI.

@@ -1,6 +1,11 @@
-import type { RiskAssessment, RiskInput, RiskLevel } from './types'
+import type { RiskAssessment, RiskInput, RiskState } from './types'
+import {
+  calibrationIsUsable,
+  measurementIsUsable
+} from './product-state'
 
-const SEVERITY_SCORE: Record<Exclude<RiskLevel, 'unreliable'>, number> = {
+const SEVERITY_SCORE: Record<RiskState, number> = {
+  unknown: 0,
   normal: 20,
   long: 55,
   organize: 72,
@@ -8,94 +13,150 @@ const SEVERITY_SCORE: Record<Exclude<RiskLevel, 'unreliable'>, number> = {
 }
 
 export function assessRisk(input: RiskInput): RiskAssessment {
-  const load = Math.max(0, input.currentLoad)
-  const safeBoundary = input.safeBoundary ?? input.safeFloor
-  const failureBoundary = input.failureBoundary ?? input.failureCeiling
-  const turnBuffer = Math.max(0, input.turnBuffer ?? 0)
+  const currentLoad = Math.max(0, input.currentLoad)
+  const composerDraftLoad = Math.max(0, input.composerDraftLoad)
+  const baseLoad = currentLoad + composerDraftLoad
+  const reasons: string[] = []
 
-  if (input.parserHealth === 'unreliable') {
-    return {
-      level: 'unreliable',
-      predictedNextTurnLoad: load,
-      score: 100,
-      trendScore: 0,
-      reasons: ['page_adapter_unreliable']
+  if (!measurementIsUsable(input.measurementState)) {
+    reasons.push(`measurement_${input.measurementState}`)
+    return unknownAssessment(baseLoad, reasons)
+  }
+
+  if (!calibrationIsUsable(input.calibrationState)) {
+    reasons.push(`calibration_${input.calibrationState}`)
+    return unknownAssessment(baseLoad, reasons)
+  }
+
+  const failureReference = input.failureReference
+  if (!failureReference || failureReference.load <= 0) {
+    reasons.push('missing_empirical_failure_reference')
+    return unknownAssessment(baseLoad, reasons)
+  }
+
+  if (failureReference.quality === 'conservative') {
+    reasons.push('conservative_failure_reference')
+  } else {
+    reasons.push('strong_failure_reference')
+  }
+
+  if (composerDraftLoad > 0) reasons.push('composer_draft_included')
+
+  const reserve =
+    input.growthReserve !== undefined && input.growthReserve > 0
+      ? input.growthReserve
+      : 0
+  const referenceLoad = failureReference.load
+  const projectedLoad = baseLoad + reserve
+  const environmentUnverified = input.environmentConfidence === 'unverified'
+  if (environmentUnverified) {
+    reasons.push('environment_unverified_warning_prior_only')
+  }
+
+  let state: Exclude<RiskState, 'unknown'> = 'normal'
+
+  if (reserve > 0) {
+    reasons.push('turn_growth_reserve_ready')
+    if (baseLoad + reserve >= referenceLoad) {
+      state = 'high'
+      reasons.push('projected_next_turn_reaches_reference')
+    } else if (baseLoad + 2 * reserve >= referenceLoad) {
+      state = 'organize'
+      reasons.push('within_two_turn_growth_reserves')
+    } else if (baseLoad + 3 * reserve >= referenceLoad) {
+      state = 'long'
+      reasons.push('within_three_turn_growth_reserves')
+    }
+  } else {
+    reasons.push('turn_growth_reserve_learning')
+    if (baseLoad >= referenceLoad) {
+      state = 'high'
+      reasons.push('at_or_above_failure_reference')
     }
   }
 
-  const reasons: string[] = []
-  if (input.coverage !== 'complete') reasons.push('coverage_not_complete')
-  if (input.parserHealth === 'degraded') reasons.push('parser_degraded')
+  const referencePositionScore = computeReferencePositionScore(
+    baseLoad,
+    referenceLoad,
+    reserve
+  )
 
-  let level: Exclude<RiskLevel, 'unreliable'> = 'normal'
+  if (input.environmentConfidence === 'mismatch') {
+    reasons.push('environment_mismatch')
+    return unknownAssessment(projectedLoad, reasons)
+  }
 
-  if (input.usingWarmStartPrior) {
-    if (
-      failureBoundary !== undefined &&
-      turnBuffer > 0 &&
-      load + 3 * turnBuffer >= failureBoundary
-    ) {
-      level = 'long'
-      reasons.push('warm_prior_near_boundary')
-    } else if (safeBoundary !== undefined && load > safeBoundary) {
-      level = 'long'
-      reasons.push('warm_prior_above_safe_boundary')
-    } else {
-      reasons.push('warm_prior_learning')
-    }
-  } else if (failureBoundary !== undefined) {
-    reasons.push('confirmed_failure_boundary')
-    if (load >= failureBoundary) {
-      level = 'high'
-      reasons.push('at_or_above_failure_boundary')
-    } else if (turnBuffer > 0) {
-      if (load + turnBuffer >= failureBoundary) {
-        level = 'high'
-        reasons.push('within_one_typical_turn')
-      } else if (load + 2 * turnBuffer >= failureBoundary) {
-        level = 'organize'
-        reasons.push('within_two_typical_turns')
-      } else if (load + 3 * turnBuffer >= failureBoundary) {
-        level = 'long'
-        reasons.push('within_three_typical_turns')
-      }
-    } else if (safeBoundary !== undefined && load > safeBoundary) {
-      level = 'long'
-      reasons.push('above_safe_boundary_without_turn_buffer')
-    }
-  } else if (safeBoundary !== undefined) {
-    reasons.push('confirmed_safe_boundary_only')
-    if (load > safeBoundary) {
-      level = 'long'
-      reasons.push('above_confirmed_safe_boundary')
-    }
-  } else {
-    reasons.push('learning_boundaries')
+  if (environmentUnverified && state === 'normal') {
+    reasons.push('environment_unverified_cannot_certify_normal')
+    return unknownAssessment(
+      projectedLoad,
+      reasons,
+      referencePositionScore
+    )
   }
 
   return {
-    level,
-    predictedNextTurnLoad: load + turnBuffer,
-    score: SEVERITY_SCORE[level],
-    trendScore: boundaryTrendScore(load, safeBoundary, failureBoundary),
+    state,
+    score: SEVERITY_SCORE[state],
+    referencePositionScore,
+    projectedLoad,
     reasons
   }
 }
 
-function boundaryTrendScore(
+function unknownAssessment(
+  projectedLoad: number,
+  reasons: string[],
+  referencePositionScore = 0
+): RiskAssessment {
+  return {
+    state: 'unknown',
+    score: SEVERITY_SCORE.unknown,
+    referencePositionScore,
+    projectedLoad,
+    reasons
+  }
+}
+
+function computeReferencePositionScore(
   load: number,
-  safeBoundary: number | undefined,
-  failureBoundary: number | undefined
+  failureReference: number,
+  reserve: number
 ): number {
-  if (load <= 0) return 0
-  if (failureBoundary !== undefined && failureBoundary > 0) {
-    return clamp((load / failureBoundary) * 100, 2, 100)
+  if (load <= 0 || failureReference <= 0) return 0
+
+  if (reserve > 0) {
+    const longStart = Math.max(0, failureReference - 3 * reserve)
+    const organizeStart = Math.max(longStart, failureReference - 2 * reserve)
+    const highStart = Math.max(organizeStart, failureReference - reserve)
+
+    if (longStart > 0 && load < longStart) {
+      return clamp((load / longStart) * 62.5, 2, 62.5)
+    }
+    if (organizeStart > longStart && load < organizeStart) {
+      return clamp(
+        62.5 + ((load - longStart) / (organizeStart - longStart)) * 12.5,
+        62.5,
+        75
+      )
+    }
+    if (highStart > organizeStart && load < highStart) {
+      return clamp(
+        75 + ((load - organizeStart) / (highStart - organizeStart)) * 12.5,
+        75,
+        87.5
+      )
+    }
+    if (failureReference > highStart) {
+      return clamp(
+        87.5 + ((load - highStart) / (failureReference - highStart)) * 12.5,
+        87.5,
+        100
+      )
+    }
   }
-  if (safeBoundary !== undefined && safeBoundary > 0) {
-    if (load <= safeBoundary) return clamp((load / safeBoundary) * 45, 2, 45)
-    return clamp(45 + ((load - safeBoundary) / safeBoundary) * 15, 45, 60)
-  }
-  return 2
+
+  return clamp((load / failureReference) * 100, 2, 100)
 }
 
 function clamp(value: number, min: number, max: number): number {

@@ -1,8 +1,25 @@
-import type { BackgroundRequest, BackgroundResponse } from '../background/coordinator'
-import { CALIBRATION_DEFAULTS, summarizeGeneration } from '../core/calibration'
-import { WebCryptoFingerprinter } from '../core/fingerprinter'
-import { parseConversationIdFromUrl, analyzePageSnapshot } from '../core/page-adapter'
+import type {
+  BackgroundRequest,
+  BackgroundResponse
+} from '../background/coordinator'
+import { summarizeGeneration } from '../core/calibration'
+import {
+  anonymizeConversationKey,
+  WebCryptoFingerprinter
+} from '../core/fingerprinter'
+import {
+  parseConversationIdFromUrl,
+  analyzePageSnapshot
+} from '../core/page-adapter'
 import type { PageMessageSnapshot } from '../core/page-adapter'
+import {
+  deriveCalibrationState,
+  deriveEnvironmentConfidence,
+  deriveMeasurementState,
+  calibrationIsUsable,
+  measurementIsUsable
+} from '../core/product-state'
+import { assessRisk } from '../core/risk-engine'
 import {
   DEFAULT_COMPLETION_STABILITY_MS,
   ResponseCompletionTracker
@@ -13,41 +30,74 @@ import {
   hasRequiredPrivacyConsent
 } from '../core/storage'
 import type {
-  ConversationControl,
-  MessageRecord,
+  CalibrationState,
   ObservedMessageRecord,
-  RiskAssessment
+  PersistedConversationLedger,
+  RiskAssessment,
+  UncertaintySource
 } from '../core/types'
 import {
   shouldDrawAttention,
-  stabilizeRiskLevel,
-  withAlertRecorded,
-  withDisplayedLevel
+  withAlertRecorded
 } from '../core/warning-controller'
-import { createCoalescedAsyncRunner } from './coalesced-runner'
+import {
+  createCoalescedAsyncRunner,
+  createDebouncedRunner
+} from './coalesced-runner'
 import { readPageSnapshot } from './dom-reader'
+import {
+  detectUncertaintySources,
+  parserCanaryPasses,
+  readEnvironmentSignature
+} from './environment'
 import {
   scanConversationHistory,
   type HistoryScanFailureReason,
   type HistoryScanResult
 } from './history-scanner'
-import { GuardUi, type BaselineState, type LearningStage } from './ui'
+import { GuardUi } from './ui'
 import { t } from './i18n'
 
 const estimator = new HeuristicTokenEstimator()
 const SCAN_DIAGNOSTICS_KEY = 'longChatGuardLastScanDiagnostics'
 const SCAN_DIAGNOSTICS_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
-type HistoryScanMode = 'baseline' | 'refresh' | 'limit'
-
 export interface StoredScanDiagnostics {
-  version: 3
+  version: 4
   recordedAt: number
   reason: HistoryScanFailureReason
-  stages: Array<Pick<HistoryScanResult['diagnostics'][number],
-    'phase' | 'scrollTop' | 'scrollHeight' | 'clientHeight' | 'logicalTop' |
-    'scrollMode' | 'pageMessageCount' | 'observedCount' | 'totalMessageCount' | 'reason'
-  >>
+  stages: Array<
+    Pick<
+      HistoryScanResult['diagnostics'][number],
+      | 'phase'
+      | 'scrollTop'
+      | 'scrollHeight'
+      | 'clientHeight'
+      | 'logicalTop'
+      | 'scrollMode'
+      | 'pageMessageCount'
+      | 'observedCount'
+      | 'totalMessageCount'
+      | 'reason'
+    >
+  >
+}
+
+interface ActiveCalibrationScan {
+  id: string
+  rawConversationKey: string
+  persistedConversationKey: string
+  expectedGenerationId: string
+  expectedLedgerRevision: number
+}
+
+interface PendingTurnStart {
+  conversationKey?: string
+  generationId: string
+  ledgerRevision: number
+  load: number
+  accepted: boolean
+  capturedAt: number
 }
 
 export function buildStoredScanDiagnostics(
@@ -56,7 +106,7 @@ export function buildStoredScanDiagnostics(
 ): StoredScanDiagnostics | undefined {
   if (result.complete || !result.reason) return undefined
   return {
-    version: 3,
+    version: 4,
     recordedAt,
     reason: result.reason,
     stages: result.diagnostics.slice(-8).map((stage) => ({
@@ -64,21 +114,32 @@ export function buildStoredScanDiagnostics(
       scrollTop: stage.scrollTop,
       scrollHeight: stage.scrollHeight,
       clientHeight: stage.clientHeight,
-      ...(stage.logicalTop !== undefined ? { logicalTop: stage.logicalTop } : {}),
+      ...(stage.logicalTop !== undefined
+        ? { logicalTop: stage.logicalTop }
+        : {}),
       ...(stage.scrollMode ? { scrollMode: stage.scrollMode } : {}),
-      ...(stage.pageMessageCount !== undefined ? { pageMessageCount: stage.pageMessageCount } : {}),
-      ...(stage.observedCount !== undefined ? { observedCount: stage.observedCount } : {}),
-      ...(stage.totalMessageCount !== undefined ? { totalMessageCount: stage.totalMessageCount } : {}),
+      ...(stage.pageMessageCount !== undefined
+        ? { pageMessageCount: stage.pageMessageCount }
+        : {}),
+      ...(stage.observedCount !== undefined
+        ? { observedCount: stage.observedCount }
+        : {}),
+      ...(stage.totalMessageCount !== undefined
+        ? { totalMessageCount: stage.totalMessageCount }
+        : {}),
       ...(stage.reason ? { reason: stage.reason } : {})
     }))
   }
 }
 
-export function shouldDiscardStoredScanDiagnostics(value: unknown, now: number): boolean {
+export function shouldDiscardStoredScanDiagnostics(
+  value: unknown,
+  now: number
+): boolean {
   if (!value || typeof value !== 'object') return true
   const saved = value as { version?: unknown; recordedAt?: unknown }
   return (
-    saved.version !== 3 ||
+    saved.version !== 4 ||
     typeof saved.recordedAt !== 'number' ||
     now - saved.recordedAt > SCAN_DIAGNOSTICS_TTL_MS
   )
@@ -89,12 +150,15 @@ async function cleanupExpiredScanDiagnostics(now: number): Promise<void> {
     const stored = await chrome.storage.local.get(SCAN_DIAGNOSTICS_KEY)
     if (
       stored[SCAN_DIAGNOSTICS_KEY] &&
-      shouldDiscardStoredScanDiagnostics(stored[SCAN_DIAGNOSTICS_KEY], now)
+      shouldDiscardStoredScanDiagnostics(
+        stored[SCAN_DIAGNOSTICS_KEY],
+        now
+      )
     ) {
       await chrome.storage.local.remove(SCAN_DIAGNOSTICS_KEY)
     }
   } catch {
-    // Diagnostic cleanup is best-effort and never blocks the user flow.
+    // Diagnostics are best-effort and never block monitoring.
   }
 }
 
@@ -103,55 +167,110 @@ const CONTINUATION_PROMPT = t(
   "Create a continuation package for a new ChatGPT chat so work can resume without re-analysis. Preserve the current goal and exact stage, completed work, confirmed decisions, constraints and user preferences, key files/paths/repos/commits/code/config/data/platform state, unresolved issues and failed attempts, prioritized next actions, risks and pitfalls, and essential exact wording when needed. Clearly separate confirmed facts from inference and items still needing verification. If code or files are involved, state what was changed, tested, committed, pushed or published, and what remains pending. Finish with a short instruction telling the new chat to continue from the listed next action instead of starting over."
 )
 
-export function deriveScanSafeCompletion(
-  messages: Pick<MessageRecord, 'fingerprint' | 'role' | 'tokenEstimate'>[]
-): { assistantFingerprint: string; assistantTokenCount: number; estimatedLoad: number } | undefined {
-  let estimatedLoad = 0
-  let candidate:
-    | { assistantFingerprint: string; assistantTokenCount: number; estimatedLoad: number }
-    | undefined
-  for (const message of messages) {
-    estimatedLoad += Math.max(0, message.tokenEstimate)
-    if (message.role === 'assistant' && message.tokenEstimate > 0) {
-      candidate = {
-        assistantFingerprint: message.fingerprint,
-        assistantTokenCount: message.tokenEstimate,
-        estimatedLoad
-      }
-    }
-  }
-  return candidate
-}
-
 export async function startGuard(): Promise<void> {
   if (location.hostname !== 'chatgpt.com') return
 
   const initialResponse = await sendBackground({ type: 'guard.loadState' })
   await cleanupExpiredScanDiagnostics(Date.now())
+
   let latestState = initialResponse.state
   const fingerprinter = new WebCryptoFingerprinter(latestState.installSalt)
+  const persistedConversationKey = (value: string): Promise<string> =>
+    anonymizeConversationKey(value, latestState.installSalt)
+
   let scheduleRun: (() => void) | undefined
   let latestConversationKey: string | undefined
   let blankStartArmed = false
   let pendingBlankStart = false
-  let initializedUserBaseline = false
-  let observedNewUserDuringRun = false
   let monitoringStarted = false
   let historyScanInProgress = false
-  let focusPendingConfirmationAfterRender = false
-  const seenUserKeys = new Set<string>()
+  let activeCalibrationScan: ActiveCalibrationScan | undefined
+  let measurementScanInProgress = false
+  let activeMeasurementScan: ActiveCalibrationScan | undefined
+  let pendingTurnStart: PendingTurnStart | undefined
+  let observationEpoch = Date.now()
   let completionTracker = new ResponseCompletionTracker()
 
-  const refresh = () => scheduleRun?.()
+  const refresh = (): void => scheduleRun?.()
 
-  const currentLearningMode = (): 'cold' | 'warm' | 'calibrated' => {
-    const generation = latestState.generations.find(
+  const currentGeneration = () =>
+    latestState.generations.find(
       (item) => item.id === latestState.settings.generationId
+    ) ?? latestState.generations[0]
+
+  const currentCalibrationState = (): CalibrationState =>
+    deriveCalibrationState({
+      generation: currentGeneration(),
+      currentEnvironment: readEnvironmentSignature(document),
+      calibrating: historyScanInProgress
+    })
+
+  const renderCurrentUiFromState = (): void => {
+    const conversationKey = latestConversationKey
+    if (!conversationKey) {
+      ui.showUnavailable(currentCalibrationState())
+      return
+    }
+    const generation = currentGeneration()
+    const ledger = latestState.ledgers[conversationKey]
+    if (!generation || !ledger) {
+      ui.showUnavailable(currentCalibrationState())
+      return
+    }
+    const measurementState = deriveMeasurementState({
+      supported: ledger.generationId === generation.id,
+      ledger
+    })
+    const currentEnvironment = readEnvironmentSignature(document)
+    const calibrationState = deriveCalibrationState({
+      generation,
+      currentEnvironment,
+      calibrating: historyScanInProgress
+    })
+    const environmentConfidence = deriveEnvironmentConfidence(
+      generation.environmentSignature,
+      currentEnvironment
     )
-    if (!generation) return 'cold'
     const summary = summarizeGeneration(generation)
-    if (summary.usingWarmStartPrior) return 'warm'
-    return summary.independentConversations > 0 ? 'calibrated' : 'cold'
+    const composerDraftLoad = estimator.estimate(
+      readPageSnapshot(document, location.href, 'none').composerText ?? ''
+    )
+    const risk = assessRisk({
+      currentLoad: ledger.currentEstimatedLoad,
+      composerDraftLoad,
+      measurementState,
+      calibrationState,
+      environmentConfidence,
+      ...(summary.failureReference
+        ? { failureReference: summary.failureReference }
+        : {}),
+      ...(summary.growthReserveReady
+        ? { growthReserve: summary.growthReserve }
+        : {})
+    })
+    const control =
+      latestState.conversationControls[conversationKey] ?? {}
+    ui.update({
+      conversationKey,
+      measurementState,
+      calibrationState,
+      environmentConfidence,
+      riskState: risk.state,
+      referencePositionScore: risk.referencePositionScore,
+      trackAvailable:
+        measurementIsUsable(measurementState) &&
+        calibrationIsUsable(calibrationState),
+      growthReserveReady: summary.growthReserveReady,
+      muted: control.muted ?? false,
+      pendingFailureConfirmation:
+        generation.pendingFailureConfirmations.some(
+          (item) => item.conversationKey === conversationKey
+        ),
+      measurementRecoveryAvailable:
+        measurementState !== 'complete' &&
+        calibrationIsUsable(calibrationState),
+      uncertaintySources: ledger.uncertaintySources
+    })
   }
 
   const runAction = async (
@@ -165,7 +284,9 @@ export async function startGuard(): Promise<void> {
       refresh()
       return true
     } catch {
-      ui.showToast(t('toastActionFailed', 'Action failed. Please try again.'))
+      ui.showToast(
+        t('toastActionFailed', 'Action failed. Please try again.')
+      )
       return false
     }
   }
@@ -180,7 +301,9 @@ export async function startGuard(): Promise<void> {
         `${message.role}\u001f${message.text}`
       )
       const stableHintHash = message.stableHint
-        ? await fingerprinter.fingerprint(`stable\u001f${message.stableHint}`)
+        ? await fingerprinter.fingerprint(
+            `stable\u001f${message.stableHint}`
+          )
         : undefined
       const observedMessage: ObservedMessageRecord = {
         contentFingerprint,
@@ -201,20 +324,28 @@ export async function startGuard(): Promise<void> {
   const ui = new GuardUi({
     onCopyContinuation: () => {
       void copyText(CONTINUATION_PROMPT)
-        .then(() => ui.showToast(t('toastContinuationCopied', 'Continuation prompt copied')))
-        .catch(() => ui.showToast(t('toastCopyFailed', 'Copy failed. Please try again.')))
+        .then(() =>
+          ui.showToast(
+            t('toastContinuationCopied', 'Continuation prompt copied')
+          )
+        )
+        .catch(() =>
+          ui.showToast(
+            t('toastCopyFailed', 'Copy failed. Please try again.')
+          )
+        )
     },
-    onScanHistory: () => {
-      const generation = latestState.generations.find(
-        (item) => item.id === latestState.settings.generationId
-      )
-      const summary = generation ? summarizeGeneration(generation) : undefined
-      void runHistoryScan(summary && hasUsableBaseline(summary) ? 'refresh' : 'baseline')
+
+    onCalibrate: () => {
+      void runCalibrationScan()
     },
-    onCalibrateLimit: () => {
-      void runHistoryScan('limit')
+
+    onMeasureCurrentChat: () => {
+      void runMeasurementScan()
     },
+
     onRecalibrate: () => {
+      if (historyScanInProgress || measurementScanInProgress) return
       void runAction(
         () =>
           sendBackground({
@@ -222,9 +353,13 @@ export async function startGuard(): Promise<void> {
             reason: 'recalibrate',
             observedAt: Date.now()
           }),
-        t('toastRelearned', 'Existing baseline kept while recalibration starts')
+        t(
+          'toastRecalibrationStarted',
+          'Previous reference kept as an outdated prior. Calibrate again before relying on risk levels.'
+        )
       )
     },
+
     onToggleMute: () => {
       const key = latestConversationKey
       if (!key) return
@@ -241,6 +376,7 @@ export async function startGuard(): Promise<void> {
           : t('toastConversationMuted', 'Alerts muted for this chat')
       )
     },
+
     onConfirmFailure: (accepted) => {
       const key = latestConversationKey
       if (!key) return
@@ -253,10 +389,14 @@ export async function startGuard(): Promise<void> {
             observedAt: Date.now()
           }),
         accepted
-          ? t('toastFailureLearned', 'Conversation-limit sample learned')
-          : t('toastFailureIgnored', 'This error was ignored')
+          ? t(
+              'toastFailureLearned',
+              'Calibration evidence saved from this limit event.'
+            )
+          : t('toastFailureIgnored', 'This event was ignored.')
       )
     },
+
     onAcceptPrivacyConsent: () => {
       void runAction(
         () =>
@@ -270,6 +410,7 @@ export async function startGuard(): Promise<void> {
         if (saved) startMonitoring()
       })
     },
+
     onDeclinePrivacyConsent: () => {
       void runAction(
         () =>
@@ -286,17 +427,28 @@ export async function startGuard(): Promise<void> {
   })
 
   const processPage = async (): Promise<void> => {
-    if (historyScanInProgress) return
+    if (historyScanInProgress || measurementScanInProgress) return
+
     try {
       const isRoot = isRootChatUrl(location.href)
-      const preliminarySnapshot = readPageSnapshot(document, location.href, 'none')
+      const preliminarySnapshot = readPageSnapshot(
+        document,
+        location.href,
+        'none'
+      )
       const urlConversationId = parseConversationIdFromUrl(location.href)
       const knownConversationKey = urlConversationId
-        ? `chatgpt:${urlConversationId}`
+        ? await persistedConversationKey(
+            `chatgpt:${urlConversationId}`
+          )
+        : undefined
+      const knownLedger = knownConversationKey
+        ? latestState.ledgers[knownConversationKey]
         : undefined
       const persistedComplete =
-        knownConversationKey !== undefined &&
-        latestState.ledgers[knownConversationKey]?.coverageState === 'complete'
+        knownLedger?.coverageState === 'complete' &&
+        knownLedger.sequenceReliability === 'reliable'
+
       const lifecycle = resolveCoverageLifecycle({
         isRoot,
         hasConversationId: Boolean(urlConversationId),
@@ -310,60 +462,71 @@ export async function startGuard(): Promise<void> {
       })
       blankStartArmed = lifecycle.blankStartArmed
       pendingBlankStart = lifecycle.pendingBlankStart
-      const coverageEvidence = lifecycle.coverageEvidence
+      preliminarySnapshot.coverageEvidence = lifecycle.coverageEvidence
 
-      preliminarySnapshot.coverageEvidence = coverageEvidence
       const adapterResult = analyzePageSnapshot(preliminarySnapshot)
       const conversationKey = adapterResult.conversationKey
+        ? await persistedConversationKey(adapterResult.conversationKey)
+        : undefined
+      const environmentSignature = readEnvironmentSignature(document)
 
-      if (!conversationKey || adapterResult.health === 'unreliable') {
+      if (
+        !conversationKey ||
+        adapterResult.health === 'unreliable' ||
+        !parserCanaryPasses(adapterResult.messages)
+      ) {
         latestConversationKey = undefined
-        ui.showUnavailable(currentLearningMode())
+        ui.showUnavailable(
+          deriveCalibrationState({
+            generation: currentGeneration(),
+            currentEnvironment: environmentSignature
+          })
+        )
         return
       }
 
       if (conversationKey !== latestConversationKey) {
+        if (
+          pendingTurnStart?.conversationKey &&
+          pendingTurnStart.conversationKey !== conversationKey
+        ) {
+          pendingTurnStart = undefined
+        }
         latestConversationKey = conversationKey
-        initializedUserBaseline = false
-        observedNewUserDuringRun = coverageEvidence === 'observed_from_start'
-        seenUserKeys.clear()
         completionTracker = new ResponseCompletionTracker()
       }
 
-      const observedMessages: ObservedMessageRecord[] = []
+      const previousLedger = latestState.ledgers[conversationKey]
+      const observedMessages = await observePageMessages(
+        adapterResult.messages
+      )
       const now = Date.now()
-      for (const [index, message] of adapterResult.messages.entries()) {
-        const contentFingerprint = await fingerprinter.fingerprint(
-          `${message.role}\u001f${message.text}`
+      const newUserCount = observedMessages.filter(
+        (message) =>
+          message.role === 'user' &&
+          !previousLedger?.messages.some(
+            (existing) =>
+              (message.stableHintHash &&
+                existing.stableHintHash === message.stableHintHash) ||
+              (!message.stableHintHash &&
+                existing.contentFingerprint === message.contentFingerprint &&
+                existing.role === 'user')
+          )
+      ).length
+
+      const composerTokenEstimate = estimator.estimate(
+        adapterResult.composerText
+      )
+      const uncertaintySources = uniqueUncertaintySources([
+        ...detectUncertaintySources(document),
+        ...(observedMessages.some(
+          (message) => (message.attachmentCount ?? 0) > 0
         )
-        const stableHintHash = message.stableHint
-          ? await fingerprinter.fingerprint(`stable\u001f${message.stableHint}`)
-          : undefined
-        const observedMessage: ObservedMessageRecord = {
-          contentFingerprint,
-          role: message.role,
-          tokenEstimate: estimator.estimate(message.text),
-          charCount: message.text.length,
-          observedAt: now,
-          ordinalHint: index,
-          hasCode: message.hasCode,
-          attachmentCount: message.attachmentCount
-        }
-        if (stableHintHash) observedMessage.stableHintHash = stableHintHash
-        observedMessages.push(observedMessage)
+          ? (['attachment'] as const)
+          : [])
+      ])
 
-        if (message.role === 'user') {
-          const userKey = stableHintHash ?? contentFingerprint
-          if (initializedUserBaseline && !seenUserKeys.has(userKey)) {
-            observedNewUserDuringRun = true
-          }
-          seenUserKeys.add(userKey)
-        }
-      }
-      initializedUserBaseline = true
-
-      // 2.x intentionally ignores unsent composer drafts for risk/calibration.
-      const composerTokenEstimate = 0
+      observationEpoch = Math.max(observationEpoch + 1, now)
       let response = await sendBackground({
         type: 'guard.observeWindow',
         window: {
@@ -373,20 +536,58 @@ export async function startGuard(): Promise<void> {
           tailEvidence: adapterResult.tailEvidence,
           observedMessages,
           composerTokenEstimate,
+          environmentSignature,
+          uncertaintySources,
+          expectedGenerationId: latestState.settings.generationId,
+          baseRevision: previousLedger?.ledgerRevision ?? 0,
+          observationEpoch,
           observedAt: now
         }
       })
       latestState = response.state
+
+      if (response.staleObservation) {
+        pendingTurnStart = undefined
+        window.setTimeout(() => scheduleRun?.(), 50)
+        return
+      }
+
       let latestRisk: RiskAssessment | undefined = response.risk
       let persistedSnapshot = response.snapshot
+      if (!persistedSnapshot) {
+        persistedSnapshot = latestState.ledgers[conversationKey]
+      }
       if (!persistedSnapshot) throw new Error('missing_persisted_snapshot')
 
-      if (pendingBlankStart && adapterResult.coverageState === 'complete') {
+      if (pendingTurnStart && newUserCount > 0) {
+        const expectedRevision = previousLedger?.ledgerRevision ?? 0
+        const sameConversation =
+          !pendingTurnStart.conversationKey ||
+          pendingTurnStart.conversationKey === conversationKey
+        const validTurnStart =
+          sameConversation &&
+          pendingTurnStart.generationId === persistedSnapshot.generationId &&
+          pendingTurnStart.ledgerRevision === expectedRevision &&
+          newUserCount === 1
+        pendingTurnStart = validTurnStart
+          ? {
+              ...pendingTurnStart,
+              conversationKey,
+              accepted: true
+            }
+          : undefined
+      }
+
+      if (
+        pendingBlankStart &&
+        adapterResult.coverageState === 'complete'
+      ) {
         blankStartArmed = false
         pendingBlankStart = false
       }
 
       for (const error of adapterResult.visibleErrors) {
+        if (error.kind !== 'conversation_length_limit') continue
         response = await sendBackground({
           type: 'guard.recordFailure',
           event: {
@@ -394,6 +595,8 @@ export async function startGuard(): Promise<void> {
             errorKind: error.kind,
             confidence: error.confidence,
             composerTokenEstimate,
+            expectedGenerationId: persistedSnapshot.generationId,
+            expectedLedgerRevision: persistedSnapshot.ledgerRevision,
             observedAt: now
           }
         })
@@ -403,7 +606,8 @@ export async function startGuard(): Promise<void> {
 
       persistedSnapshot =
         latestState.ledgers[conversationKey] ?? persistedSnapshot
-      const tailFingerprint = persistedSnapshot.activeFingerprints.at(-1)
+      const tailFingerprint =
+        persistedSnapshot.activeFingerprints.at(-1)
       const tail = persistedSnapshot.messages.find(
         (message) => message.fingerprint === tailFingerprint
       )
@@ -412,11 +616,14 @@ export async function startGuard(): Promise<void> {
           error.kind === 'conversation_length_limit' &&
           error.confidence !== 'low'
       )
+
       const completion = completionTracker.observe({
         observedAt: now,
         generationState: adapterResult.generationState,
         hasLengthError,
-        ...(tail?.fingerprint ? { assistantFingerprint: tail.fingerprint } : {}),
+        ...(tail?.fingerprint
+          ? { assistantFingerprint: tail.fingerprint }
+          : {}),
         ...(tail?.role ? { role: tail.role } : {}),
         ...(tail?.contentFingerprint
           ? { contentFingerprint: tail.contentFingerprint }
@@ -426,19 +633,25 @@ export async function startGuard(): Promise<void> {
           : {})
       })
 
-      if (completion.state === 'completed' && observedNewUserDuringRun) {
+      if (
+        completion.state === 'completed' &&
+        pendingTurnStart?.accepted
+      ) {
         const completionResponse = await sendBackground({
           type: 'guard.recordCompletion',
           event: {
             conversationKey,
-            assistantFingerprint: completion.candidate.assistantFingerprint,
-            estimatedLoad: persistedSnapshot.currentEstimatedLoad,
-            assistantTokenCount: completion.candidate.tokenEstimate,
+            assistantFingerprint:
+              completion.candidate.assistantFingerprint,
+            beforeTurnLoad: pendingTurnStart.load,
+            expectedGenerationId: persistedSnapshot.generationId,
+            expectedLedgerRevision: persistedSnapshot.ledgerRevision,
             observedAt: now
           }
         })
         latestState = completionResponse.state
         latestRisk = completionResponse.risk ?? latestRisk
+        pendingTurnStart = undefined
       } else if (
         completion.state === 'pending' &&
         completion.candidate &&
@@ -450,347 +663,496 @@ export async function startGuard(): Promise<void> {
         )
       }
 
-      const generation = latestState.generations.find(
-        (item) => item.id === latestState.settings.generationId
-      )
-      if (!generation || !latestRisk) {
-        ui.showUnavailable(currentLearningMode())
+      const generation = currentGeneration()
+      const ledger = latestState.ledgers[conversationKey]
+      if (!generation || !ledger || !latestRisk) {
+        ui.showUnavailable(currentCalibrationState())
         return
       }
 
-      const summary = summarizeGeneration(generation)
-      const control = latestState.conversationControls[conversationKey] ?? {}
-      const userTurn = countActiveUserTurns(persistedSnapshot)
-      const displayedLevel = stabilizeRiskLevel(
-        latestRisk,
-        control.lastDisplayedLevel
+      const measurementState = deriveMeasurementState({
+        supported: ledger.generationId === generation.id,
+        ledger
+      })
+      const calibrationState = deriveCalibrationState({
+        generation,
+        currentEnvironment: ledger.environmentSignature
+      })
+      const environmentConfidence = deriveEnvironmentConfidence(
+        generation.environmentSignature,
+        ledger.environmentSignature
       )
+      const summary = summarizeGeneration(generation)
+      const control =
+        latestState.conversationControls[conversationKey] ?? {}
       const attention = shouldDrawAttention({
-        level: displayedLevel,
-        score: latestRisk.score,
-        userTurn,
+        state: latestRisk.state,
         control
       })
 
-      const nextControl = attention
-        ? withAlertRecorded(control, displayedLevel, latestRisk.score, userTurn)
-        : withDisplayedLevel(control, displayedLevel)
-      if (!controlsEqual(control, nextControl)) {
+      if (attention) {
         const controlResponse = await sendBackground({
           type: 'guard.updateControl',
           conversationKey,
-          patch: nextControl
+          patch: withAlertRecorded(control, latestRisk.state)
         })
         latestState = controlResponse.state
       }
 
       const effectiveControl =
-        latestState.conversationControls[conversationKey] ?? nextControl
+        latestState.conversationControls[conversationKey] ?? control
       const pendingFailureConfirmation =
-        generation.pendingFailureConfirmations?.some(
+        generation.pendingFailureConfirmations.some(
           (item) => item.conversationKey === conversationKey
-        ) ?? false
+        )
+
       ui.update({
         conversationKey,
-        riskLevel: displayedLevel,
-        trendScore: latestRisk.trendScore,
-        estimatedLoad: persistedSnapshot.currentEstimatedLoad,
-        learningMode: summary.usingWarmStartPrior
-          ? 'warm'
-          : summary.independentConversations > 0
-            ? 'calibrated'
-            : 'cold',
-        baselineState: deriveBaselineState(summary),
-        hasRiskBoundary: hasUsableBaseline(summary),
-        showScanAction: shouldShowScanAction(summary),
-        showLimitCalibrationAction: summary.confirmedFailureConversations === 0,
+        measurementState,
+        calibrationState,
+        environmentConfidence,
+        riskState: latestRisk.state,
+        referencePositionScore: latestRisk.referencePositionScore,
+        trackAvailable:
+          measurementIsUsable(measurementState) &&
+          calibrationIsUsable(calibrationState),
+        growthReserveReady: summary.growthReserveReady,
         muted: effectiveControl.muted ?? false,
-        pendingFailureConfirmation
+        pendingFailureConfirmation,
+        measurementRecoveryAvailable:
+          measurementState !== 'complete' &&
+          calibrationIsUsable(calibrationState),
+        uncertaintySources: ledger.uncertaintySources
       })
 
-      if (pendingFailureConfirmation && focusPendingConfirmationAfterRender) {
-        focusPendingConfirmationAfterRender = false
+      if (pendingFailureConfirmation) {
         ui.focusPendingConfirmation()
       } else if (attention) {
         ui.drawAttention()
       }
     } catch {
-      ui.showUnavailable(currentLearningMode())
+      ui.showUnavailable(currentCalibrationState())
     }
   }
 
-  async function runHistoryScan(mode: HistoryScanMode): Promise<void> {
-    if (historyScanInProgress) return
+  async function runMeasurementScan(): Promise<void> {
+    if (historyScanInProgress || measurementScanInProgress) return
     await cleanupExpiredScanDiagnostics(Date.now())
-    const currentSnapshot = readPageSnapshot(document, location.href, 'none')
-    const currentAdapter = analyzePageSnapshot(currentSnapshot)
-    if (mode === 'limit') {
-      const generation = latestState.generations.find(
-        (item) => item.id === latestState.settings.generationId
-      )
-      const summary = generation ? summarizeGeneration(generation) : undefined
-      if ((summary?.confirmedFailureConversations ?? 0) > 0) {
-        ui.showToast(t('toastLimitAlreadyConfirmed', 'A confirmed limit baseline already exists.'))
-        return
-      }
-    }
-    const conversationKey =
-      currentAdapter.conversationKey ??
-      latestConversationKey ??
-      (() => {
-        const conversationId = parseConversationIdFromUrl(location.href)
-        return conversationId ? `chatgpt:${conversationId}` : undefined
-      })()
-    if (!conversationKey) {
-      ui.showToast(
+
+    const startSnapshot = readPageSnapshot(
+      document,
+      location.href,
+      'none'
+    )
+    const startAdapter = analyzePageSnapshot(startSnapshot)
+    const rawConversationKey =
+      startAdapter.conversationKey ??
+      rawConversationKeyFromUrl(location.href)
+
+    if (!rawConversationKey) {
+      ui.showScanNotice(
         t(
-          'toastNoConversation',
-          'Chat is open, but its conversation information is not available yet. Refresh and try again.'
-        )
+          'measurementNoConversation',
+          'Open the chat you want to measure, then try again.'
+        ),
+        'warning'
       )
       return
     }
 
-    historyScanInProgress = true
-    focusPendingConfirmationAfterRender = false
-    ui.setHistoryScanBusy(true, mode === 'limit' ? 'limit' : 'primary')
+    const persistedKey = await persistedConversationKey(rawConversationKey)
+    const scan: ActiveCalibrationScan = {
+      id: createScanSessionId(),
+      rawConversationKey,
+      persistedConversationKey: persistedKey,
+      expectedGenerationId: latestState.settings.generationId,
+      expectedLedgerRevision:
+        latestState.ledgers[persistedKey]?.ledgerRevision ?? 0
+    }
+
+    activeMeasurementScan = scan
+    measurementScanInProgress = true
+    ui.setMeasurementBusy(true)
+
     try {
-      const result = await scanConversationHistory(document, observePageMessages)
+      const result = await scanConversationHistory(
+        document,
+        observePageMessages
+      )
+
+      if (!isSameActiveMeasurementScan(scan)) {
+        throw new Error('scan_session_replaced')
+      }
+
+      const currentRawConversationKey =
+        rawConversationKeyFromUrl(location.href) ??
+        analyzePageSnapshot(
+          readPageSnapshot(document, location.href, 'none')
+        ).conversationKey
+
+      if (currentRawConversationKey !== scan.rawConversationKey) {
+        throw new Error('conversation_changed_during_scan')
+      }
+
       if (!result.complete) {
-        try {
-          const diagnostic = buildStoredScanDiagnostics(result, Date.now())
-          if (diagnostic) {
-            await chrome.storage.local.set({ [SCAN_DIAGNOSTICS_KEY]: diagnostic })
-          }
-        } catch {
-          // Diagnostics are optional and must never block the user flow.
-        }
-        ui.showToast(historyScanFailureMessage(result.reason))
+        await persistScanFailureDiagnostic(result)
+        ui.showScanNotice(
+          t(
+            'measurementScanIncomplete',
+            'The full chat could not be read, so this chat\'s risk was not updated. Keep the page open and try again.'
+          ),
+          'warning'
+        )
         return
       }
 
-      const now = Date.now()
-      const parserHealthy = result.unknownRoleCount === 0
-      const strongCoverage = parserHealthy && result.attachmentCount === 0
-      const messages = result.observedMessages.map((message, index) => {
-        const fingerprint = message.stableHintHash
-          ? `stable:${message.stableHintHash}`
-          : `scan:${index}:${message.contentFingerprint.slice(0, 16)}`
-        return {
-          fingerprint,
-          contentFingerprint: message.contentFingerprint,
-          ...(message.stableHintHash ? { stableHintHash: message.stableHintHash } : {}),
-          role: message.role,
-          tokenEstimate: message.tokenEstimate,
-          charCount: message.charCount,
-          observedAt: now + index,
-          localBranchId: 'active',
-          ordinalHint: index,
-          ...(message.hasCode !== undefined ? { hasCode: message.hasCode } : {}),
-          ...(message.attachmentCount !== undefined
-            ? { attachmentCount: message.attachmentCount }
-            : {})
-        }
-      })
-      const activeFingerprints = messages.map((message) => message.fingerprint)
-      const currentEstimatedLoad = messages.reduce(
-        (total, message) => total + message.tokenEstimate,
-        0
-      )
-      const generationId = latestState.settings.generationId
+      if (result.unknownRoleCount > 0) {
+        ui.showScanNotice(
+          t(
+            'measurementParserFailed',
+            'This chat could not be measured reliably because some message roles could not be read.'
+          ),
+          'error'
+        )
+        return
+      }
+
+      const uncertaintySources = uniqueUncertaintySources([
+        ...result.uncertaintySources,
+        ...(result.attachmentCount > 0
+          ? (['attachment'] as const)
+          : [])
+      ])
       const response = await sendBackground({
-        type: 'guard.upsertLedger',
-        snapshot: {
-          conversationKey,
-          generationId,
-          coverageState: strongCoverage ? 'complete' : 'mostly_complete',
-          parserHealth: parserHealthy ? 'healthy' : 'degraded',
-          messages,
-          activeFingerprints,
-          sequenceReliability: 'reliable',
-          currentEstimatedLoad,
-          updatedAt: now
+        type: 'guard.commitMeasurementScan',
+        event: {
+          conversationKey: scan.rawConversationKey,
+          expectedGenerationId: scan.expectedGenerationId,
+          expectedLedgerRevision: scan.expectedLedgerRevision,
+          environmentSignature: readEnvironmentSignature(document),
+          uncertaintySources,
+          observedMessages: result.observedMessages,
+          observedAt: Date.now()
         }
       })
       latestState = response.state
-      latestConversationKey = conversationKey
 
-      const assistantGrowthHistory = result.observedMessages
-        .filter((message) => message.role === 'assistant' && message.tokenEstimate > 0)
-        .map((message) => message.tokenEstimate)
-        .slice(-24)
-      if (assistantGrowthHistory.length > 0) {
-        const growthResponse = await sendBackground({
-          type: 'guard.seedGrowthHistory',
-          event: {
-            conversationKey,
-            tokenCounts: assistantGrowthHistory,
-            observedAt: now
-          }
-        })
-        latestState = growthResponse.state
+      try {
+        await chrome.storage.local.remove(SCAN_DIAGNOSTICS_KEY)
+      } catch {
+        // Optional cleanup only.
       }
 
-      if (strongCoverage) {
-        const safeCompletion = deriveScanSafeCompletion(messages)
-        if (safeCompletion) {
-          const completionResponse = await sendBackground({
-            type: 'guard.recordCompletion',
-            event: {
-              conversationKey,
-              ...safeCompletion,
-              observedAt: now
-            }
-          })
-          latestState = completionResponse.state
-        }
-      }
-
-      let detectedLimitConfidence: 'high' | 'medium' | undefined
-      if (mode === 'limit') {
-        const postScanAdapter = analyzePageSnapshot(
-          readPageSnapshot(document, location.href, 'none')
-        )
-        const limitErrors = [
-          ...currentAdapter.visibleErrors,
-          ...postScanAdapter.visibleErrors
-        ].filter((error) => error.kind === 'conversation_length_limit')
-        detectedLimitConfidence = limitErrors.some((error) => error.confidence === 'high')
-          ? 'high'
-          : limitErrors.some((error) => error.confidence === 'medium')
-            ? 'medium'
-            : undefined
-
-        const failureResponse = await sendBackground({
-          type: 'guard.recordFailure',
-          event: {
-            conversationKey,
-            errorKind: 'conversation_length_limit',
-            confidence: detectedLimitConfidence ?? 'medium',
-            forcePrompt: detectedLimitConfidence !== 'high',
-            composerTokenEstimate: 0,
-            observedAt: now
-          }
-        })
-        latestState = failureResponse.state
-      }
-
-      const activeGeneration = latestState.generations.find(
-        (item) => item.id === latestState.settings.generationId
-      )
-      const activeSummary = activeGeneration ? summarizeGeneration(activeGeneration) : undefined
-      const awaitingLimitConfirmation =
-        activeGeneration?.pendingFailureConfirmations?.some(
-          (item) => item.conversationKey === conversationKey
-        ) ?? false
-
-      if (mode === 'limit') {
-        if (awaitingLimitConfirmation) {
-          focusPendingConfirmationAfterRender = true
-          ui.showToast(
-            t('toastLimitConfirm', 'Scan complete. Please confirm that this chat really reached the conversation-length limit.')
-          )
-        } else if (
-          detectedLimitConfidence === 'high' ||
-          (activeSummary?.confirmedFailureConversations ?? 0) > 0
-        ) {
-          ui.showToast(
-            t('toastLimitDetected', 'Conversation-length limit detected. The limit baseline was confirmed automatically.')
-          )
-        }
-      } else if (mode === 'baseline') {
-        if (activeSummary && hasUsableBaseline(activeSummary)) {
-          ui.showToast(
-            t('toastBaselineReady', 'Reference baseline established. Risk tracking is ready.')
-          )
-        } else {
-          ui.showToast(
-            t('toastBaselineNotSet', 'Scan finished, but this chat was not reliable enough to establish a baseline. Try another complete chat.')
-          )
-        }
-      } else if (result.attachmentCount > 0) {
-        ui.showToast(
-          t('toastScanAttachments', 'Scan complete. Current progress was refreshed; attachment data is handled conservatively.')
-        )
-      } else if (!parserHealthy) {
-        ui.showToast(
-          t('toastScanRoleUncertain', 'Scan complete. Current progress was refreshed with conservative handling for uncertain roles.')
-        )
-      } else {
-        ui.showToast(t('toastProgressUpdated', 'Current chat progress updated.'))
-      }
-    } catch {
       ui.showToast(
-        t('toastScanFailed', 'Full scan did not finish. Please try again later.')
+        t(
+          'measurementScanSuccess',
+          'Full chat read complete. LongChat Guard can now assess this chat using your existing alert reference.'
+        ),
+        4200
+      )
+    } catch (error) {
+      const reason =
+        error instanceof Error ? error.message : 'unknown_error'
+      ui.showScanNotice(
+        measurementCommitFailureMessage(reason),
+        'error'
       )
     } finally {
-      historyScanInProgress = false
-      ui.setHistoryScanBusy(false, mode === 'limit' ? 'limit' : 'primary')
+      if (isSameActiveMeasurementScan(scan)) activeMeasurementScan = undefined
+      measurementScanInProgress = false
+      ui.setMeasurementBusy(false)
       refresh()
     }
   }
 
-  function historyScanFailureMessage(
-    reason: import('./history-scanner').HistoryScanFailureReason | undefined
-  ): string {
-    if (reason === 'no_scroll_container') {
-      return t('scanNoScroll', 'Conversation scroll area was not found. Refresh and try again.')
-    }
-    if (reason === 'no_messages') {
-      return t(
-        'scanNoMessages',
-        'No conversation messages are available yet. Wait for the page to finish loading.'
-      )
-    }
-    if (reason === 'head_not_stable') {
-      return t('scanHeadLoading', 'Older messages are still loading. Wait a few seconds and try again.')
-    }
-    if (reason === 'tail_not_stable') {
-      return t(
-        'scanTailChanging',
-        'The end of the conversation is still changing. Wait for the page to settle.'
-      )
-    }
-    if (reason === 'window_alignment_failed') {
-      return t(
-        'scanAlignmentFailed',
-        'Part of the history could not be read continuously, so the scan was stopped to avoid a misleading estimate.'
-      )
-    }
-    if (reason === 'scan_limit_reached') {
-      return t('scanLimitReached', 'This chat is very long and the scan did not finish. Try once more.')
-    }
-    return t(
-      'scanIncomplete',
-      'Complete history was not confirmed, so this scan will not establish or update the baseline.'
+  async function runCalibrationScan(): Promise<void> {
+    if (historyScanInProgress) return
+    await cleanupExpiredScanDiagnostics(Date.now())
+
+    const startSnapshot = readPageSnapshot(
+      document,
+      location.href,
+      'none'
     )
+    const startAdapter = analyzePageSnapshot(startSnapshot)
+    const rawConversationKey =
+      startAdapter.conversationKey ??
+      rawConversationKeyFromUrl(location.href)
+
+    if (!rawConversationKey) {
+      ui.showScanNotice(
+        t(
+          'calibrationNoConversation',
+          'Open the historical chat you know reached the conversation-length limit, then try again.'
+        ),
+        'warning'
+      )
+      return
+    }
+    if (
+      startAdapter.health !== 'healthy' ||
+      !parserCanaryPasses(startAdapter.messages)
+    ) {
+      ui.showScanNotice(
+        t(
+          'calibrationParserFailed',
+          'Calibration was not saved because message roles could not be read reliably.'
+        ),
+        'error'
+      )
+      return
+    }
+
+    const persistedKey = await persistedConversationKey(
+      rawConversationKey
+    )
+    const expectedGenerationId = latestState.settings.generationId
+    const expectedLedgerRevision =
+      latestState.ledgers[persistedKey]?.ledgerRevision ?? 0
+    const scan: ActiveCalibrationScan = {
+      id: createScanSessionId(),
+      rawConversationKey,
+      persistedConversationKey: persistedKey,
+      expectedGenerationId,
+      expectedLedgerRevision
+    }
+
+    activeCalibrationScan = scan
+    historyScanInProgress = true
+    ui.setCalibrationBusy(true)
+
+    try {
+      const result = await scanConversationHistory(
+        document,
+        observePageMessages
+      )
+
+      if (!isSameActiveScan(scan)) {
+        throw new Error('scan_session_replaced')
+      }
+
+      const currentRawConversationKey =
+        rawConversationKeyFromUrl(location.href) ??
+        analyzePageSnapshot(
+          readPageSnapshot(document, location.href, 'none')
+        ).conversationKey
+
+      if (currentRawConversationKey !== scan.rawConversationKey) {
+        throw new Error('conversation_changed_during_scan')
+      }
+
+      if (!result.complete) {
+        await persistScanFailureDiagnostic(result)
+        ui.showScanNotice(
+          historyScanFailureMessage(result.reason),
+          'warning'
+        )
+        return
+      }
+
+      if (result.unknownRoleCount > 0) {
+        ui.showScanNotice(
+          t(
+            'calibrationParserFailed',
+            'Calibration was not saved because message roles could not be read reliably.'
+          ),
+          'error'
+        )
+        return
+      }
+
+      const uncertaintySources = uniqueUncertaintySources([
+        ...result.uncertaintySources,
+        ...(result.attachmentCount > 0
+          ? (['attachment'] as const)
+          : [])
+      ])
+      const environmentSignature =
+        readEnvironmentSignature(document)
+      const observedAt = Date.now()
+
+      const response = await sendBackground({
+        type: 'guard.commitCalibration',
+        event: {
+          conversationKey: scan.rawConversationKey,
+          expectedGenerationId: scan.expectedGenerationId,
+          expectedLedgerRevision: scan.expectedLedgerRevision,
+          scanSessionId: scan.id,
+          environmentSignature,
+          uncertaintySources,
+          observedMessages: result.observedMessages,
+          observedAt
+        }
+      })
+      latestState = response.state
+
+      try {
+        await chrome.storage.local.remove(SCAN_DIAGNOSTICS_KEY)
+      } catch {
+        // Optional cleanup only.
+      }
+
+      const generation = currentGeneration()
+      const summary = generation
+        ? summarizeGeneration(generation)
+        : undefined
+      if (summary?.failureReference?.quality === 'conservative') {
+        ui.showScanNotice(
+          t(
+            'calibrationConservativeSuccess',
+            'Reference established. This chat includes context that cannot be measured precisely, so alerts will be more conservative.'
+          ),
+          'warning'
+        )
+      } else {
+        ui.showToast(
+          t(
+            'calibrationSuccess',
+            'Calibration complete. The local failure reference is established.'
+          ),
+          4200
+        )
+      }
+    } catch (error) {
+      const reason =
+        error instanceof Error ? error.message : 'unknown_error'
+      ui.showScanNotice(
+        calibrationCommitFailureMessage(reason),
+        'error'
+      )
+    } finally {
+      if (isSameActiveScan(scan)) activeCalibrationScan = undefined
+      historyScanInProgress = false
+      ui.setCalibrationBusy(false)
+      refresh()
+    }
   }
 
-  const markNewChatSend = (target: EventTarget | null): void => {
+  const onStorageChanged = (
+    changes: Record<string, chrome.storage.StorageChange>,
+    areaName: string
+  ): void => {
+    if (
+      areaName !== 'local' ||
+      !changes.conversationGuardState ||
+      historyScanInProgress ||
+      measurementScanInProgress
+    ) {
+      return
+    }
+    void sendBackground({ type: 'guard.readState' })
+      .then((response) => {
+        latestState = response.state
+        renderCurrentUiFromState()
+      })
+      .catch(() => undefined)
+  }
+
+  const captureTurnStart = (target: EventTarget | null): boolean => {
+    if (!isPromptSendTarget(target)) return false
+    const snapshot = readPageSnapshot(
+      document,
+      location.href,
+      'none'
+    )
+    if (!(snapshot.composerText ?? '').trim()) return false
+
+    const now = Date.now()
+    if (
+      pendingTurnStart &&
+      now - pendingTurnStart.capturedAt < 750
+    ) {
+      return true
+    }
+
+    const generationId = latestState.settings.generationId
+    const conversationKey = latestConversationKey
+    const ledger = conversationKey
+      ? latestState.ledgers[conversationKey]
+      : undefined
+
+    if (conversationKey && ledger) {
+      pendingTurnStart = {
+        conversationKey,
+        generationId,
+        ledgerRevision: ledger.ledgerRevision,
+        load: ledger.currentEstimatedLoad,
+        accepted: false,
+        capturedAt: now
+      }
+      return true
+    }
+
+    if (
+      isRootChatUrl(location.href) &&
+      !parseConversationIdFromUrl(location.href) &&
+      snapshot.messages.length === 0
+    ) {
+      pendingTurnStart = {
+        generationId,
+        ledgerRevision: 0,
+        load: 0,
+        accepted: false,
+        capturedAt: now
+      }
+      return true
+    }
+
+    return false
+  }
+
+  const markNewChatSend = (): void => {
     if (!isRootChatUrl(location.href)) return
-    if (!isPromptSendTarget(target)) return
-    const snapshot = readPageSnapshot(document, location.href, 'none')
-    if (parseConversationIdFromUrl(location.href) || snapshot.messages.length > 0) return
-    if (!(snapshot.composerText ?? '').trim()) return
+    const snapshot = readPageSnapshot(
+      document,
+      location.href,
+      'none'
+    )
+    if (
+      parseConversationIdFromUrl(location.href) ||
+      snapshot.messages.length > 0
+    ) {
+      return
+    }
     blankStartArmed = true
     pendingBlankStart = true
-    scheduleRun?.()
   }
 
-  const onSubmit = (event: SubmitEvent): void => markNewChatSend(event.target)
+  const onSubmit = (event: SubmitEvent): void => {
+    if (captureTurnStart(event.target)) markNewChatSend()
+  }
   const onClick = (event: MouseEvent): void => {
-    const element = event.target instanceof Element ? event.target : null
-    const button = element?.closest<HTMLElement>('button, [role="button"]')
-    if (!button) return
-    if (button instanceof HTMLButtonElement && button.disabled) return
-    if (button.getAttribute('aria-disabled') === 'true') return
-    const semantic = `${button.getAttribute('data-testid') ?? ''} ${button.getAttribute('aria-label') ?? ''}`
-    if (/send-button|send message|发送|发送消息/i.test(semantic)) markNewChatSend(button)
+    const element =
+      event.target instanceof Element ? event.target : null
+    const buttonElement =
+      element?.closest<HTMLElement>('button, [role="button"]')
+    if (!buttonElement) return
+    if (
+      buttonElement instanceof HTMLButtonElement &&
+      buttonElement.disabled
+    ) {
+      return
+    }
+    if (buttonElement.getAttribute('aria-disabled') === 'true') return
+    const semantic =
+      `${buttonElement.getAttribute('data-testid') ?? ''} ${buttonElement.getAttribute('aria-label') ?? ''}`
+    if (
+      /send-button|send message|发送|发送消息/i.test(semantic)
+    ) {
+      if (captureTurnStart(buttonElement)) markNewChatSend()
+    }
   }
   const onKeyDown = (event: KeyboardEvent): void => {
-    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return
-    markNewChatSend(event.target)
+    if (
+      event.key !== 'Enter' ||
+      event.shiftKey ||
+      event.isComposing
+    ) {
+      return
+    }
+    if (captureTurnStart(event.target)) markNewChatSend()
   }
+  const onInput = (): void => scheduleRun?.()
 
   function startMonitoring(): void {
     if (monitoringStarted) return
@@ -798,26 +1160,38 @@ export async function startGuard(): Promise<void> {
       ui.showConsentCard()
       return
     }
+
     monitoringStarted = true
     scheduleRun = createCoalescedAsyncRunner(processPage)
 
     document.addEventListener('submit', onSubmit, true)
     document.addEventListener('click', onClick, true)
     document.addEventListener('keydown', onKeyDown, true)
+    document.addEventListener('input', onInput, true)
+    chrome.storage.onChanged.addListener(onStorageChanged)
 
-    const observer = new MutationObserver(() => scheduleRun?.())
+    const mutationRunner = createDebouncedRunner(
+      () => scheduleRun?.(),
+      120
+    )
+    const observer = new MutationObserver(mutationRunner.schedule)
     observer.observe(document.documentElement, {
       childList: true,
       subtree: true,
       characterData: true
     })
+
     window.addEventListener(
       'beforeunload',
       () => {
+        activeCalibrationScan = undefined
         observer.disconnect()
+        mutationRunner.cancel()
         document.removeEventListener('submit', onSubmit, true)
         document.removeEventListener('click', onClick, true)
         document.removeEventListener('keydown', onKeyDown, true)
+        document.removeEventListener('input', onInput, true)
+        chrome.storage.onChanged.removeListener(onStorageChanged)
         ui.destroy()
       },
       { once: true }
@@ -827,11 +1201,164 @@ export async function startGuard(): Promise<void> {
 
   if (canStartMonitoring(latestState.settings)) {
     startMonitoring()
-  } else if (hasDismissedPrivacyConsent(latestState.settings)) {
+  } else if (
+    hasDismissedPrivacyConsent(latestState.settings)
+  ) {
     ui.showDisabled()
   } else {
     ui.showConsentCard()
   }
+
+  function isSameActiveScan(scan: ActiveCalibrationScan): boolean {
+    return activeCalibrationScan?.id === scan.id
+  }
+
+  function isSameActiveMeasurementScan(
+    scan: ActiveCalibrationScan
+  ): boolean {
+    return activeMeasurementScan?.id === scan.id
+  }
+}
+
+async function persistScanFailureDiagnostic(
+  result: HistoryScanResult
+): Promise<void> {
+  try {
+    const diagnostic = buildStoredScanDiagnostics(
+      result,
+      Date.now()
+    )
+    if (diagnostic) {
+      await chrome.storage.local.set({
+        [SCAN_DIAGNOSTICS_KEY]: diagnostic
+      })
+    }
+  } catch {
+    // Diagnostics are optional and contain no raw chat content.
+  }
+}
+
+function historyScanFailureMessage(
+  reason: HistoryScanFailureReason | undefined
+): string {
+  if (reason === 'no_scroll_container') {
+    return t(
+      'scanNoScroll',
+      'Conversation scroll area was not found. Refresh and try again.'
+    )
+  }
+  if (reason === 'no_messages') {
+    return t(
+      'scanNoMessages',
+      'No conversation messages are available yet. Wait for the page to finish loading.'
+    )
+  }
+  if (reason === 'head_not_stable') {
+    return t(
+      'scanHeadLoading',
+      'Older history did not finish stabilizing, so calibration was not saved. Keep the page open and try again.'
+    )
+  }
+  if (reason === 'tail_not_stable') {
+    return t(
+      'scanTailChanging',
+      'The end of the conversation is still changing. Calibration was not saved.'
+    )
+  }
+  if (reason === 'window_alignment_failed') {
+    return t(
+      'scanAlignmentFailed',
+      'Part of the history could not be read continuously, so calibration was stopped instead of guessing.'
+    )
+  }
+  if (reason === 'scan_limit_reached') {
+    return t(
+      'scanLimitReached',
+      'This chat is very long and the full history could not be confirmed. Calibration was not saved.'
+    )
+  }
+  return t(
+    'scanIncomplete',
+    'Complete history was not confirmed, so calibration was not saved.'
+  )
+}
+
+function measurementCommitFailureMessage(reason: string): string {
+  if (
+    reason === 'conversation_changed_during_scan' ||
+    reason === 'ledger_changed_during_scan'
+  ) {
+    return t(
+      'measurementConversationChanged',
+      'The chat changed while it was being read. Nothing was updated; keep this chat open and try again.'
+    )
+  }
+  if (reason === 'generation_changed_during_scan') {
+    return t(
+      'measurementGenerationChanged',
+      'The alert reference changed while this chat was being read. Nothing was updated; try again.'
+    )
+  }
+  if (
+    reason === 'measurement_parser_unreliable' ||
+    reason === 'measurement_scan_empty'
+  ) {
+    return t(
+      'measurementSampleUnusable',
+      'This chat could not be measured reliably enough to determine its current risk.'
+    )
+  }
+  return t(
+    'measurementScanFailed',
+    'The full chat could not be read, so this chat\'s risk was not updated.'
+  )
+}
+
+function calibrationCommitFailureMessage(reason: string): string {
+  if (
+    reason === 'conversation_changed_during_scan' ||
+    reason === 'ledger_changed_during_scan'
+  ) {
+    return t(
+      'calibrationConversationChanged',
+      'The conversation changed while it was being scanned. Nothing was calibrated; keep this chat open and try again.'
+    )
+  }
+  if (reason === 'generation_changed_during_scan') {
+    return t(
+      'calibrationGenerationChanged',
+      'The alert reference changed while scanning. Nothing was calibrated; try again.'
+    )
+  }
+  if (
+    reason === 'calibration_parser_unreliable' ||
+    reason === 'calibration_scan_empty'
+  ) {
+    return t(
+      'calibrationSampleUnusable',
+      'This chat could not be measured reliably enough to use as a calibration sample.'
+    )
+  }
+  return t(
+    'toastScanFailed',
+    'Calibration did not finish. No failure reference was saved.'
+  )
+}
+
+function rawConversationKeyFromUrl(
+  url: string
+): string | undefined {
+  const conversationId = parseConversationIdFromUrl(url)
+  return conversationId
+    ? `chatgpt:${conversationId}`
+    : undefined
+}
+
+function createScanSessionId(): string {
+  if (typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `scan-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
 export function canStartMonitoring(settings: {
@@ -845,62 +1372,6 @@ export function canStartMonitoring(settings: {
   })
 }
 
-export function deriveLearningStage(
-  summary: ReturnType<typeof summarizeGeneration>
-): LearningStage {
-  if (summary.independentConversations <= 0) return 'learning'
-  if (summary.independentConversations === 1) return 'initial'
-  const stable =
-    summary.safeBoundary !== undefined &&
-    summary.failureBoundary !== undefined &&
-    summary.turnBuffer > 0 &&
-    summary.confirmedSafeConversations >=
-      CALIBRATION_DEFAULTS.minConfirmedSafeConversationsForStable &&
-    summary.independentConversations >=
-      CALIBRATION_DEFAULTS.minIndependentBoundaryConversationsForStable
-  return stable ? 'stable' : 'calibrating'
-}
-
-export function deriveBaselineState(
-  summary: ReturnType<typeof summarizeGeneration>
-): BaselineState {
-  const hasBoundary =
-    summary.safeBoundary !== undefined || summary.failureBoundary !== undefined
-  if (!hasBoundary) return 'none'
-  if (summary.confirmedFailureConversations > 0) return 'confirmed'
-  if (summary.confirmedSafeConversations > 0) return 'safe'
-  if (summary.usingWarmStartPrior) return 'inherited'
-  return 'safe'
-}
-
-export function hasUsableBaseline(
-  summary: ReturnType<typeof summarizeGeneration>
-): boolean {
-  return deriveBaselineState(summary) !== 'none'
-}
-
-export function shouldShowScanAction(
-  _summary: ReturnType<typeof summarizeGeneration>
-): boolean {
-  return true
-}
-
-async function sendBackground(
-  request: BackgroundRequest
-): Promise<Extract<BackgroundResponse, { ok: true }>> {
-  const response = (await chrome.runtime.sendMessage(request)) as BackgroundResponse
-  if (!response.ok) throw new Error(response.error)
-  return response
-}
-
-function isRootChatUrl(url: string): boolean {
-  const parsed = new URL(url)
-  return (
-    parsed.hostname === 'chatgpt.com' &&
-    (parsed.pathname === '/' || parsed.pathname === '/chat')
-  )
-}
-
 export function resolveCoverageLifecycle(input: {
   isRoot: boolean
   hasConversationId: boolean
@@ -912,12 +1383,19 @@ export function resolveCoverageLifecycle(input: {
 }): {
   blankStartArmed: boolean
   pendingBlankStart: boolean
-  coverageEvidence: 'observed_from_start' | 'persisted_complete' | 'none'
+  coverageEvidence:
+    | 'observed_from_start'
+    | 'persisted_complete'
+    | 'none'
 } {
   let blankStartArmed = input.blankStartArmed
   let pendingBlankStart = input.pendingBlankStart
 
-  if (input.isRoot && !input.hasConversationId && input.messageCount === 0) {
+  if (
+    input.isRoot &&
+    !input.hasConversationId &&
+    input.messageCount === 0
+  ) {
     blankStartArmed = true
   } else if (
     blankStartArmed &&
@@ -941,45 +1419,61 @@ export function resolveCoverageLifecycle(input: {
   }
 }
 
+function isRootChatUrl(url: string): boolean {
+  const parsed = new URL(url)
+  return (
+    parsed.hostname === 'chatgpt.com' &&
+    (parsed.pathname === '/' || parsed.pathname === '/chat')
+  )
+}
+
 function isPromptSendTarget(target: EventTarget | null): boolean {
-  const element = target instanceof Element ? target : null
+  const element =
+    target instanceof Element ? target : null
   if (!element) return false
-  if (element.matches('#prompt-textarea, [data-testid="prompt-textarea"]')) return true
-  if (element.closest('#prompt-textarea, [data-testid="prompt-textarea"]')) return true
+  if (
+    element.matches(
+      '#prompt-textarea, [data-testid="prompt-textarea"]'
+    )
+  ) {
+    return true
+  }
+  if (
+    element.closest(
+      '#prompt-textarea, [data-testid="prompt-textarea"]'
+    )
+  ) {
+    return true
+  }
   const form = element.closest('form')
   if (!form) return false
-  return form.querySelector('#prompt-textarea, [data-testid="prompt-textarea"]') !== null
-}
-
-function countActiveUserTurns(snapshot: {
-  activeFingerprints: string[]
-  messages: Array<{ fingerprint: string; role: string }>
-}): number {
-  const records = new Map(
-    snapshot.messages.map((message) => [message.fingerprint, message])
-  )
-  return snapshot.activeFingerprints.reduce(
-    (count, fingerprint) =>
-      count + (records.get(fingerprint)?.role === 'user' ? 1 : 0),
-    0
-  )
-}
-
-function controlsEqual(
-  left: ConversationControl,
-  right: ConversationControl
-): boolean {
   return (
-    left.muted === right.muted &&
-    left.snoozeUntilUserTurn === right.snoozeUntilUserTurn &&
-    left.lastDisplayedLevel === right.lastDisplayedLevel &&
-    left.lastAlertLevel === right.lastAlertLevel &&
-    left.lastAlertScore === right.lastAlertScore &&
-    left.lastAlertUserTurn === right.lastAlertUserTurn
+    form.querySelector(
+      '#prompt-textarea, [data-testid="prompt-textarea"]'
+    ) !== null
   )
+}
+
+function uniqueUncertaintySources(
+  values: UncertaintySource[]
+): UncertaintySource[] {
+  return Array.from(new Set(values))
+}
+
+async function sendBackground(
+  request: BackgroundRequest
+): Promise<Extract<BackgroundResponse, { ok: true }>> {
+  const response =
+    (await chrome.runtime.sendMessage(
+      request
+    )) as BackgroundResponse
+  if (!response.ok) throw new Error(response.error)
+  return response
 }
 
 async function copyText(text: string): Promise<void> {
-  if (!navigator.clipboard?.writeText) throw new Error('clipboard_unavailable')
+  if (!navigator.clipboard?.writeText) {
+    throw new Error('clipboard_unavailable')
+  }
   await navigator.clipboard.writeText(text)
 }

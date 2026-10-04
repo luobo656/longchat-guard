@@ -12,6 +12,7 @@ function failedResult(stageCount = 10): HistoryScanResult {
     observedMessages: [],
     messageCount: 0,
     attachmentCount: 0,
+    uncertaintySources: [],
     unknownRoleCount: 0,
     diagnostics: Array.from({ length: stageCount }, (_, index) => ({
       at: index,
@@ -37,7 +38,7 @@ describe('scan diagnostic retention', () => {
   it('stores only a bounded structural tail without chat content or surface hints', () => {
     const saved = buildStoredScanDiagnostics(failedResult(), 1000)
 
-    expect(saved?.version).toBe(3)
+    expect(saved?.version).toBe(4)
     expect(saved?.reason).toBe('window_alignment_failed')
     expect(saved?.stages).toHaveLength(8)
     expect(saved?.stages[0]?.scrollTop).toBe(20)

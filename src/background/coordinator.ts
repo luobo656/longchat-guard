@@ -1,27 +1,40 @@
-import { loadState, saveState, mergeLedgerSnapshots, withPrivacyConsent, type LocalStorageArea, type PersistedState } from '../core/storage'
+import {
+  loadState,
+  readState,
+  saveState,
+  mergeLedgerSnapshots,
+  withPrivacyConsent,
+  type LocalStorageArea,
+  type PersistedState
+} from '../core/storage'
 import { reconcileSequence, type TailEvidence } from '../core/sequence-reconciler'
 import {
+  recordConfirmedFailureReference,
   recordFailureObservation,
   recordSuccessfulAssistantCompletion,
-  seedGrowthHistory,
+  recordTurnGrowth,
   summarizeGeneration
 } from '../core/calibration'
 import { assessRisk } from '../core/risk-engine'
+import { anonymizeConversationKey } from '../core/fingerprinter'
+import { clearLearningData, startNewGeneration } from '../core/generation-manager'
 import {
-  clearLearningData,
-  restoreGeneration as restoreGenerationState,
-  startNewGeneration
-} from '../core/generation-manager'
+  deriveCalibrationState,
+  deriveEnvironmentConfidence,
+  deriveMeasurementState
+} from '../core/product-state'
 import type {
   CalibrationGeneration,
   ConversationControl,
   CoverageState,
+  EnvironmentSignature,
   ErrorKind,
   EvidenceConfidence,
   ObservedMessageRecord,
   ParserHealth,
   PersistedConversationLedger,
-  RiskAssessment
+  RiskAssessment,
+  UncertaintySource
 } from '../core/types'
 
 export interface ObservedConversationWindow {
@@ -31,14 +44,20 @@ export interface ObservedConversationWindow {
   tailEvidence: TailEvidence
   observedMessages: ObservedMessageRecord[]
   composerTokenEstimate: number
+  environmentSignature: EnvironmentSignature
+  uncertaintySources: UncertaintySource[]
+  expectedGenerationId: string
+  baseRevision: number
+  observationEpoch: number
   observedAt: number
 }
 
 export interface CompletionEvent {
   conversationKey: string
   assistantFingerprint: string
-  estimatedLoad: number
-  assistantTokenCount: number
+  beforeTurnLoad: number
+  expectedGenerationId: string
+  expectedLedgerRevision: number
   observedAt: number
 }
 
@@ -47,32 +66,54 @@ export interface FailureEvent {
   errorKind: ErrorKind
   confidence: EvidenceConfidence
   composerTokenEstimate: number
-  forcePrompt?: boolean
+  expectedGenerationId: string
+  expectedLedgerRevision: number
   observedAt: number
 }
 
-export interface SeedGrowthHistoryEvent {
+export interface CalibrationCommitEvent {
   conversationKey: string
-  tokenCounts: number[]
+  expectedGenerationId: string
+  expectedLedgerRevision: number
+  scanSessionId: string
+  environmentSignature: EnvironmentSignature
+  uncertaintySources: UncertaintySource[]
+  observedMessages: ObservedMessageRecord[]
+  observedAt: number
+}
+
+export interface MeasurementScanCommitEvent {
+  conversationKey: string
+  expectedGenerationId: string
+  expectedLedgerRevision: number
+  environmentSignature: EnvironmentSignature
+  uncertaintySources: UncertaintySource[]
+  observedMessages: ObservedMessageRecord[]
   observedAt: number
 }
 
 export type BackgroundRequest =
   | { type: 'guard.loadState' }
-  | { type: 'guard.upsertLedger'; snapshot: PersistedConversationLedger }
+  | { type: 'guard.readState' }
   | { type: 'guard.observeWindow'; window: ObservedConversationWindow }
   | { type: 'guard.recordCompletion'; event: CompletionEvent }
   | { type: 'guard.recordFailure'; event: FailureEvent }
-  | { type: 'guard.seedGrowthHistory'; event: SeedGrowthHistoryEvent }
+  | { type: 'guard.commitCalibration'; event: CalibrationCommitEvent }
+  | { type: 'guard.commitMeasurementScan'; event: MeasurementScanCommitEvent }
   | { type: 'guard.startGeneration'; reason: 'environment_change' | 'recalibrate'; observedAt: number }
-  | { type: 'guard.restoreGeneration'; generationId: string; observedAt: number }
   | { type: 'guard.clearLearning'; observedAt: number }
   | { type: 'guard.confirmPendingFailure'; conversationKey: string; accepted: boolean; observedAt: number }
   | { type: 'guard.updateControl'; conversationKey: string; patch: Partial<ConversationControl> }
   | { type: 'guard.updatePrivacyConsent'; accepted: boolean; observedAt: number }
 
 export type BackgroundResponse =
-  | { ok: true; state: PersistedState; snapshot?: PersistedConversationLedger; risk?: RiskAssessment }
+  | {
+      ok: true
+      state: PersistedState
+      snapshot?: PersistedConversationLedger
+      risk?: RiskAssessment
+      staleObservation?: boolean
+    }
   | { ok: false; error: string }
 
 export class StorageMutationCoordinator {
@@ -84,198 +125,458 @@ export class StorageMutationCoordinator {
     return this.enqueue(() => loadState(this.storage))
   }
 
-  upsertLedger(snapshot: PersistedConversationLedger): Promise<{
-    state: PersistedState
-    snapshot: PersistedConversationLedger
-  }> {
-    return this.enqueue(async () => {
-      const state = await loadState(this.storage)
-      const generationId = state.settings.generationId
-      const existing = state.ledgers[snapshot.conversationKey]
-      const normalizedIncoming: PersistedConversationLedger = {
-        ...snapshot,
-        generationId,
-        coverageState: strongestCoverage(existing?.coverageState, snapshot.coverageState)
-      }
-      const merged = mergeLedgerSnapshots(existing, normalizedIncoming)
-      state.ledgers[snapshot.conversationKey] = merged
-      await saveState(this.storage, state)
-      return { state, snapshot: merged }
-    })
+  readState(): Promise<PersistedState> {
+    return this.enqueue(() => readState(this.storage))
   }
 
   observeWindow(window: ObservedConversationWindow): Promise<{
+    state: PersistedState
+    snapshot?: PersistedConversationLedger
+    risk?: RiskAssessment
+    staleObservation: boolean
+  }> {
+    return this.enqueue(async () => {
+      const state = await loadState(this.storage)
+      const generation = currentGeneration(state)
+      if (!generation) throw new Error('missing_generation')
+
+      const conversationKey = await anonymizeConversationKey(
+        window.conversationKey,
+        state.installSalt
+      )
+      const existing = state.ledgers[conversationKey]
+
+      if (window.expectedGenerationId !== state.settings.generationId) {
+        return {
+          state,
+          ...(existing
+            ? {
+                snapshot: existing,
+                risk: riskFor(
+                  existing,
+                  generation,
+                  window.composerTokenEstimate
+                )
+              }
+            : {}),
+          staleObservation: true
+        }
+      }
+
+      if (
+        existing &&
+        window.baseRevision !== existing.ledgerRevision
+      ) {
+        return {
+          state,
+          snapshot: existing,
+          risk: riskFor(
+            existing,
+            generation,
+            window.composerTokenEstimate
+          ),
+          staleObservation: true
+        }
+      }
+
+      const reconcileResult = reconcileSequence({
+        existingMessages: existing?.messages ?? [],
+        activeFingerprints: existing?.activeFingerprints ?? [],
+        observed: window.observedMessages,
+        tailEvidence: window.tailEvidence,
+        coverageState: window.coverageState,
+        parserHealth: window.parserHealth,
+        now: window.observedAt
+      })
+
+      const retainedPrefixLoad =
+        reconcileResult.reliability === 'reliable'
+          ? Math.max(0, existing?.retainedPrefixLoad ?? 0)
+          : 0
+
+      const currentEstimatedLoad =
+        retainedPrefixLoad +
+        reconcileResult.activeFingerprints.reduce((total, fingerprint) => {
+          const message = reconcileResult.messages.find(
+            (item) => item.fingerprint === fingerprint
+          )
+          return total + Math.max(0, message?.tokenEstimate ?? 0)
+        }, 0)
+
+      const uncertaintySources = unique([
+        ...window.uncertaintySources,
+        ...(window.observedMessages.some(
+          (message) => (message.attachmentCount ?? 0) > 0
+        )
+          ? (['attachment'] as const)
+          : [])
+      ])
+
+      const sameGeneration = existing?.generationId === generation.id
+      const snapshot: PersistedConversationLedger = {
+        conversationKey,
+        generationId: generation.id,
+        ledgerRevision: (existing?.ledgerRevision ?? 0) + 1,
+        observationEpoch: Math.max(
+          window.observationEpoch,
+          window.observedAt
+        ),
+        coverageState: reconcileResult.coverageState,
+        parserHealth: reconcileResult.parserHealth,
+        messages: reconcileResult.messages,
+        activeFingerprints: reconcileResult.activeFingerprints,
+        sequenceReliability: reconcileResult.reliability,
+        ...(reconcileResult.uncertainReason
+          ? { sequenceUncertainReason: reconcileResult.uncertainReason }
+          : {}),
+        currentEstimatedLoad,
+        ...(retainedPrefixLoad > 0 ? { retainedPrefixLoad } : {}),
+        uncertaintySources,
+        environmentSignature: window.environmentSignature,
+        completedAssistantFingerprints:
+          sameGeneration
+            ? existing?.completedAssistantFingerprints ?? []
+            : [],
+        confirmedFailureFingerprints:
+          sameGeneration
+            ? existing?.confirmedFailureFingerprints ?? []
+            : [],
+        dismissedFailureKeys:
+          sameGeneration ? existing?.dismissedFailureKeys ?? [] : [],
+        updatedAt: window.observedAt
+      }
+
+      if (existing && observationEquivalent(existing, snapshot)) {
+        return {
+          state,
+          snapshot: existing,
+          risk: riskFor(
+            existing,
+            generation,
+            window.composerTokenEstimate
+          ),
+          staleObservation: false
+        }
+      }
+
+      const merged = mergeLedgerSnapshots(existing, snapshot)
+      state.ledgers[conversationKey] = merged
+      const risk = riskFor(
+        merged,
+        generation,
+        window.composerTokenEstimate
+      )
+      await saveState(this.storage, state)
+      return {
+        state,
+        snapshot: merged,
+        risk,
+        staleObservation: false
+      }
+    })
+  }
+
+  recordCompletion(
+    event: CompletionEvent
+  ): Promise<{ state: PersistedState; risk?: RiskAssessment }> {
+    return this.enqueue(async () => {
+      const state = await loadState(this.storage)
+      const conversationKey = await anonymizeConversationKey(
+        event.conversationKey,
+        state.installSalt
+      )
+      const ledger = state.ledgers[conversationKey]
+      const generation = currentGeneration(state)
+      if (!ledger || !generation) return { state }
+      if (event.expectedGenerationId !== state.settings.generationId) {
+        return { state, risk: riskFor(ledger, generation, 0) }
+      }
+      if (ledger.ledgerRevision !== event.expectedLedgerRevision) {
+        return { state, risk: riskFor(ledger, generation, 0) }
+      }
+
+      if (
+        ledger.completedAssistantFingerprints.includes(
+          event.assistantFingerprint
+        )
+      ) {
+        return { state, risk: riskFor(ledger, generation, 0) }
+      }
+
+      ledger.completedAssistantFingerprints = unique([
+        ...ledger.completedAssistantFingerprints,
+        event.assistantFingerprint
+      ])
+      ledger.ledgerRevision += 1
+      ledger.observationEpoch = Math.max(
+        ledger.observationEpoch,
+        event.observedAt
+      )
+      ledger.updatedAt = Math.max(ledger.updatedAt, event.observedAt)
+
+      let updatedGeneration = recordSuccessfulAssistantCompletion(
+        generation,
+        {
+          conversationKey,
+          generationId: generation.id,
+          estimatedLoad: ledger.currentEstimatedLoad,
+          assistantFingerprint: event.assistantFingerprint,
+          coverageState: ledger.coverageState,
+          parserHealth: ledger.parserHealth,
+          sequenceReliability: ledger.sequenceReliability,
+          uncertaintySources: ledger.uncertaintySources,
+          ...(ledger.environmentSignature
+            ? { environmentSignature: ledger.environmentSignature }
+            : {}),
+          observedAt: event.observedAt
+        }
+      )
+
+      const delta = ledger.currentEstimatedLoad - event.beforeTurnLoad
+      if (delta > 0) {
+        const measurementState = deriveMeasurementState({
+          supported: true,
+          ledger
+        })
+        updatedGeneration = recordTurnGrowth(updatedGeneration, {
+          conversationKey,
+          generationId: generation.id,
+          beforeLoad: Math.max(0, event.beforeTurnLoad),
+          afterLoad: ledger.currentEstimatedLoad,
+          delta,
+          uncertain:
+            measurementState !== 'complete' ||
+            ledger.uncertaintySources.length > 0,
+          uncertaintySources: ledger.uncertaintySources,
+          observedAt: event.observedAt
+        })
+      }
+
+      replaceGeneration(state, updatedGeneration)
+      await saveState(this.storage, state)
+      return {
+        state,
+        risk: riskFor(ledger, updatedGeneration, 0)
+      }
+    })
+  }
+
+  recordFailure(
+    event: FailureEvent
+  ): Promise<{ state: PersistedState; risk?: RiskAssessment }> {
+    return this.enqueue(async () => {
+      const state = await loadState(this.storage)
+      const conversationKey = await anonymizeConversationKey(
+        event.conversationKey,
+        state.installSalt
+      )
+      const ledger = state.ledgers[conversationKey]
+      const generation = currentGeneration(state)
+      if (!ledger || !generation) return { state }
+      if (event.expectedGenerationId !== state.settings.generationId) {
+        return {
+          state,
+          risk: riskFor(
+            ledger,
+            generation,
+            event.composerTokenEstimate
+          )
+        }
+      }
+      if (ledger.ledgerRevision !== event.expectedLedgerRevision) {
+        return {
+          state,
+          risk: riskFor(
+            ledger,
+            generation,
+            event.composerTokenEstimate
+          )
+        }
+      }
+
+      if (event.errorKind !== 'conversation_length_limit') {
+        return {
+          state,
+          risk: riskFor(
+            ledger,
+            generation,
+            event.composerTokenEstimate
+          )
+        }
+      }
+
+      const estimatedLoad =
+        ledger.currentEstimatedLoad +
+        Math.max(0, event.composerTokenEstimate)
+      const confirmedKey = passiveConfirmedFailureKey(
+        generation.id,
+        event.errorKind
+      )
+      const dismissedKey = dismissedFailureKey(
+        generation.id,
+        event.errorKind
+      )
+      if (
+        ledger.confirmedFailureFingerprints.includes(confirmedKey) ||
+        ledger.dismissedFailureKeys.includes(dismissedKey)
+      ) {
+        return {
+          state,
+          risk: riskFor(
+            ledger,
+            generation,
+            event.composerTokenEstimate
+          )
+        }
+      }
+
+      const updatedGeneration = recordFailureObservation(
+        generation,
+        {
+          conversationKey,
+          generationId: generation.id,
+          estimatedLoad,
+          errorKind: event.errorKind,
+          confidence: event.confidence,
+          coverageState: ledger.coverageState,
+          parserHealth: ledger.parserHealth,
+          sequenceReliability: ledger.sequenceReliability,
+          uncertaintySources: ledger.uncertaintySources,
+          ...(ledger.environmentSignature
+            ? { environmentSignature: ledger.environmentSignature }
+            : {}),
+          observedAt: event.observedAt
+        }
+      )
+
+      replaceGeneration(state, updatedGeneration)
+      await saveState(this.storage, state)
+      return {
+        state,
+        risk: riskFor(
+          ledger,
+          updatedGeneration,
+          event.composerTokenEstimate
+        )
+      }
+    })
+  }
+
+  commitMeasurementScan(
+    event: MeasurementScanCommitEvent
+  ): Promise<{
     state: PersistedState
     snapshot: PersistedConversationLedger
     risk: RiskAssessment
   }> {
     return this.enqueue(async () => {
       const state = await loadState(this.storage)
-      const generationId = state.settings.generationId
-      const existing = state.ledgers[window.conversationKey]
-      const reconcileResult = reconcileSequence({
-        existingMessages: existing?.messages ?? [],
-        activeFingerprints: existing?.activeFingerprints ?? [],
-        observed: window.observedMessages,
-        tailEvidence: window.tailEvidence,
-        coverageState: strongestCoverage(existing?.coverageState, window.coverageState),
-        parserHealth: window.parserHealth,
-        now: window.observedAt
-      })
-      const retainedPrefixLoad = Math.max(0, existing?.retainedPrefixLoad ?? 0)
-      const currentEstimatedLoad = retainedPrefixLoad + reconcileResult.activeFingerprints.reduce((total, fingerprint) => {
-        return total + (reconcileResult.messages.find((message) => message.fingerprint === fingerprint)?.tokenEstimate ?? 0)
-      }, 0)
-      const snapshot: PersistedConversationLedger = {
-        conversationKey: window.conversationKey,
-        generationId,
-        coverageState: reconcileResult.coverageState,
-        parserHealth: reconcileResult.parserHealth,
-        messages: reconcileResult.messages,
-        activeFingerprints: reconcileResult.activeFingerprints,
-        sequenceReliability: reconcileResult.reliability,
-        currentEstimatedLoad,
-        ...(retainedPrefixLoad > 0 ? { retainedPrefixLoad } : {}),
-        updatedAt: window.observedAt
+      if (state.settings.generationId !== event.expectedGenerationId) {
+        throw new Error('generation_changed_during_scan')
       }
-      if (reconcileResult.uncertainReason) {
-        snapshot.sequenceUncertainReason = reconcileResult.uncertainReason
-      }
-      state.ledgers[window.conversationKey] = snapshot
       const generation = currentGeneration(state)
       if (!generation) throw new Error('missing_generation')
-      const risk = riskFor(snapshot, generation, window.composerTokenEstimate)
-      await saveState(this.storage, state)
-      return { state, snapshot, risk }
-    })
-  }
 
-  recordCompletion(event: CompletionEvent): Promise<{ state: PersistedState; risk?: RiskAssessment }> {
-    return this.enqueue(async () => {
-      let state = await loadState(this.storage)
-      const ledger = state.ledgers[event.conversationKey]
-      const generation = currentGeneration(state)
-      if (!ledger || !generation) return { state }
-      if (ledger.completedAssistantFingerprints?.includes(event.assistantFingerprint)) {
-        return { state, risk: riskFor(ledger, generation) }
+      const conversationKey = await anonymizeConversationKey(
+        event.conversationKey,
+        state.installSalt
+      )
+      const existing = state.ledgers[conversationKey]
+      const currentRevision = existing?.ledgerRevision ?? 0
+      if (currentRevision !== event.expectedLedgerRevision) {
+        throw new Error('ledger_changed_during_scan')
       }
+      validateFullHistoryScan(event.observedMessages, 'measurement')
 
-      ledger.completedAssistantFingerprints = unique([
-        ...(ledger.completedAssistantFingerprints ?? []),
-        event.assistantFingerprint
-      ])
-      const wasSuggested = generation.changePointSuggested ?? false
-      const observation = {
-        conversationKey: event.conversationKey,
+      const snapshot = fullHistorySnapshot({
+        existing,
+        conversationKey,
         generationId: generation.id,
-        estimatedLoad: event.estimatedLoad,
-        assistantTokenCount: event.assistantTokenCount,
-        assistantFingerprint: event.assistantFingerprint,
-        coverageState: ledger.coverageState,
-        parserHealth: ledger.parserHealth,
+        currentRevision,
+        environmentSignature: event.environmentSignature,
+        uncertaintySources: event.uncertaintySources,
+        observedMessages: event.observedMessages,
         observedAt: event.observedAt
-      } as const
-      const updatedGeneration = recordSuccessfulAssistantCompletion(generation, observation)
-      replaceGeneration(state, updatedGeneration)
-
-      if (!wasSuggested && updatedGeneration.changePointSuggested) {
-        state = rollToAutoChangeGenerationFromSuccess(state, observation)
-        const activeGeneration = currentGeneration(state)
-        if (!activeGeneration) throw new Error('missing_generation_after_auto_change')
-        ledger.generationId = activeGeneration.id
-        state.ledgers[event.conversationKey] = ledger
-        await saveState(this.storage, state)
-        return { state, risk: riskFor(ledger, activeGeneration) }
-      }
-
+      })
+      const merged = mergeLedgerSnapshots(existing, snapshot)
+      state.ledgers[conversationKey] = merged
       await saveState(this.storage, state)
-      return { state, risk: riskFor(ledger, updatedGeneration) }
+
+      return {
+        state,
+        snapshot: merged,
+        risk: riskFor(merged, generation, 0)
+      }
     })
   }
 
-  seedGrowthHistory(event: SeedGrowthHistoryEvent): Promise<{ state: PersistedState; risk?: RiskAssessment }> {
+  commitCalibration(
+    event: CalibrationCommitEvent
+  ): Promise<{
+    state: PersistedState
+    snapshot: PersistedConversationLedger
+    risk: RiskAssessment
+  }> {
     return this.enqueue(async () => {
       const state = await loadState(this.storage)
+      if (state.settings.generationId !== event.expectedGenerationId) {
+        throw new Error('generation_changed_during_scan')
+      }
       const generation = currentGeneration(state)
-      if (!generation) return { state }
-      const updatedGeneration = seedGrowthHistory(
-        generation,
+      if (!generation) throw new Error('missing_generation')
+
+      const conversationKey = await anonymizeConversationKey(
         event.conversationKey,
-        event.tokenCounts
+        state.installSalt
+      )
+      const existing = state.ledgers[conversationKey]
+      const currentRevision = existing?.ledgerRevision ?? 0
+      if (currentRevision !== event.expectedLedgerRevision) {
+        throw new Error('ledger_changed_during_scan')
+      }
+      validateFullHistoryScan(event.observedMessages, 'calibration')
+
+      const snapshot = fullHistorySnapshot({
+        existing,
+        conversationKey,
+        generationId: generation.id,
+        currentRevision,
+        environmentSignature: event.environmentSignature,
+        uncertaintySources: event.uncertaintySources,
+        observedMessages: event.observedMessages,
+        observedAt: event.observedAt,
+        calibrationFailureFingerprint: calibrationFailureKey(
+          generation.id,
+          event.scanSessionId
+        )
+      })
+
+      const merged = mergeLedgerSnapshots(existing, snapshot)
+      state.ledgers[conversationKey] = merged
+
+      const updatedGeneration = recordConfirmedFailureReference(
+        generation,
+        {
+          conversationKey,
+          generationId: generation.id,
+          estimatedLoad: merged.currentEstimatedLoad,
+          errorKind: 'conversation_length_limit',
+          coverageState: merged.coverageState,
+          parserHealth: merged.parserHealth,
+          sequenceReliability: merged.sequenceReliability,
+          uncertaintySources: merged.uncertaintySources,
+          environmentSignature: event.environmentSignature,
+          observedAt: event.observedAt
+        }
       )
       replaceGeneration(state, updatedGeneration)
       await saveState(this.storage, state)
-      const ledger = state.ledgers[event.conversationKey]
+
       return {
         state,
-        ...(ledger ? { risk: riskFor(ledger, updatedGeneration) } : {})
+        snapshot: merged,
+        risk: riskFor(merged, updatedGeneration, 0)
       }
-    })
-  }
-
-  recordFailure(event: FailureEvent): Promise<{ state: PersistedState; risk?: RiskAssessment }> {
-    return this.enqueue(async () => {
-      let state = await loadState(this.storage)
-      const ledger = state.ledgers[event.conversationKey]
-      const generation = currentGeneration(state)
-      if (!ledger || !generation) return { state }
-
-      const estimatedLoad = ledger.currentEstimatedLoad + event.composerTokenEstimate
-      const wasSuggested = generation.changePointSuggested ?? false
-      const confirmedKey = confirmedFailureKey(generation.id, event.errorKind)
-      const dismissedKey = dismissedFailureKey(generation.id, event.errorKind, estimatedLoad)
-      if (ledger.confirmedFailureFingerprints?.includes(confirmedKey)) {
-        return { state, risk: riskFor(ledger, generation, event.composerTokenEstimate) }
-      }
-      if (
-        !event.forcePrompt &&
-        event.confidence !== 'high' &&
-        ledger.dismissedFailureKeys?.includes(dismissedKey)
-      ) {
-        return { state, risk: riskFor(ledger, generation, event.composerTokenEstimate) }
-      }
-
-      const observation = {
-        conversationKey: event.conversationKey,
-        generationId: generation.id,
-        estimatedLoad,
-        errorKind: event.errorKind,
-        confidence: event.confidence,
-        coverageState: ledger.coverageState,
-        parserHealth: ledger.parserHealth,
-        observedAt: event.observedAt
-      } as const
-      const updatedGeneration = recordFailureObservation(generation, observation)
-
-      if (event.errorKind === 'conversation_length_limit' && event.confidence === 'high') {
-        ledger.confirmedFailureFingerprints = unique([
-          ...(ledger.confirmedFailureFingerprints ?? []),
-          confirmedKey
-        ])
-      }
-      replaceGeneration(state, updatedGeneration)
-
-      if (
-        event.errorKind === 'conversation_length_limit' &&
-        event.confidence === 'high' &&
-        !wasSuggested &&
-        updatedGeneration.changePointSuggested
-      ) {
-        state = rollToAutoChangeGeneration(state, observation)
-        const activeGeneration = currentGeneration(state)
-        if (!activeGeneration) throw new Error('missing_generation_after_auto_change')
-        ledger.generationId = activeGeneration.id
-        ledger.confirmedFailureFingerprints = unique([
-          ...(ledger.confirmedFailureFingerprints ?? []),
-          confirmedFailureKey(activeGeneration.id, event.errorKind)
-        ])
-        state.ledgers[event.conversationKey] = ledger
-        await saveState(this.storage, state)
-        return { state, risk: riskFor(ledger, activeGeneration, event.composerTokenEstimate) }
-      }
-
-      await saveState(this.storage, state)
-      return { state, risk: riskFor(ledger, updatedGeneration, event.composerTokenEstimate) }
     })
   }
 
@@ -286,15 +587,6 @@ export class StorageMutationCoordinator {
     return this.enqueue(async () => {
       const state = await loadState(this.storage)
       const next = startNewGeneration(state, reason, observedAt)
-      await saveState(this.storage, next)
-      return next
-    })
-  }
-
-  restoreGeneration(generationId: string, observedAt: number): Promise<PersistedState> {
-    return this.enqueue(async () => {
-      const state = await loadState(this.storage)
-      const next = restoreGenerationState(state, generationId, observedAt)
       await saveState(this.storage, next)
       return next
     })
@@ -315,67 +607,93 @@ export class StorageMutationCoordinator {
     observedAt: number
   ): Promise<{ state: PersistedState; risk?: RiskAssessment }> {
     return this.enqueue(async () => {
-      let state = await loadState(this.storage)
+      const state = await loadState(this.storage)
+      conversationKey = await anonymizeConversationKey(
+        conversationKey,
+        state.installSalt
+      )
       const generation = currentGeneration(state)
       const ledger = state.ledgers[conversationKey]
       if (!generation || !ledger) return { state }
-      const wasSuggested = generation.changePointSuggested ?? false
 
-      const pending = generation.pendingFailureConfirmations?.find(
+      const pending = generation.pendingFailureConfirmations.find(
         (item) => item.conversationKey === conversationKey
       )
-      if (!pending) return { state, risk: riskFor(ledger, generation, 0) }
-
-      let updatedGeneration: CalibrationGeneration = {
-        ...generation,
-        pendingFailureConfirmations: (generation.pendingFailureConfirmations ?? []).filter(
-          (item) => item.conversationKey !== conversationKey
-        )
+      if (!pending) {
+        return { state, risk: riskFor(ledger, generation, 0) }
       }
 
       if (!accepted) {
         ledger.dismissedFailureKeys = unique([
-          ...(ledger.dismissedFailureKeys ?? []),
-          dismissedFailureKey(generation.id, pending.errorKind, pending.estimatedLoad)
+          ...ledger.dismissedFailureKeys,
+          dismissedFailureKey(generation.id, pending.errorKind)
         ])
+        ledger.ledgerRevision += 1
+        ledger.observationEpoch = Math.max(
+          ledger.observationEpoch,
+          observedAt
+        )
+        ledger.updatedAt = Math.max(ledger.updatedAt, observedAt)
+        const updatedGeneration: CalibrationGeneration = {
+          ...generation,
+          pendingFailureConfirmations:
+            generation.pendingFailureConfirmations.filter(
+              (item) => item.conversationKey !== conversationKey
+            )
+        }
         replaceGeneration(state, updatedGeneration)
         await saveState(this.storage, state)
-        return { state, risk: riskFor(ledger, updatedGeneration, 0) }
+        return {
+          state,
+          risk: riskFor(ledger, updatedGeneration, 0)
+        }
       }
 
-      const observation = {
-        conversationKey,
-        generationId: generation.id,
-        estimatedLoad: pending.estimatedLoad,
-        errorKind: pending.errorKind,
-        confidence: 'high' as const,
-        coverageState: ledger.coverageState,
-        parserHealth: ledger.parserHealth,
-        observedAt
-      }
-      updatedGeneration = recordFailureObservation(updatedGeneration, observation)
+      const updatedGeneration = recordConfirmedFailureReference(
+        {
+          ...generation,
+          pendingFailureConfirmations:
+            generation.pendingFailureConfirmations.filter(
+              (item) => item.conversationKey !== conversationKey
+            )
+        },
+        {
+          conversationKey,
+          generationId: generation.id,
+          estimatedLoad: pending.estimatedLoad,
+          errorKind: pending.errorKind,
+          coverageState: pending.coverageState ?? 'unknown',
+          parserHealth: pending.parserHealth ?? 'unreliable',
+          sequenceReliability:
+            pending.sequenceReliability ?? 'uncertain',
+          uncertaintySources:
+            pending.uncertaintySources ?? ['unknown_context'],
+          ...(pending.environmentSignature
+            ? { environmentSignature: pending.environmentSignature }
+            : {}),
+          observedAt
+        }
+      )
+
       ledger.confirmedFailureFingerprints = unique([
-        ...(ledger.confirmedFailureFingerprints ?? []),
-        confirmedFailureKey(generation.id, pending.errorKind)
+        ...ledger.confirmedFailureFingerprints,
+        passiveConfirmedFailureKey(
+          generation.id,
+          pending.errorKind
+        )
       ])
+      ledger.ledgerRevision += 1
+      ledger.observationEpoch = Math.max(
+        ledger.observationEpoch,
+        observedAt
+      )
+      ledger.updatedAt = Math.max(ledger.updatedAt, observedAt)
       replaceGeneration(state, updatedGeneration)
-
-      if (!wasSuggested && updatedGeneration.changePointSuggested) {
-        state = rollToAutoChangeGeneration(state, observation)
-        const activeGeneration = currentGeneration(state)
-        if (!activeGeneration) throw new Error('missing_generation_after_auto_change')
-        ledger.generationId = activeGeneration.id
-        ledger.confirmedFailureFingerprints = unique([
-          ...(ledger.confirmedFailureFingerprints ?? []),
-          confirmedFailureKey(activeGeneration.id, pending.errorKind)
-        ])
-        state.ledgers[conversationKey] = ledger
-        await saveState(this.storage, state)
-        return { state, risk: riskFor(ledger, activeGeneration, 0) }
-      }
-
       await saveState(this.storage, state)
-      return { state, risk: riskFor(ledger, updatedGeneration, 0) }
+      return {
+        state,
+        risk: riskFor(ledger, updatedGeneration, 0)
+      }
     })
   }
 
@@ -385,6 +703,10 @@ export class StorageMutationCoordinator {
   ): Promise<PersistedState> {
     return this.enqueue(async () => {
       const state = await loadState(this.storage)
+      conversationKey = await anonymizeConversationKey(
+        conversationKey,
+        state.installSalt
+      )
       state.conversationControls[conversationKey] = {
         ...(state.conversationControls[conversationKey] ?? {}),
         ...patch,
@@ -395,7 +717,10 @@ export class StorageMutationCoordinator {
     })
   }
 
-  updatePrivacyConsent(accepted: boolean, observedAt: number): Promise<PersistedState> {
+  updatePrivacyConsent(
+    accepted: boolean,
+    observedAt: number
+  ): Promise<PersistedState> {
     return this.enqueue(async () => {
       const state = await loadState(this.storage)
       const next = withPrivacyConsent(state, accepted, observedAt)
@@ -411,121 +736,254 @@ export class StorageMutationCoordinator {
   }
 }
 
-function strongestCoverage(
-  existing: CoverageState | undefined,
-  incoming: CoverageState
-): CoverageState {
-  if (!existing) return incoming
-  const rank: Record<CoverageState, number> = {
-    unknown: 0,
-    incomplete: 1,
-    mostly_complete: 2,
-    complete: 3
-  }
-  return rank[existing] >= rank[incoming] ? existing : incoming
+function currentGeneration(
+  state: PersistedState
+): CalibrationGeneration | undefined {
+  return (
+    state.generations.find(
+      (generation) => generation.id === state.settings.generationId
+    ) ?? state.generations[0]
+  )
 }
 
-function rollToAutoChangeGeneration(
+function replaceGeneration(
   state: PersistedState,
-  observation: {
-    conversationKey: string
-    estimatedLoad: number
-    errorKind: ErrorKind
-    coverageState: CoverageState
-    parserHealth: ParserHealth
-    observedAt: number
-  }
-): PersistedState {
-  const rolled = startNewGeneration(state, 'auto_change', observation.observedAt)
-  const generation = currentGeneration(rolled)
-  if (!generation) throw new Error('missing_generation_after_auto_change')
-  const seeded = recordFailureObservation(generation, {
-    ...observation,
-    generationId: generation.id,
-    confidence: 'high'
-  })
-  replaceGeneration(rolled, {
-    ...seeded,
-    environmentConflictKeys: [],
-    suspiciousChangeCount: 0,
-    changePointSuggested: false
-  })
-  return rolled
-}
-
-function rollToAutoChangeGenerationFromSuccess(
-  state: PersistedState,
-  observation: {
-    conversationKey: string
-    estimatedLoad: number
-    assistantTokenCount: number
-    assistantFingerprint: string
-    coverageState: CoverageState
-    parserHealth: ParserHealth
-    observedAt: number
-  }
-): PersistedState {
-  const rolled = startNewGeneration(state, 'auto_change', observation.observedAt)
-  const generation = currentGeneration(rolled)
-  if (!generation) throw new Error('missing_generation_after_auto_change')
-  const seeded = recordSuccessfulAssistantCompletion(generation, {
-    ...observation,
-    generationId: generation.id
-  })
-  replaceGeneration(rolled, {
-    ...seeded,
-    environmentConflictKeys: [],
-    suspiciousChangeCount: 0,
-    changePointSuggested: false
-  })
-  return rolled
-}
-
-function confirmedFailureKey(generationId: string, errorKind: ErrorKind): string {
-  return `${generationId}:${errorKind}:confirmed`
-}
-
-function dismissedFailureKey(
-  generationId: string,
-  errorKind: ErrorKind,
-  _estimatedLoad: number
-): string {
-  return `${generationId}:${errorKind}:dismissed`
-}
-
-function unique(values: string[]): string[] {
-  return Array.from(new Set(values))
-}
-
-function currentGeneration(state: PersistedState) {
-  return state.generations.find((generation) => generation.id === state.settings.generationId) ?? state.generations[0]
-}
-
-function replaceGeneration(state: PersistedState, generation: NonNullable<ReturnType<typeof currentGeneration>>): void {
+  generation: CalibrationGeneration
+): void {
   state.generations = [
     ...state.generations.filter((item) => item.id !== generation.id),
     generation
   ]
 }
 
+function validateFullHistoryScan(
+  observedMessages: ObservedMessageRecord[],
+  kind: 'measurement' | 'calibration'
+): void {
+  if (observedMessages.length === 0) {
+    throw new Error(`${kind}_scan_empty`)
+  }
+  if (observedMessages.some((message) => message.role === 'unknown')) {
+    throw new Error(`${kind}_parser_unreliable`)
+  }
+}
+
+function fullHistorySnapshot(input: {
+  existing: PersistedConversationLedger | undefined
+  conversationKey: string
+  generationId: string
+  currentRevision: number
+  environmentSignature: EnvironmentSignature
+  uncertaintySources: UncertaintySource[]
+  observedMessages: ObservedMessageRecord[]
+  observedAt: number
+  calibrationFailureFingerprint?: string
+}): PersistedConversationLedger {
+  const messages = input.observedMessages.map((message, index) => {
+    const fingerprint = message.stableHintHash
+      ? `stable:${message.stableHintHash}`
+      : `scan:${index}:${message.contentFingerprint.slice(0, 16)}`
+    return {
+      fingerprint,
+      contentFingerprint: message.contentFingerprint,
+      ...(message.stableHintHash
+        ? { stableHintHash: message.stableHintHash }
+        : {}),
+      role: message.role,
+      tokenEstimate: message.tokenEstimate,
+      observedAt: input.observedAt + index,
+      ordinalHint: index,
+      ...(message.attachmentCount !== undefined
+        ? { attachmentCount: message.attachmentCount }
+        : {})
+    }
+  })
+  const activeFingerprints = messages.map((message) => message.fingerprint)
+  const currentEstimatedLoad = messages.reduce(
+    (sum, message) => sum + Math.max(0, message.tokenEstimate),
+    0
+  )
+  const uncertaintySources = unique([
+    ...input.uncertaintySources,
+    ...(input.observedMessages.some(
+      (message) => (message.attachmentCount ?? 0) > 0
+    )
+      ? (['attachment'] as const)
+      : [])
+  ])
+  const sameGeneration = input.existing?.generationId === input.generationId
+  const confirmedFailureFingerprints =
+    input.calibrationFailureFingerprint
+      ? unique([
+          ...(sameGeneration
+            ? input.existing?.confirmedFailureFingerprints ?? []
+            : []),
+          input.calibrationFailureFingerprint
+        ])
+      : sameGeneration
+        ? input.existing?.confirmedFailureFingerprints ?? []
+        : []
+
+  return {
+    conversationKey: input.conversationKey,
+    generationId: input.generationId,
+    ledgerRevision: input.currentRevision + 1,
+    observationEpoch: input.observedAt,
+    coverageState: 'complete',
+    parserHealth: 'healthy',
+    messages,
+    activeFingerprints,
+    sequenceReliability: 'reliable',
+    currentEstimatedLoad,
+    uncertaintySources,
+    environmentSignature: input.environmentSignature,
+    completedAssistantFingerprints:
+      sameGeneration
+        ? input.existing?.completedAssistantFingerprints ?? []
+        : [],
+    confirmedFailureFingerprints,
+    dismissedFailureKeys:
+      sameGeneration ? input.existing?.dismissedFailureKeys ?? [] : [],
+    updatedAt: input.observedAt
+  }
+}
+
 function riskFor(
   ledger: PersistedConversationLedger,
-  generation: NonNullable<ReturnType<typeof currentGeneration>>,
-  _legacyComposerTokenEstimate = 0
+  generation: CalibrationGeneration,
+  composerTokenEstimate: number
 ): RiskAssessment {
+  const measurementState = deriveMeasurementState({
+    supported: ledger.generationId === generation.id,
+    ledger
+  })
+  const calibrationState = deriveCalibrationState({
+    generation,
+    currentEnvironment: ledger.environmentSignature
+  })
+  const environmentConfidence = deriveEnvironmentConfidence(
+    generation.environmentSignature,
+    ledger.environmentSignature
+  )
   const summary = summarizeGeneration(generation)
+
   return assessRisk({
     currentLoad: ledger.currentEstimatedLoad,
-    coverage: ledger.coverageState,
-    parserHealth: ledger.parserHealth,
-    ...(summary.safeBoundary !== undefined
-      ? { safeBoundary: summary.safeBoundary }
+    composerDraftLoad: Math.max(0, composerTokenEstimate),
+    measurementState,
+    calibrationState,
+    environmentConfidence,
+    ...(summary.failureReference
+      ? { failureReference: summary.failureReference }
       : {}),
-    ...(summary.failureBoundary !== undefined
-      ? { failureBoundary: summary.failureBoundary }
-      : {}),
-    turnBuffer: summary.turnBuffer,
-    usingWarmStartPrior:
-      summary.usingWarmStartPrior && summary.confirmedFailureConversations === 0
+    ...(summary.growthReserveReady
+      ? { growthReserve: summary.growthReserve }
+      : {})
   })
+}
+
+function passiveConfirmedFailureKey(
+  generationId: string,
+  errorKind: ErrorKind
+): string {
+  return `${generationId}:${errorKind}:confirmed`
+}
+
+function calibrationFailureKey(
+  generationId: string,
+  scanSessionId: string
+): string {
+  return `${generationId}:calibration:${scanSessionId}`
+}
+
+function dismissedFailureKey(
+  generationId: string,
+  errorKind: ErrorKind
+): string {
+  return `${generationId}:${errorKind}:dismissed`
+}
+
+function unique<T>(values: T[]): T[] {
+  return Array.from(new Set(values))
+}
+
+function observationEquivalent(
+  existing: PersistedConversationLedger,
+  incoming: PersistedConversationLedger
+): boolean {
+  return (
+    existing.generationId === incoming.generationId &&
+    existing.coverageState === incoming.coverageState &&
+    existing.parserHealth === incoming.parserHealth &&
+    existing.sequenceReliability === incoming.sequenceReliability &&
+    existing.sequenceUncertainReason === incoming.sequenceUncertainReason &&
+    existing.currentEstimatedLoad === incoming.currentEstimatedLoad &&
+    (existing.retainedPrefixLoad ?? 0) ===
+      (incoming.retainedPrefixLoad ?? 0) &&
+    sameStringSet(
+      existing.uncertaintySources,
+      incoming.uncertaintySources
+    ) &&
+    sameEnvironment(
+      existing.environmentSignature,
+      incoming.environmentSignature
+    ) &&
+    sameStrings(
+      existing.activeFingerprints,
+      incoming.activeFingerprints
+    ) &&
+    sameMessages(existing.messages, incoming.messages)
+  )
+}
+
+function sameMessages(
+  left: PersistedConversationLedger['messages'],
+  right: PersistedConversationLedger['messages']
+): boolean {
+  if (left.length !== right.length) return false
+  const rightByFingerprint = new Map(
+    right.map((message) => [message.fingerprint, message])
+  )
+  return left.every((message) => {
+    const other = rightByFingerprint.get(message.fingerprint)
+    return (
+      other !== undefined &&
+      message.contentFingerprint === other.contentFingerprint &&
+      message.stableHintHash === other.stableHintHash &&
+      message.role === other.role &&
+      message.tokenEstimate === other.tokenEstimate &&
+      message.ordinalHint === other.ordinalHint &&
+      message.hasCode === other.hasCode &&
+      message.attachmentCount === other.attachmentCount
+    )
+  })
+}
+
+function sameEnvironment(
+  left: PersistedConversationLedger['environmentSignature'],
+  right: PersistedConversationLedger['environmentSignature']
+): boolean {
+  if (!left || !right) return left === right
+  return (
+    left.parserSchemaVersion === right.parserSchemaVersion &&
+    left.measurementSchemaVersion === right.measurementSchemaVersion &&
+    left.modelHint === right.modelHint
+  )
+}
+
+function sameStrings(left: string[], right: string[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  )
+}
+
+function sameStringSet(
+  left: readonly string[],
+  right: readonly string[]
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value) => right.includes(value))
+  )
 }

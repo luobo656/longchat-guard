@@ -1,0 +1,142 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>LongChat Guard Phase 3 Fixture</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#fafafa}
+#timeline{height:420px;overflow-y:auto;border:1px solid #ddd;padding:8px}
+[data-turn-key]{min-height:90px;padding:8px;border-bottom:1px solid #eee}
+[data-user-message-bubble]{font-weight:600}
+[data-markdown-text-style="assistant-message"]{margin-top:8px}
+#composer{padding:12px;display:flex;gap:8px}
+#prompt-textarea{width:80%;height:80px}
+</style>
+</head>
+<body>
+<main>
+<button data-testid="model-switcher-dropdown-button">GPT Fixture</button>
+<div id="timeline" data-app-action-timeline-scroll></div>
+<form id="composer" onsubmit="return false">
+<textarea id="prompt-textarea" data-testid="prompt-textarea" aria-label="Message ChatGPT"></textarea>
+<button type="button" id="send" data-testid="send-button" aria-label="Send message">Send</button>
+</form>
+</main>
+<script>
+(function(){
+  var timeline=document.getElementById('timeline');
+  var prompt=document.getElementById('prompt-textarea');
+  var send=document.getElementById('send');
+  var seq=0;
+  window.__phase3={scrollEvents:0,sends:0,externalMutations:0};
+  timeline.addEventListener('scroll',function(){window.__phase3.scrollEvents+=1});
+
+  function addTurn(id,userText,assistantText,opts){
+    opts=opts||{};
+    var turn=document.createElement('section');
+    turn.setAttribute('data-turn-key',id);
+    turn.dataset.fixtureTurn=id;
+    if(opts.unknownRole){
+      var unknown=document.createElement('div');
+      unknown.setAttribute('data-message-author-role','mystery');
+      unknown.setAttribute('data-message-id',id+'-unknown');
+      unknown.textContent=userText;
+      turn.appendChild(unknown);
+    } else {
+      var user=document.createElement('div');
+      user.setAttribute('data-user-message-bubble','');
+      user.setAttribute('data-message-id',id+'-u');
+      user.textContent=userText;
+      if(opts.attachment){
+        var img=document.createElement('img');
+        img.setAttribute('data-testid','attachment-preview');
+        img.alt='fixture attachment';
+        user.appendChild(img);
+      }
+      turn.appendChild(user);
+    }
+    if(assistantText){
+      var assistant=document.createElement('div');
+      assistant.setAttribute('data-markdown-text-style','assistant-message');
+      assistant.setAttribute('data-message-author-role','assistant');
+      assistant.setAttribute('data-message-id',id+'-a');
+      assistant.textContent=assistantText;
+      turn.appendChild(assistant);
+    }
+    if(opts.tool){
+      var tool=document.createElement('div');
+      tool.setAttribute('data-message-author-role','tool');
+      tool.setAttribute('data-testid','tool-result');
+      tool.textContent='fixture tool result';
+      turn.appendChild(tool);
+    }
+    timeline.appendChild(turn);
+    timeline.scrollTop=timeline.scrollHeight;
+    return turn;
+  }
+
+  window.__phase3.addExternalTurn=function(){
+    window.__phase3.externalMutations+=1;
+    addTurn('external-'+(++seq),'External user mutation','External assistant mutation');
+  };
+
+  var p=location.pathname;
+  if(p==='/c/parser-broken'){
+    addTurn('broken-1','Ambiguous role content','',{unknownRole:true});
+  } else if(
+    p==='/c/limit-known' ||
+    p==='/c/limit-attachment' ||
+    p==='/c/sequence-live'
+  ){
+    for(var i=0;i<10;i+=1){
+      addTurn(
+        'limit-'+i,
+        ('Known limit user turn '+i+' ').repeat(8),
+        ('Known limit assistant turn '+i+' ').repeat(15),
+        {attachment:p==='/c/limit-attachment' && i===0}
+      );
+    }
+  } else if(p==='/c/old-history'){
+    for(var j=0;j<6;j+=1){
+      addTurn(
+        'old-'+j,
+        ('Older chat user turn '+j+' ').repeat(4),
+        ('Older chat assistant turn '+j+' ').repeat(7)
+      );
+    }
+  } else if(p==='/c/shared'){
+    addTurn('shared-0','Shared conversation user content','Shared conversation assistant content');
+  } else if(p!=='/'){
+    addTurn('first-0','Short user message','Short assistant answer');
+  }
+
+  send.addEventListener('click',function(){
+    var text=prompt.value.trim();
+    if(!text)return;
+    window.__phase3.sends+=1;
+    var id='sent-'+Date.now();
+    if(location.pathname==='/')history.pushState({},'','/c/new-chat');
+    var turn=addTurn(id,text,'');
+    prompt.value='';
+    prompt.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'deleteContentBackward'}));
+    var stop=document.createElement('button');
+    stop.id='stop-generating';
+    stop.setAttribute('aria-label','Stop generating');
+    stop.textContent='Stop generating';
+    document.body.appendChild(stop);
+    setTimeout(function(){
+      var assistant=document.createElement('div');
+      assistant.setAttribute('data-markdown-text-style','assistant-message');
+      assistant.setAttribute('data-message-author-role','assistant');
+      assistant.setAttribute('data-message-id',id+'-a');
+      assistant.textContent=('Assistant completed response for '+text+' ').repeat(3);
+      turn.appendChild(assistant);
+      stop.remove();
+      timeline.scrollTop=timeline.scrollHeight;
+    },500);
+  });
+  setTimeout(function(){timeline.scrollTop=timeline.scrollHeight},0);
+})();
+</script>
+</body>
+</html>

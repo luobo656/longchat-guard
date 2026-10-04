@@ -1,8 +1,19 @@
 export type CoverageState = 'complete' | 'mostly_complete' | 'incomplete' | 'unknown'
 export type ParserHealth = 'healthy' | 'degraded' | 'unreliable'
-export type RiskLevel = 'normal' | 'long' | 'organize' | 'high' | 'unreliable'
+export type SequenceReliability = 'reliable' | 'uncertain'
+
+export type MeasurementState = 'unavailable' | 'partial' | 'complete' | 'uncertain'
+export type CalibrationState =
+  | 'uncalibrated'
+  | 'calibrating'
+  | 'calibrated_conservative'
+  | 'calibrated'
+  | 'environment_unknown'
+  | 'stale'
+export type RiskState = 'unknown' | 'normal' | 'long' | 'organize' | 'high'
+export type EnvironmentConfidence = 'verified' | 'unverified' | 'mismatch'
+export type FailureReferenceQuality = 'strong' | 'conservative' | 'provisional'
 export type EvidenceConfidence = 'high' | 'medium' | 'low'
-export type FeedbackKind = 'too_early' | 'right' | 'too_late'
 
 export type ErrorKind =
   | 'conversation_length_limit'
@@ -15,6 +26,21 @@ export type ErrorKind =
   | 'service_error'
   | 'safety_refusal'
   | 'unknown'
+
+export type UncertaintySource =
+  | 'attachment'
+  | 'tool_result'
+  | 'web_search'
+  | 'code_execution'
+  | 'voice'
+  | 'generated_image'
+  | 'unknown_context'
+
+export interface EnvironmentSignature {
+  parserSchemaVersion: string
+  measurementSchemaVersion: number
+  modelHint?: string
+}
 
 export interface MessageRecord {
   fingerprint: string
@@ -43,76 +69,82 @@ export interface ObservedMessageRecord {
   attachmentCount?: number
 }
 
-export interface ConversationStats {
-  conversationKey: string
-  generationId: string
-  highestConfirmedSafeLoad?: number
-  firstConfirmedFailureLoad?: number
-  currentEstimatedLoad: number
-  coverageState: CoverageState
-  parserHealth: ParserHealth
-  updatedAt: number
-}
-
 export interface PersistedConversationLedger {
   conversationKey: string
   generationId: string
+  ledgerRevision: number
+  observationEpoch: number
   coverageState: CoverageState
   parserHealth: ParserHealth
   messages: MessageRecord[]
   activeFingerprints: string[]
-  sequenceReliability?: 'reliable' | 'uncertain'
+  sequenceReliability: SequenceReliability
   sequenceUncertainReason?: string
   currentEstimatedLoad: number
   retainedPrefixLoad?: number
-  lastObservedUserMessageAt?: number
-  completedAssistantFingerprints?: string[]
-  confirmedFailureFingerprints?: string[]
-  dismissedFailureKeys?: string[]
+  uncertaintySources: UncertaintySource[]
+  environmentSignature?: EnvironmentSignature
+  completedAssistantFingerprints: string[]
+  confirmedFailureFingerprints: string[]
+  dismissedFailureKeys: string[]
   updatedAt: number
 }
 
-export interface ConversationBoundarySample {
+export interface CalibrationEvidenceSample {
   conversationKey: string
   generationId: string
   highestConfirmedSafeLoad?: number
-  firstConfirmedFailureLoad?: number
+  empiricalFailureLoad?: number
+  failureReferenceQuality?: FailureReferenceQuality
   coverageState?: CoverageState
   parserHealth?: ParserHealth
-  successEvidenceQuality?: 'complete' | 'partial'
-  failureEvidenceQuality?: 'confirmed' | 'pending'
+  sequenceReliability?: SequenceReliability
+  uncertaintySources?: UncertaintySource[]
+  environmentSignature?: EnvironmentSignature
   firstObservedAt?: number
   lastObservedAt?: number
   updatedAt: number
 }
 
+export interface TurnGrowthSample {
+  conversationKey: string
+  generationId: string
+  beforeLoad: number
+  afterLoad: number
+  delta: number
+  uncertain: boolean
+  uncertaintySources: UncertaintySource[]
+  observedAt: number
+}
+
+export interface EmpiricalFailureReference {
+  load: number
+  quality: Exclude<FailureReferenceQuality, 'provisional'>
+  sourceConversationCount: number
+}
+
 export interface CalibrationGeneration {
   id: string
   createdAt: number
-  archivedAt?: number
   warmStartedFrom?: string
-  createdReason?: 'initial' | 'environment_change' | 'recalibrate' | 'auto_change'
+  createdReason?: 'initial' | 'environment_change' | 'recalibrate'
   warmStartPrior?: WarmStartPrior
-  verificationFactor?: number
-  samples: ConversationBoundarySample[]
-  confidence: number
-  suspiciousChangeCount: number
-  recentAssistantTokenCounts?: number[]
-  growthHistoryConversationKeys?: string[]
-  environmentConflictKeys?: string[]
-  pendingFailureConfirmations?: PendingFailureConfirmation[]
-  changePointSuggested?: boolean
-  feedbackBias?: number
+  environmentSignature?: EnvironmentSignature
+  samples: CalibrationEvidenceSample[]
+  turnGrowthSamples: TurnGrowthSample[]
+  environmentConflictKeys: string[]
+  pendingFailureConfirmations: PendingFailureConfirmation[]
+  changePointSuggested: boolean
 }
 
 export interface WarmStartPrior {
   sourceGenerationId: string
-  safeBoundary?: number
-  failureBoundary?: number
-  turnBuffer?: number
-  estimatedRiskStart: number
-  estimatedHighRisk: number
-  confidence: number
+  safeLoad?: number
+  failureReference?: {
+    load: number
+    quality: Exclude<FailureReferenceQuality, 'provisional'>
+  }
+  environmentSignature?: EnvironmentSignature
   createdAt: number
 }
 
@@ -121,46 +153,34 @@ export interface PendingFailureConfirmation {
   estimatedLoad: number
   errorKind: ErrorKind
   confidence: EvidenceConfidence
+  coverageState?: CoverageState
+  parserHealth?: ParserHealth
+  sequenceReliability?: SequenceReliability
+  uncertaintySources?: UncertaintySource[]
+  environmentSignature?: EnvironmentSignature
   observedAt: number
 }
 
 export interface ConversationControl {
   muted?: boolean
-  snoozeUntilUserTurn?: number
-  lastDisplayedLevel?: RiskLevel
-  lastAlertLevel?: RiskLevel
-  lastAlertScore?: number
-  lastAlertUserTurn?: number
+  lastAlertState?: RiskState
   updatedAt?: number
 }
 
 export interface RiskInput {
   currentLoad: number
-  coverage: CoverageState
-  parserHealth: ParserHealth
-  safeBoundary?: number
-  failureBoundary?: number
-  turnBuffer?: number
-  usingWarmStartPrior?: boolean
-  // Legacy 1.x inputs are accepted for upgrade compatibility but ignored by 2.0 risk logic.
-  safeFloor?: number
-  failureCeiling?: number
-  composerLoad?: number
-  expectedAssistantGrowth?: number
-  safetyMargin?: number
-  confidence?: number
-  safeFloorEvidenceReady?: boolean
-  estimatedRiskStart?: number
-  estimatedHighRisk?: number
-  suspiciousChangeCount?: number
-  changePointSuggested?: boolean
-  feedbackBias?: number
+  composerDraftLoad: number
+  measurementState: MeasurementState
+  calibrationState: CalibrationState
+  environmentConfidence: EnvironmentConfidence
+  failureReference?: EmpiricalFailureReference
+  growthReserve?: number
 }
 
 export interface RiskAssessment {
-  level: RiskLevel
-  predictedNextTurnLoad: number
+  state: RiskState
   score: number
-  trendScore: number
+  referencePositionScore: number
+  projectedLoad: number
   reasons: string[]
 }

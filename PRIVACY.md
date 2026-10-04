@@ -2,50 +2,70 @@
 
 LongChat Guard is a local browser extension for `chatgpt.com`.
 
-Before the extension reads or processes visible ChatGPT conversation content for the first time, it presents a localized in-product privacy disclosure and requires affirmative consent. Supported UI locales include English, Simplified Chinese, and Traditional Chinese. Choosing the localized “Not now / 暂不开启 / 暫不啟用” option keeps monitoring disabled.
+Before the extension reads or processes visible ChatGPT conversation content for the first time, it presents a localized disclosure and requires affirmative consent. Choosing “Not now / 暂不开启 / 暫不啟用” keeps monitoring disabled.
 
 ## Data Processing
 
-After affirmative consent, the extension reads visible page text only inside the content script so it can estimate local conversation length trends and create anonymous local fingerprints. Raw text is processed transiently in memory. Before consent, conversation text is not read, fingerprinted, token-estimated, or added to the local conversation ledger.
-A successful history scan leaves no diagnostic record. If a history scan fails, LongChat Guard may retain only a bounded local failure summary (failure reason and a few scrolling/structure metrics) for up to 7 days. That diagnostic does not include the conversation URL, raw chat text, or raw message fingerprints.
+After affirmative consent, the content script may read visible ChatGPT conversation text, the unsent composer draft, visible error messages, and structural DOM metadata in order to estimate local conversation load, detect measurement quality, learn whole-turn growth, and calculate local empirical risk.
+
+Raw chat text and composer text are processed transiently in memory. They are not persisted as raw text and are not transmitted to LongChat Guard or to the developer.
+
+A successful history-calibration scan leaves no diagnostic record. If a scan fails, LongChat Guard may keep one bounded local structural diagnostic for up to 7 days. That diagnostic contains only a failure reason and limited scrolling/structure metrics; it does not contain the conversation URL, raw chat text, or raw message fingerprints.
 
 ## Data Stored Locally
 
 The extension may store:
 
-- Local install salt
-- Anonymous message fingerprints
-- Internal token and character estimates
-- Branch, coverage, and parser health metadata
-- Learned safe/failure boundary metadata and recent assistant-growth estimates
-- Per-conversation reminder controls
-- On history-scan failure only: a bounded structural diagnostic summary with no conversation URL or raw chat text; it expires after 7 days
+- A local install salt.
+- An install-salted SHA-256 **pseudonymous** per-conversation identifier. The raw ChatGPT conversation ID is not stored.
+- Pseudonymous message fingerprints and local load estimates.
+- Coverage, parser health, sequence reliability, ledger revision, and observation metadata.
+- Current uncertainty-source categories such as attachment/tool/search context; attachment names, file contents, tool-result text, and file data are not stored.
+- Internal successful-observation evidence, empirical failure-reference metadata, and whole-turn growth samples.
+- Environment metadata limited to measurement/parser schema versions and a model hint only when it can be reliably observed from the page.
+- Per-conversation reminder controls.
+- On failed history scans only, the bounded structural diagnostic described above.
+
+The pseudonymous identifier reduces direct exposure of the raw conversation ID, but it is not described as absolute anonymity against an attacker who has access to the same browser profile and local install salt.
 
 ## Data Not Stored
 
-The extension must not persist:
+LongChat Guard must not persist:
 
-- User chat text
-- Assistant response text
-- Composer draft text
-- Attachment text
-- Names or email addresses
-- API keys
+- User chat text.
+- Assistant response text.
+- Composer draft text.
+- Attachment or file contents.
+- Tool-result/search-result raw text.
+- Names or email addresses.
+- API keys.
+- Raw ChatGPT conversation IDs.
 
 ## Data Sharing
 
-Conversation content and locally derived extension data are never transmitted to the developer or to an extension server. The extension has no server component, no cloud sync, no advertising data pipeline, and no OpenAI API integration. Local data is used only to provide the extension's single purpose: local long-conversation trend warnings.
+Conversation content and locally derived extension data are not transmitted to the developer or to a LongChat Guard server. The extension has no server component, cloud sync, advertising pipeline, or OpenAI API integration.
+
+## Browser Permissions
+
+The Manifest V3 extension uses:
+
+- `storage` for local pseudonymous state, calibration evidence, and settings.
+- `https://chatgpt.com/*` so the content script can provide its single user-facing purpose on ChatGPT web pages.
+
+No additional permission is required for the Unreleased calibration/risk refactor.
 
 ## User Control and Deletion
 
-Users can decline the initial disclosure and leave monitoring disabled. Uninstalling the extension removes its extension-local data from the browser. Users may also clear the extension's local storage using browser extension/developer storage controls. The developer does not hold a server-side copy because the extension sends no conversation data to the developer.
+Users may decline the initial disclosure and keep monitoring disabled. Uninstalling the extension removes extension-local data from the browser. Users may also clear the extension's local storage with browser extension/developer controls.
+
+There is no server-side copy held by the developer.
 
 ## Browser Store Data Disclosure and Limited Use
 
-For browser-store disclosure purposes, LongChat Guard accesses **personal communications** and **website content** that are visibly present on `chatgpt.com` after affirmative user consent. This access is local and transient: the raw conversation content is not transmitted to the developer or to a LongChat Guard server, and it is not persisted as raw text.
+For store-disclosure purposes, LongChat Guard accesses **personal communications** and **website content** visibly present on `chatgpt.com` after affirmative consent. Access is local and transient for the extension's long-conversation warning purpose.
 
-Data access is limited to providing and improving the extension's single user-facing purpose. Conversation data is not used for advertising, profiling, creditworthiness, data brokerage, or unrelated purposes, and is not made available for human review by the developer.
+Conversation data is not used for advertising, profiling, creditworthiness, data brokerage, or unrelated purposes, and is not made available for human review by the developer.
 
 ## Official Relationship
 
-This project is not affiliated with, endorsed by, or sponsored by OpenAI. `ChatGPT` is used only to identify the supported website.
+LongChat Guard is not affiliated with, endorsed by, or sponsored by OpenAI. `ChatGPT` is used only to identify the supported website.

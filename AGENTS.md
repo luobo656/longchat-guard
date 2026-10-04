@@ -68,9 +68,9 @@ LongChat Guard 2.x 仅针对 `chatgpt.com` 网页端。
 - Coverage / Completeness
 - Calibration Confidence
 
-每个 conversation 以 Safe Floor / Failure Ceiling 为核心边界。
+必须区分当前会话负载 L、经验失败参考 R 与整轮增长缓冲 G；成功证据 S 只用于一致性/漂移判断，不解锁风险轨道。
 
-非 conversation length 类错误不得更新 Failure Ceiling。
+非 conversation length 类错误不得更新经验失败参考 R。
 
 套餐/环境变化必须使用新 Generation，而不是把新旧环境数据直接混合平均。
 

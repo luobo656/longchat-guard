@@ -1,9 +1,20 @@
 import { createGeneration, upsertConversationSample } from './calibration'
-import { createInstallSalt } from './fingerprinter'
+import {
+  anonymizeConversationKey,
+  createInstallSalt,
+  isAnonymousConversationKey
+} from './fingerprinter'
 import type {
+  CalibrationEvidenceSample,
   CalibrationGeneration,
   ConversationControl,
-  PersistedConversationLedger
+  EnvironmentSignature,
+  FailureReferenceQuality,
+  MessageRecord,
+  PersistedConversationLedger,
+  RiskState,
+  TurnGrowthSample,
+  UncertaintySource
 } from './types'
 
 export interface ExtensionSettings {
@@ -30,11 +41,11 @@ export interface LocalStorageArea {
 
 const STATE_KEY = 'conversationGuardState'
 const DEFAULT_GENERATION_ID = 'default-generation'
-export const CURRENT_SCHEMA_VERSION = 8
+export const CURRENT_SCHEMA_VERSION = 10
 export const REQUIRED_PRIVACY_CONSENT_VERSION = 1
-const MAX_PERSISTED_LEDGERS = 8
-const MAX_BOUNDARY_SAMPLES = 24
-const MAX_GROWTH_KEYS = 32
+const MAX_PERSISTED_LEDGERS = 12
+const MAX_EVIDENCE_SAMPLES = 24
+const MAX_GROWTH_SAMPLES = 32
 const MAX_COMPLETION_KEYS = 32
 const MAX_FAILURE_KEYS = 8
 const MAX_LEDGER_MESSAGE_RECORDS = 32
@@ -43,9 +54,11 @@ const MAX_CONVERSATION_CONTROLS = 16
 export async function loadState(storage: LocalStorageArea): Promise<PersistedState> {
   const result = await storage.get(STATE_KEY)
   const raw = result[STATE_KEY]
-  if (isPersistedState(raw)) {
-    const normalized = normalizeState(raw)
-    if (normalized !== raw) await saveState(storage, normalized)
+  if (isPersistedStateLike(raw)) {
+    const normalized = await normalizeState(raw as PersistedState)
+    if (!persistedStatesEqual(raw as PersistedState, normalized)) {
+      await storage.set({ [STATE_KEY]: normalized })
+    }
     return normalized
   }
 
@@ -65,177 +78,138 @@ export async function loadState(storage: LocalStorageArea): Promise<PersistedSta
   return state
 }
 
-export async function saveState(storage: LocalStorageArea, state: PersistedState): Promise<void> {
-  await storage.set({ [STATE_KEY]: normalizeState(state) })
+export async function readState(storage: LocalStorageArea): Promise<PersistedState> {
+  const result = await storage.get(STATE_KEY)
+  const raw = result[STATE_KEY]
+  if (isPersistedStateLike(raw)) {
+    return normalizeState(raw as PersistedState)
+  }
+  return loadState(storage)
 }
 
-export async function upsertLedgerSnapshot(
+export async function saveState(
   storage: LocalStorageArea,
-  snapshot: PersistedConversationLedger
-): Promise<PersistedState> {
-  const state = await loadState(storage)
-  const existing = state.ledgers[snapshot.conversationKey]
-  state.ledgers[snapshot.conversationKey] = mergeLedgerSnapshots(existing, snapshot)
-  await saveState(storage, state)
-  return state
+  state: PersistedState
+): Promise<void> {
+  await storage.set({ [STATE_KEY]: await normalizeState(state) })
 }
 
+/**
+ * Merge policy is explicit:
+ * - message/evidence collections: union
+ * - latest measurement fields: newest observationEpoch wins
+ * - revision/timestamps: max
+ * - generation: follows the newest measurement
+ *
+ * This prevents an older tab/window snapshot from replacing a newer active branch,
+ * load, coverage, parser, sequence or uncertainty state.
+ */
 export function mergeLedgerSnapshots(
   existing: PersistedConversationLedger | undefined,
   incoming: PersistedConversationLedger
 ): PersistedConversationLedger {
-  if (!existing) return incoming
+  if (!existing) return normalizeLedger(incoming, incoming.generationId)
 
-  const recordsByFingerprint = new Map(existing.messages.map((record) => [record.fingerprint, record]))
-  for (const record of incoming.messages) {
-    if (!recordsByFingerprint.has(record.fingerprint)) {
+  const generationChanged = existing.generationId !== incoming.generationId
+  const incomingIsLatest =
+    generationChanged ||
+    incoming.observationEpoch > existing.observationEpoch ||
+    (incoming.observationEpoch === existing.observationEpoch &&
+      incoming.updatedAt >= existing.updatedAt)
+  const latest = incomingIsLatest ? incoming : existing
+
+  const recordsByFingerprint = new Map<string, MessageRecord>()
+  for (const record of [...existing.messages, ...incoming.messages]) {
+    const current = recordsByFingerprint.get(record.fingerprint)
+    if (!current || messageRecency(record) >= messageRecency(current)) {
       recordsByFingerprint.set(record.fingerprint, record)
     }
   }
 
   return {
-    ...incoming,
+    conversationKey: existing.conversationKey,
+    generationId: latest.generationId,
+    ledgerRevision: Math.max(existing.ledgerRevision, incoming.ledgerRevision),
+    observationEpoch: Math.max(existing.observationEpoch, incoming.observationEpoch),
+    coverageState: latest.coverageState,
+    parserHealth: latest.parserHealth,
     messages: Array.from(recordsByFingerprint.values()).sort((a, b) => {
       return a.observedAt - b.observedAt || a.fingerprint.localeCompare(b.fingerprint)
     }),
-    activeFingerprints:
-      incoming.activeFingerprints.length > 0
-        ? unique(incoming.activeFingerprints)
-        : unique(existing.activeFingerprints),
-    currentEstimatedLoad: incoming.currentEstimatedLoad,
+    activeFingerprints: unique(latest.activeFingerprints),
+    sequenceReliability: latest.sequenceReliability,
+    ...(latest.sequenceUncertainReason
+      ? { sequenceUncertainReason: latest.sequenceUncertainReason }
+      : {}),
+    currentEstimatedLoad: latest.currentEstimatedLoad,
+    ...(latest.retainedPrefixLoad !== undefined
+      ? { retainedPrefixLoad: latest.retainedPrefixLoad }
+      : {}),
+    uncertaintySources: unique(latest.uncertaintySources),
+    ...(latest.environmentSignature
+      ? { environmentSignature: latest.environmentSignature }
+      : {}),
+    completedAssistantFingerprints: generationChanged
+      ? unique(latest.completedAssistantFingerprints)
+      : unique([
+          ...existing.completedAssistantFingerprints,
+          ...incoming.completedAssistantFingerprints
+        ]),
+    confirmedFailureFingerprints: generationChanged
+      ? unique(latest.confirmedFailureFingerprints)
+      : unique([
+          ...existing.confirmedFailureFingerprints,
+          ...incoming.confirmedFailureFingerprints
+        ]),
+    dismissedFailureKeys: generationChanged
+      ? unique(latest.dismissedFailureKeys)
+      : unique([
+          ...existing.dismissedFailureKeys,
+          ...incoming.dismissedFailureKeys
+        ]),
     updatedAt: Math.max(existing.updatedAt, incoming.updatedAt)
   }
 }
 
-function unique(values: string[]): string[] {
-  return Array.from(new Set(values))
-}
-
-function isPersistedState(value: unknown): value is PersistedState {
-  if (!value || typeof value !== 'object') return false
-  const state = value as Partial<PersistedState>
-  return (
-    typeof state.installSalt === 'string' &&
-    typeof state.settings === 'object' &&
-    Array.isArray(state.generations) &&
-    typeof state.ledgers === 'object' &&
-    state.ledgers !== null
-  )
-}
-
-function createInitialGeneration(id: string, now: number): CalibrationGeneration {
-  const generation = createGeneration(id, now)
-  generation.createdReason = 'initial'
-  return generation
-}
-
-export function normalizeState(raw: PersistedState): PersistedState {
+export async function normalizeState(raw: PersistedState): Promise<PersistedState> {
+  const rawRecord = raw as PersistedState & Record<string, unknown>
+  const schemaVersion =
+    typeof rawRecord.schemaVersion === 'number' ? rawRecord.schemaVersion : 0
   const now = Date.now()
   const generationId = raw.settings?.generationId ?? DEFAULT_GENERATION_ID
-  let generations =
-    raw.generations.length > 0
-      ? raw.generations.map((generation) => ({
-          ...generation,
-          recentAssistantTokenCounts: generation.recentAssistantTokenCounts ?? [],
-          growthHistoryConversationKeys: generation.growthHistoryConversationKeys ?? [],
-          environmentConflictKeys: generation.environmentConflictKeys ?? [],
-          pendingFailureConfirmations: generation.pendingFailureConfirmations ?? [],
-          suspiciousChangeCount:
-            generation.environmentConflictKeys?.length ?? generation.suspiciousChangeCount ?? 0,
-          changePointSuggested: generation.changePointSuggested ?? false,
-          verificationFactor: generation.verificationFactor ?? 1
-        }))
+
+  const rawGenerations = Array.isArray(raw.generations) ? raw.generations : []
+  const generations =
+    rawGenerations.length > 0
+      ? rawGenerations.map((generation) => normalizeGeneration(generation, schemaVersion))
       : [createInitialGeneration(generationId, now)]
+
+  const rawLedgers =
+    raw.ledgers && typeof raw.ledgers === 'object' ? raw.ledgers : {}
   const ledgers = Object.fromEntries(
-    Object.entries(raw.ledgers ?? {}).map(([key, ledger]) => [
+    Object.entries(rawLedgers).map(([key, ledger]) => [
       key,
-      {
-        ...ledger,
-        completedAssistantFingerprints: ledger.completedAssistantFingerprints ?? [],
-        confirmedFailureFingerprints: ledger.confirmedFailureFingerprints ?? [],
-        dismissedFailureKeys: ledger.dismissedFailureKeys ?? []
-      }
+      normalizeLedger(
+        ledger as PersistedConversationLedger,
+        generationId,
+        schemaVersion
+      )
     ])
   )
-  if ((raw.schemaVersion ?? 0) < 7) {
-    // 2.0.x migration: preserve reply-growth evidence from existing local ledgers.
-    const eligibleLedgers = Object.values(ledgers).filter((ledger) =>
-      ledger.generationId === generationId &&
-      (ledger.coverageState === 'complete' || ledger.coverageState === 'mostly_complete') &&
-      ledger.parserHealth !== 'unreliable'
-    )
-    const historicalGrowth = eligibleLedgers
-      .flatMap((ledger) => ledger.messages)
-      .filter((message) => message.role === 'assistant' && message.tokenEstimate > 0)
-      .sort((a, b) => a.observedAt - b.observedAt)
-      .map((message) => message.tokenEstimate)
-      .slice(-32)
-    if (historicalGrowth.length > 0) {
-      generations = generations.map((generation) =>
-        generation.id === generationId
-          ? {
-              ...generation,
-              recentAssistantTokenCounts: historicalGrowth,
-              growthHistoryConversationKeys: unique([
-                ...(generation.growthHistoryConversationKeys ?? []),
-                ...eligibleLedgers.map((ledger) => ledger.conversationKey)
-              ])
-            }
-          : generation
-      )
-    }
-  }
-
-  if ((raw.schemaVersion ?? 0) < 8) {
-    generations = generations.map((generation) => {
-      if (generation.id !== generationId) return generation
-      let migrated = generation
-      for (const ledger of Object.values(ledgers)) {
-        if (
-          ledger.generationId !== generationId ||
-          ledger.coverageState !== 'complete' ||
-          ledger.parserHealth !== 'healthy'
-        ) {
-          continue
-        }
-        const recordsByFingerprint = new Map(
-          ledger.messages.map((message) => [message.fingerprint, message])
-        )
-        let cumulativeLoad = Math.max(0, ledger.retainedPrefixLoad ?? 0)
-        let safeLoad: number | undefined
-        for (const fingerprint of ledger.activeFingerprints) {
-          const message = recordsByFingerprint.get(fingerprint)
-          if (!message) continue
-          cumulativeLoad += Math.max(0, message.tokenEstimate)
-          if (message.role === 'assistant') safeLoad = cumulativeLoad
-        }
-        if (safeLoad === undefined) continue
-        migrated = upsertConversationSample(migrated, {
-          conversationKey: ledger.conversationKey,
-          generationId: migrated.id,
-          highestConfirmedSafeLoad: safeLoad,
-          coverageState: 'complete',
-          parserHealth: 'healthy',
-          successEvidenceQuality: 'complete',
-          updatedAt: ledger.updatedAt
-        })
-      }
-      return migrated
-    })
-  }
 
   const selectedGeneration =
     generations.find((generation) => generation.id === generationId) ??
     generations.at(-1) ??
     createInitialGeneration(generationId, now)
+
   const activeGeneration = compactGeneration(selectedGeneration)
   const compactedLedgers = compactLedgers(ledgers)
   const conversationControls = compactConversationControls(
-    raw.conversationControls ?? {},
+    normalizeControls(raw.conversationControls ?? {}),
     compactedLedgers
   )
 
-  return {
+  return anonymizeConversationReferences({
     schemaVersion: CURRENT_SCHEMA_VERSION,
     installSalt: raw.installSalt,
     settings: {
@@ -246,21 +220,184 @@ export function normalizeState(raw: PersistedState): PersistedState {
     generations: [activeGeneration],
     ledgers: compactedLedgers,
     conversationControls
+  })
+}
+
+function normalizeGeneration(
+  generation: CalibrationGeneration,
+  schemaVersion: number
+): CalibrationGeneration {
+  const legacy = generation as CalibrationGeneration & {
+    recentAssistantTokenCounts?: number[]
+    growthHistoryConversationKeys?: string[]
+    warmStartPrior?: Record<string, unknown>
+    samples?: Array<Record<string, unknown>>
+  }
+
+  const samples = (legacy.samples ?? []).map((sample) =>
+    normalizeEvidenceSample(
+      sample as unknown as Record<string, unknown>,
+      generation.id
+    )
+  )
+
+  const turnGrowthSamples =
+    schemaVersion >= CURRENT_SCHEMA_VERSION && Array.isArray(generation.turnGrowthSamples)
+      ? generation.turnGrowthSamples
+          .map((sample) => normalizeTurnGrowthSample(sample, generation.id))
+          .filter((sample): sample is TurnGrowthSample => Boolean(sample))
+      : []
+
+  const warmStartPrior = normalizeWarmStartPrior(
+    legacy.warmStartPrior,
+    generation.id
+  )
+
+  const normalized: CalibrationGeneration = {
+    id: generation.id,
+    createdAt: generation.createdAt,
+    ...(generation.warmStartedFrom
+      ? { warmStartedFrom: generation.warmStartedFrom }
+      : {}),
+    ...(generation.createdReason === 'environment_change' ||
+    generation.createdReason === 'recalibrate' ||
+    generation.createdReason === 'initial'
+      ? { createdReason: generation.createdReason }
+      : {}),
+    ...(warmStartPrior ? { warmStartPrior } : {}),
+    ...(isEnvironmentSignature(generation.environmentSignature)
+      ? { environmentSignature: generation.environmentSignature }
+      : {}),
+    samples,
+    turnGrowthSamples,
+    environmentConflictKeys: unique(generation.environmentConflictKeys ?? []),
+    pendingFailureConfirmations: generation.pendingFailureConfirmations ?? [],
+    changePointSuggested: generation.changePointSuggested ?? false
+  }
+
+  return normalized
+}
+
+function normalizeEvidenceSample(
+  raw: Record<string, unknown>,
+  fallbackGenerationId: string
+): CalibrationEvidenceSample {
+  const safeLoad = finiteNumber(raw.highestConfirmedSafeLoad)
+  const firstObservedAt = finiteNumber(raw.firstObservedAt)
+  const lastObservedAt = finiteNumber(raw.lastObservedAt)
+  const legacyFailure =
+    finiteNumber(raw.empiricalFailureLoad) ??
+    finiteNumber(raw.firstConfirmedFailureLoad)
+  const legacyQuality = normalizeFailureQuality(
+    raw.failureReferenceQuality ?? raw.failureEvidenceQuality
+  )
+  const legacyUncertainty = normalizeUncertaintySources(
+    raw.uncertaintySources,
+    raw.hasUnmeasuredAttachments === true
+  )
+
+  return {
+    conversationKey: String(raw.conversationKey ?? ''),
+    generationId: String(raw.generationId ?? fallbackGenerationId),
+    ...(safeLoad !== undefined
+      ? { highestConfirmedSafeLoad: safeLoad }
+      : {}),
+    ...(legacyFailure !== undefined ? { empiricalFailureLoad: legacyFailure } : {}),
+    ...(legacyFailure !== undefined
+      ? { failureReferenceQuality: legacyQuality }
+      : {}),
+    ...(isCoverageState(raw.coverageState)
+      ? { coverageState: raw.coverageState }
+      : {}),
+    ...(isParserHealth(raw.parserHealth)
+      ? { parserHealth: raw.parserHealth }
+      : {}),
+    ...(isSequenceReliability(raw.sequenceReliability)
+      ? { sequenceReliability: raw.sequenceReliability }
+      : {}),
+    uncertaintySources: legacyUncertainty,
+    ...(isEnvironmentSignature(raw.environmentSignature)
+      ? { environmentSignature: raw.environmentSignature }
+      : {}),
+    ...(firstObservedAt !== undefined
+      ? { firstObservedAt }
+      : {}),
+    ...(lastObservedAt !== undefined
+      ? { lastObservedAt }
+      : {}),
+    updatedAt: finiteNumber(raw.updatedAt) ?? Date.now()
   }
 }
 
-function compactGeneration(generation: CalibrationGeneration): CalibrationGeneration {
+function normalizeTurnGrowthSample(
+  raw: TurnGrowthSample,
+  fallbackGenerationId: string
+): TurnGrowthSample | undefined {
+  if (!raw || !Number.isFinite(raw.delta) || raw.delta <= 0) return undefined
+  return {
+    conversationKey: raw.conversationKey,
+    generationId: raw.generationId ?? fallbackGenerationId,
+    beforeLoad: Math.max(0, raw.beforeLoad),
+    afterLoad: Math.max(0, raw.afterLoad),
+    delta: Math.max(0, raw.delta),
+    uncertain: Boolean(raw.uncertain),
+    uncertaintySources: normalizeUncertaintySources(raw.uncertaintySources, false),
+    observedAt: raw.observedAt
+  }
+}
+
+function normalizeWarmStartPrior(
+  raw: Record<string, unknown> | undefined,
+  fallbackSourceGenerationId: string
+): CalibrationGeneration['warmStartPrior'] | undefined {
+  if (!raw) return undefined
+
+  const safeLoad =
+    finiteNumber(raw.safeLoad) ?? finiteNumber(raw.safeBoundary)
+  const legacyFailure =
+    raw.failureReference && typeof raw.failureReference === 'object'
+      ? finiteNumber((raw.failureReference as Record<string, unknown>).load)
+      : finiteNumber(raw.failureBoundary)
+  const quality =
+    raw.failureReference && typeof raw.failureReference === 'object'
+      ? normalizeFailureQuality(
+          (raw.failureReference as Record<string, unknown>).quality
+        )
+      : normalizeFailureQuality(raw.failureBoundaryQuality)
+
+  if (safeLoad === undefined && legacyFailure === undefined) return undefined
+
+  return {
+    sourceGenerationId: String(
+      raw.sourceGenerationId ?? fallbackSourceGenerationId
+    ),
+    ...(safeLoad !== undefined ? { safeLoad } : {}),
+    ...(legacyFailure !== undefined && quality !== 'provisional'
+      ? {
+          failureReference: {
+            load: legacyFailure,
+            quality
+          }
+        }
+      : {}),
+    ...(isEnvironmentSignature(raw.environmentSignature)
+      ? { environmentSignature: raw.environmentSignature }
+      : {}),
+    createdAt: finiteNumber(raw.createdAt) ?? Date.now()
+  }
+}
+
+function compactGeneration(
+  generation: CalibrationGeneration
+): CalibrationGeneration {
   return {
     ...generation,
     samples: [...generation.samples]
       .sort((a, b) => b.updatedAt - a.updatedAt)
-      .slice(0, MAX_BOUNDARY_SAMPLES),
-    recentAssistantTokenCounts: (generation.recentAssistantTokenCounts ?? []).slice(-32),
-    growthHistoryConversationKeys: unique(
-      generation.growthHistoryConversationKeys ?? []
-    ).slice(-MAX_GROWTH_KEYS),
-    environmentConflictKeys: unique(generation.environmentConflictKeys ?? []).slice(-8),
-    pendingFailureConfirmations: (generation.pendingFailureConfirmations ?? []).slice(-4)
+      .slice(0, MAX_EVIDENCE_SAMPLES),
+    turnGrowthSamples: generation.turnGrowthSamples.slice(-MAX_GROWTH_SAMPLES),
+    environmentConflictKeys: unique(generation.environmentConflictKeys).slice(-8),
+    pendingFailureConfirmations: generation.pendingFailureConfirmations.slice(-4)
   }
 }
 
@@ -275,55 +412,267 @@ function compactLedgers(
   )
 }
 
-function compactLedger(ledger: PersistedConversationLedger): PersistedConversationLedger {
+function compactLedger(
+  ledger: PersistedConversationLedger
+): PersistedConversationLedger {
   const recordsByFingerprint = new Map(
     ledger.messages.map((message) => [message.fingerprint, message])
   )
   const requestedActive = unique(ledger.activeFingerprints)
   const activeRecords = requestedActive
     .map((fingerprint) => recordsByFingerprint.get(fingerprint))
-    .filter((message): message is NonNullable<typeof message> => Boolean(message))
-  const sourceRecords = activeRecords.length > 0 ? activeRecords : ledger.messages.slice(-MAX_LEDGER_MESSAGE_RECORDS)
+    .filter((message): message is MessageRecord => Boolean(message))
+  const sourceRecords =
+    activeRecords.length > 0
+      ? activeRecords
+      : ledger.messages.slice(-MAX_LEDGER_MESSAGE_RECORDS)
+
+  const sourceLoad = sourceRecords.reduce(
+    (sum, message) => sum + Math.max(0, message.tokenEstimate),
+    0
+  )
   const basePrefixLoad = Math.max(
     0,
     ledger.retainedPrefixLoad ??
-      ledger.currentEstimatedLoad - activeRecords.reduce((sum, message) => sum + message.tokenEstimate, 0)
+      ledger.currentEstimatedLoad - sourceLoad
   )
   const retainedRecords = sourceRecords.slice(-MAX_LEDGER_MESSAGE_RECORDS)
   const droppedLoad = sourceRecords
     .slice(0, Math.max(0, sourceRecords.length - retainedRecords.length))
     .reduce((sum, message) => sum + Math.max(0, message.tokenEstimate), 0)
   const retainedPrefixLoad = Math.max(0, basePrefixLoad + droppedLoad)
+
   const messages = retainedRecords.map((message) => ({
     fingerprint: message.fingerprint,
     ...(message.contentFingerprint
       ? { contentFingerprint: message.contentFingerprint }
       : {}),
-    ...(message.stableHintHash ? { stableHintHash: message.stableHintHash } : {}),
+    ...(message.stableHintHash
+      ? { stableHintHash: message.stableHintHash }
+      : {}),
     role: message.role,
     tokenEstimate: message.tokenEstimate,
     observedAt: message.observedAt
   }))
-  const activeFingerprints = messages.map((message) => message.fingerprint)
 
   return {
     conversationKey: ledger.conversationKey,
     generationId: ledger.generationId,
+    ledgerRevision: ledger.ledgerRevision,
+    observationEpoch: ledger.observationEpoch,
     coverageState: ledger.coverageState,
     parserHealth: ledger.parserHealth,
     messages,
-    activeFingerprints,
+    activeFingerprints: messages.map((message) => message.fingerprint),
+    sequenceReliability: ledger.sequenceReliability,
+    ...(ledger.sequenceUncertainReason
+      ? { sequenceUncertainReason: ledger.sequenceUncertainReason }
+      : {}),
     currentEstimatedLoad: ledger.currentEstimatedLoad,
     ...(retainedPrefixLoad > 0 ? { retainedPrefixLoad } : {}),
+    uncertaintySources: unique(ledger.uncertaintySources),
+    ...(ledger.environmentSignature
+      ? { environmentSignature: ledger.environmentSignature }
+      : {}),
     completedAssistantFingerprints: unique(
-      ledger.completedAssistantFingerprints ?? []
+      ledger.completedAssistantFingerprints
     ).slice(-MAX_COMPLETION_KEYS),
     confirmedFailureFingerprints: unique(
-      ledger.confirmedFailureFingerprints ?? []
+      ledger.confirmedFailureFingerprints
     ).slice(-MAX_FAILURE_KEYS),
-    dismissedFailureKeys: unique(ledger.dismissedFailureKeys ?? []).slice(-MAX_FAILURE_KEYS),
+    dismissedFailureKeys: unique(ledger.dismissedFailureKeys).slice(-MAX_FAILURE_KEYS),
     updatedAt: ledger.updatedAt
   }
+}
+
+function normalizeLedger(
+  raw: PersistedConversationLedger,
+  fallbackGenerationId: string,
+  sourceSchemaVersion = CURRENT_SCHEMA_VERSION
+): PersistedConversationLedger {
+  const legacy = raw as PersistedConversationLedger & {
+    hasUnmeasuredAttachments?: boolean
+  }
+  const messages = Array.isArray(legacy.messages) ? legacy.messages : []
+  const uncertaintySources = normalizeUncertaintySources(
+    legacy.uncertaintySources,
+    sourceSchemaVersion < CURRENT_SCHEMA_VERSION &&
+      Boolean(
+        legacy.hasUnmeasuredAttachments ||
+          messages.some((message) => (message.attachmentCount ?? 0) > 0)
+      )
+  )
+  const coverageState = isCoverageState(legacy.coverageState)
+    ? legacy.coverageState
+    : 'unknown'
+  const parserHealth = isParserHealth(legacy.parserHealth)
+    ? legacy.parserHealth
+    : 'unreliable'
+  const sequenceReliability =
+    legacy.sequenceReliability === 'reliable' ||
+    legacy.sequenceReliability === 'uncertain'
+      ? legacy.sequenceReliability
+      : legacy.sequenceUncertainReason
+        ? 'uncertain'
+        : parserHealth === 'healthy' && coverageState !== 'unknown'
+          ? 'reliable'
+          : 'uncertain'
+
+  return {
+    conversationKey: legacy.conversationKey,
+    generationId: legacy.generationId ?? fallbackGenerationId,
+    ledgerRevision: Math.max(1, finiteNumber(legacy.ledgerRevision) ?? 1),
+    observationEpoch: Math.max(
+      0,
+      finiteNumber(legacy.observationEpoch) ??
+        finiteNumber(legacy.updatedAt) ??
+        0
+    ),
+    coverageState,
+    parserHealth,
+    messages,
+    activeFingerprints: Array.isArray(legacy.activeFingerprints)
+      ? unique(legacy.activeFingerprints)
+      : [],
+    sequenceReliability,
+    ...(legacy.sequenceUncertainReason
+      ? { sequenceUncertainReason: legacy.sequenceUncertainReason }
+      : {}),
+    currentEstimatedLoad: Math.max(
+      0,
+      finiteNumber(legacy.currentEstimatedLoad) ?? 0
+    ),
+    ...(finiteNumber(legacy.retainedPrefixLoad) !== undefined
+      ? { retainedPrefixLoad: Math.max(0, finiteNumber(legacy.retainedPrefixLoad)!) }
+      : {}),
+    uncertaintySources,
+    ...(isEnvironmentSignature(legacy.environmentSignature)
+      ? { environmentSignature: legacy.environmentSignature }
+      : {}),
+    completedAssistantFingerprints: unique(
+      legacy.completedAssistantFingerprints ?? []
+    ),
+    confirmedFailureFingerprints: unique(
+      legacy.confirmedFailureFingerprints ?? []
+    ),
+    dismissedFailureKeys: unique(legacy.dismissedFailureKeys ?? []),
+    updatedAt: finiteNumber(legacy.updatedAt) ?? Date.now()
+  }
+}
+
+async function anonymizeConversationReferences(
+  state: PersistedState
+): Promise<PersistedState> {
+  const cache = new Map<string, string>()
+  const mapKey = async (value: string): Promise<string> => {
+    if (isAnonymousConversationKey(value)) return value
+    const cached = cache.get(value)
+    if (cached) return cached
+    const anonymous = await anonymizeConversationKey(value, state.installSalt)
+    cache.set(value, anonymous)
+    return anonymous
+  }
+
+  const ledgers: Record<string, PersistedConversationLedger> = {}
+  for (const ledger of Object.values(state.ledgers)) {
+    const conversationKey = await mapKey(ledger.conversationKey)
+    const migrated = { ...ledger, conversationKey }
+    ledgers[conversationKey] = mergeLedgerSnapshots(
+      ledgers[conversationKey],
+      migrated
+    )
+  }
+
+  const generations: CalibrationGeneration[] = []
+  for (const generation of state.generations) {
+    let migrated: CalibrationGeneration = {
+      ...generation,
+      samples: [],
+      turnGrowthSamples: []
+    }
+    for (const sample of generation.samples) {
+      migrated = upsertConversationSample(migrated, {
+        ...sample,
+        conversationKey: await mapKey(sample.conversationKey)
+      })
+    }
+    migrated.turnGrowthSamples = await Promise.all(
+      generation.turnGrowthSamples.map(async (sample) => ({
+        ...sample,
+        conversationKey: await mapKey(sample.conversationKey)
+      }))
+    )
+    migrated.environmentConflictKeys = unique(
+      await Promise.all(
+        generation.environmentConflictKeys.map((key) =>
+          anonymizeEnvironmentConflictKey(key, mapKey)
+        )
+      )
+    )
+    migrated.pendingFailureConfirmations = await Promise.all(
+      generation.pendingFailureConfirmations.map(async (pending) => ({
+        ...pending,
+        conversationKey: await mapKey(pending.conversationKey)
+      }))
+    )
+    generations.push(migrated)
+  }
+
+  const conversationControls: Record<string, ConversationControl> = {}
+  for (const [key, control] of Object.entries(state.conversationControls)) {
+    const anonymousKey = await mapKey(key)
+    const existing = conversationControls[anonymousKey]
+    if (!existing || (control.updatedAt ?? 0) >= (existing.updatedAt ?? 0)) {
+      conversationControls[anonymousKey] = control
+    }
+  }
+
+  return {
+    ...state,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    generations,
+    ledgers,
+    conversationControls
+  }
+}
+
+async function anonymizeEnvironmentConflictKey(
+  value: string,
+  mapKey: (value: string) => Promise<string>
+): Promise<string> {
+  const match = value.match(/^(safe|failure):(.+)$/)
+  if (!match?.[1] || !match[2]) return value
+  return `${match[1]}:${await mapKey(match[2])}`
+}
+
+function normalizeControls(
+  controls: Record<string, ConversationControl>
+): Record<string, ConversationControl> {
+  return Object.fromEntries(
+    Object.entries(controls).map(([key, control]) => {
+      const legacy = control as ConversationControl & {
+        lastAlertLevel?: unknown
+        lastDisplayedLevel?: unknown
+        lastAlertScore?: unknown
+        lastAlertUserTurn?: unknown
+        snoozeUntilUserTurn?: unknown
+      }
+      const lastAlertState =
+        isRiskState(legacy.lastAlertState)
+          ? legacy.lastAlertState
+          : isRiskState(legacy.lastAlertLevel)
+            ? legacy.lastAlertLevel
+            : undefined
+      return [
+        key,
+        {
+          ...(legacy.muted !== undefined ? { muted: legacy.muted } : {}),
+          ...(lastAlertState ? { lastAlertState } : {}),
+          ...(legacy.updatedAt !== undefined ? { updatedAt: legacy.updatedAt } : {})
+        }
+      ]
+    })
+  )
 }
 
 function compactConversationControls(
@@ -333,20 +682,17 @@ function compactConversationControls(
   return Object.fromEntries(
     Object.entries(controls)
       .filter(([, control]) => hasMeaningfulControl(control))
-      .sort((a, b) => controlRecency(b[0], b[1], ledgers) - controlRecency(a[0], a[1], ledgers))
+      .sort(
+        (a, b) =>
+          controlRecency(b[0], b[1], ledgers) -
+          controlRecency(a[0], a[1], ledgers)
+      )
       .slice(0, MAX_CONVERSATION_CONTROLS)
   )
 }
 
 function hasMeaningfulControl(control: ConversationControl): boolean {
-  return (
-    control.muted !== undefined ||
-    control.snoozeUntilUserTurn !== undefined ||
-    control.lastDisplayedLevel !== undefined ||
-    control.lastAlertLevel !== undefined ||
-    control.lastAlertScore !== undefined ||
-    control.lastAlertUserTurn !== undefined
-  )
+  return control.muted !== undefined || control.lastAlertState !== undefined
 }
 
 function controlRecency(
@@ -354,10 +700,15 @@ function controlRecency(
   control: ConversationControl,
   ledgers: Record<string, PersistedConversationLedger>
 ): number {
-  return Math.max(0, control.updatedAt ?? ledgers[conversationKey]?.updatedAt ?? 0)
+  return Math.max(
+    0,
+    control.updatedAt ?? ledgers[conversationKey]?.updatedAt ?? 0
+  )
 }
 
-export function hasRequiredPrivacyConsent(settings: ExtensionSettings): boolean {
+export function hasRequiredPrivacyConsent(
+  settings: ExtensionSettings
+): boolean {
   return (
     settings.privacyConsentVersion === REQUIRED_PRIVACY_CONSENT_VERSION &&
     typeof settings.privacyConsentedAt === 'number' &&
@@ -387,7 +738,9 @@ export function withPrivacyConsent(
   }
 }
 
-export function hasDismissedPrivacyConsent(settings: ExtensionSettings): boolean {
+export function hasDismissedPrivacyConsent(
+  settings: ExtensionSettings
+): boolean {
   return (
     !hasRequiredPrivacyConsent(settings) &&
     typeof settings.privacyConsentDismissedAt === 'number' &&
@@ -416,4 +769,122 @@ function consentSettings(
     Number.isFinite(settings.privacyConsentDismissedAt)
     ? { privacyConsentDismissedAt: settings.privacyConsentDismissedAt }
     : {}
+}
+
+function createInitialGeneration(
+  id: string,
+  now: number
+): CalibrationGeneration {
+  const generation = createGeneration(id, now)
+  generation.createdReason = 'initial'
+  return generation
+}
+
+function normalizeFailureQuality(
+  value: unknown
+): FailureReferenceQuality {
+  return value === 'strong' || value === 'conservative'
+    ? value
+    : 'provisional'
+}
+
+function normalizeUncertaintySources(
+  value: unknown,
+  legacyAttachment: boolean
+): UncertaintySource[] {
+  const result = new Set<UncertaintySource>()
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (isUncertaintySource(item)) result.add(item)
+    }
+  }
+  if (legacyAttachment) result.add('attachment')
+  return [...result]
+}
+
+function isEnvironmentSignature(
+  value: unknown
+): value is EnvironmentSignature {
+  if (!value || typeof value !== 'object') return false
+  const record = value as Record<string, unknown>
+  return (
+    typeof record.parserSchemaVersion === 'string' &&
+    typeof record.measurementSchemaVersion === 'number' &&
+    (record.modelHint === undefined || typeof record.modelHint === 'string')
+  )
+}
+
+function isCoverageState(
+  value: unknown
+): value is PersistedConversationLedger['coverageState'] {
+  return (
+    value === 'complete' ||
+    value === 'mostly_complete' ||
+    value === 'incomplete' ||
+    value === 'unknown'
+  )
+}
+
+function isParserHealth(
+  value: unknown
+): value is PersistedConversationLedger['parserHealth'] {
+  return value === 'healthy' || value === 'degraded' || value === 'unreliable'
+}
+
+function isSequenceReliability(
+  value: unknown
+): value is PersistedConversationLedger['sequenceReliability'] {
+  return value === 'reliable' || value === 'uncertain'
+}
+
+function isRiskState(value: unknown): value is RiskState {
+  return (
+    value === 'unknown' ||
+    value === 'normal' ||
+    value === 'long' ||
+    value === 'organize' ||
+    value === 'high'
+  )
+}
+
+function isUncertaintySource(value: unknown): value is UncertaintySource {
+  return (
+    value === 'attachment' ||
+    value === 'tool_result' ||
+    value === 'web_search' ||
+    value === 'code_execution' ||
+    value === 'voice' ||
+    value === 'generated_image' ||
+    value === 'unknown_context'
+  )
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : undefined
+}
+
+function messageRecency(message: MessageRecord): number {
+  return Math.max(message.observedAt, message.lastObservedAt ?? 0)
+}
+
+function unique<T>(values: T[]): T[] {
+  return Array.from(new Set(values))
+}
+
+function persistedStatesEqual(a: PersistedState, b: PersistedState): boolean {
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
+function isPersistedStateLike(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false
+  const state = value as Partial<PersistedState>
+  return (
+    typeof state.installSalt === 'string' &&
+    typeof state.settings === 'object' &&
+    Array.isArray(state.generations) &&
+    typeof state.ledgers === 'object' &&
+    state.ledgers !== null
+  )
 }

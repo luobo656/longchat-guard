@@ -1,150 +1,236 @@
 import { describe, expect, it } from 'vitest'
 import { assessRisk } from '../src/core/risk-engine'
+import type { RiskInput } from '../src/core/types'
 
-describe('risk engine 2.0', () => {
-  it('fails closed when parser health is unreliable', () => {
-    const result = assessRisk({
-      currentLoad: 1000,
-      coverage: 'complete',
-      parserHealth: 'unreliable'
-    })
-    expect(result.level).toBe('unreliable')
-    expect(result.score).toBe(100)
+const calibrated = (
+  overrides: Partial<{
+    [K in keyof RiskInput]: RiskInput[K] | undefined
+  }> = {}
+): RiskInput => ({
+  currentLoad: 10_000,
+  composerDraftLoad: 0,
+  measurementState: 'complete',
+  calibrationState: 'calibrated',
+  environmentConfidence: 'verified',
+  failureReference: {
+    load: 100_000,
+    quality: 'strong',
+    sourceConversationCount: 1
+  },
+  growthReserve: 5_000,
+  ...overrides
+} as RiskInput)
+
+describe('risk engine product invariants', () => {
+  it('never calls an uncalibrated conversation normal', () => {
+    const result = assessRisk(
+      calibrated({
+        calibrationState: 'uncalibrated',
+        failureReference: undefined
+      })
+    )
+    expect(result.state).toBe('unknown')
+    expect(result.referencePositionScore).toBe(0)
   })
 
-  it('does not let incomplete coverage or low legacy confidence inflate a short conversation', () => {
-    const complete = assessRisk({
-      currentLoad: 305,
-      coverage: 'complete',
-      parserHealth: 'healthy',
-      failureBoundary: 77324,
-      turnBuffer: 2000,
-      confidence: 1
-    })
-    const incomplete = assessRisk({
-      currentLoad: 305,
-      coverage: 'incomplete',
-      parserHealth: 'healthy',
-      failureBoundary: 77324,
-      turnBuffer: 2000,
-      confidence: 0.01
-    })
-    expect(complete.level).toBe('normal')
-    expect(incomplete.level).toBe('normal')
-    expect(incomplete.score).toBe(complete.score)
-    expect(incomplete.trendScore).toBeLessThan(5)
-  })
-
-  it('keeps an uncalibrated conversation normal and visually near the left edge', () => {
-    const result = assessRisk({
-      currentLoad: 300000,
-      coverage: 'complete',
-      parserHealth: 'healthy'
-    })
-    expect(result.level).toBe('normal')
-    expect(result.trendScore).toBeLessThanOrEqual(2)
-  })
-
-  it('uses a safe-only boundary as weak evidence and never escalates above long', () => {
-    const within = assessRisk({
-      currentLoad: 50000,
-      coverage: 'complete',
-      parserHealth: 'healthy',
-      safeBoundary: 50000
-    })
-    const above = assessRisk({
-      currentLoad: 100000,
-      coverage: 'complete',
-      parserHealth: 'healthy',
-      safeBoundary: 50000
-    })
-    expect(within.level).toBe('normal')
-    expect(above.level).toBe('long')
-    expect(above.level).not.toBe('organize')
-    expect(above.level).not.toBe('high')
-    expect(above.trendScore).toBeLessThanOrEqual(60)
-  })
-
-  it('does not invent warning bands from F until B is learned', () => {
-    const below = assessRisk({
-      currentLoad: 76000,
-      coverage: 'complete',
-      parserHealth: 'healthy',
-      failureBoundary: 77324
-    })
-    const at = assessRisk({
-      currentLoad: 77324,
-      coverage: 'complete',
-      parserHealth: 'healthy',
-      failureBoundary: 77324
-    })
-    expect(below.level).toBe('normal')
-    expect(at.level).toBe('high')
-  })
-
-  it('uses one, two, and three learned turn buffers as the warning bands', () => {
-    const base = {
-      coverage: 'complete' as const,
-      parserHealth: 'healthy' as const,
-      failureBoundary: 77324,
-      turnBuffer: 2000
+  it('fails closed when measurement is partial, unavailable or uncertain', () => {
+    for (const measurementState of [
+      'partial',
+      'unavailable',
+      'uncertain'
+    ] as const) {
+      expect(
+        assessRisk(calibrated({ measurementState })).state
+      ).toBe('unknown')
     }
-    expect(assessRisk({ ...base, currentLoad: 71323 }).level).toBe('normal')
-    expect(assessRisk({ ...base, currentLoad: 71324 }).level).toBe('long')
-    expect(assessRisk({ ...base, currentLoad: 73324 }).level).toBe('organize')
-    expect(assessRisk({ ...base, currentLoad: 75324 }).level).toBe('high')
-    expect(assessRisk({ ...base, currentLoad: 77324 }).level).toBe('high')
   })
 
-  it('maps the visible trend directly to the empirical failure boundary', () => {
-    const result = assessRisk({
-      currentLoad: 305,
-      coverage: 'incomplete',
-      parserHealth: 'healthy',
-      failureBoundary: 77324,
-      turnBuffer: 2000
-    })
-    expect(result.level).toBe('normal')
-    expect(result.trendScore).toBeLessThan(5)
+  it('treats stale and calibrating references as unknown', () => {
+    expect(
+      assessRisk(calibrated({ calibrationState: 'stale' })).state
+    ).toBe('unknown')
+    expect(
+      assessRisk(calibrated({ calibrationState: 'calibrating' })).state
+    ).toBe('unknown')
   })
 
-  it('ignores legacy composer and heuristic inputs', () => {
-    const result = assessRisk({
-      currentLoad: 1000,
-      composerLoad: 50000,
-      expectedAssistantGrowth: 50000,
-      safetyMargin: 50000,
-      confidence: 0,
-      feedbackBias: 6,
-      coverage: 'complete',
-      parserHealth: 'healthy'
-    })
-    expect(result.level).toBe('normal')
-    expect(result.predictedNextTurnLoad).toBe(1000)
+  it('allows verified environment + usable reference + low load to be normal', () => {
+    const result = assessRisk(
+      calibrated({
+        currentLoad: 20_000,
+        environmentConfidence: 'verified',
+        failureReference: {
+          load: 100_000,
+          quality: 'conservative',
+          sourceConversationCount: 1
+        },
+        growthReserve: 5_000
+      })
+    )
+    expect(result.state).toBe('normal')
+    expect(result.referencePositionScore).toBeGreaterThan(0)
   })
 
-  it('uses B for predicted next-turn load', () => {
-    const result = assessRisk({
-      currentLoad: 70000,
-      coverage: 'complete',
-      parserHealth: 'healthy',
-      failureBoundary: 80000,
-      turnBuffer: 2500
-    })
-    expect(result.predictedNextTurnLoad).toBe(72500)
+  it('never certifies normal from an unverified environment warning prior', () => {
+    const result = assessRisk(
+      calibrated({
+        currentLoad: 20_000,
+        environmentConfidence: 'unverified',
+        calibrationState: 'calibrated_conservative',
+        failureReference: {
+          load: 100_000,
+          quality: 'conservative',
+          sourceConversationCount: 1
+        },
+        growthReserve: 5_000
+      })
+    )
+    expect(result.state).toBe('unknown')
+    expect(result.referencePositionScore).toBeGreaterThan(0)
+    expect(result.reasons).toContain(
+      'environment_unverified_cannot_certify_normal'
+    )
   })
 
-  it('treats warm-start boundaries as guidance, not strong warnings', () => {
-    const result = assessRisk({
-      currentLoad: 79000,
-      coverage: 'complete',
-      parserHealth: 'healthy',
-      failureBoundary: 80000,
-      turnBuffer: 2000,
-      usingWarmStartPrior: true
-    })
-    expect(['normal', 'long']).toContain(result.level)
-    expect(result.level).not.toBe('organize')
-    expect(result.level).not.toBe('high')
+  it('uses an unverified historical reference asymmetrically for warnings', () => {
+    const near = assessRisk(
+      calibrated({
+        currentLoad: 90_000,
+        environmentConfidence: 'unverified',
+        calibrationState: 'calibrated_conservative',
+        failureReference: {
+          load: 100_000,
+          quality: 'conservative',
+          sourceConversationCount: 1
+        },
+        growthReserve: 5_000
+      })
+    )
+    const atReference = assessRisk(
+      calibrated({
+        currentLoad: 100_000,
+        environmentConfidence: 'unverified',
+        calibrationState: 'calibrated_conservative',
+        failureReference: {
+          load: 100_000,
+          quality: 'conservative',
+          sourceConversationCount: 1
+        },
+        growthReserve: undefined
+      })
+    )
+
+    expect(near.state).toBe('organize')
+    expect(near.referencePositionScore).toBe(75)
+    expect(atReference.state).toBe('high')
+    expect(atReference.referencePositionScore).toBe(100)
+  })
+
+  it('never uses a confirmed environment mismatch to certify normal', () => {
+    const result = assessRisk(
+      calibrated({
+        currentLoad: 20_000,
+        environmentConfidence: 'mismatch',
+        calibrationState: 'stale',
+        failureReference: {
+          load: 100_000,
+          quality: 'strong',
+          sourceConversationCount: 1
+        }
+      })
+    )
+    expect(result.state).toBe('unknown')
+    expect(result.referencePositionScore).toBe(0)
+  })
+
+  it('uses whole-turn reserve bands only after a usable reference exists', () => {
+    expect(
+      assessRisk(calibrated({ currentLoad: 84_999 })).state
+    ).toBe('normal')
+    expect(
+      assessRisk(calibrated({ currentLoad: 85_000 })).state
+    ).toBe('long')
+    expect(
+      assessRisk(calibrated({ currentLoad: 90_000 })).state
+    ).toBe('organize')
+    expect(
+      assessRisk(calibrated({ currentLoad: 95_000 })).state
+    ).toBe('high')
+  })
+
+  it('does not invent reserve bands before turn growth is learned', () => {
+    expect(
+      assessRisk(
+        calibrated({
+          currentLoad: 99_999,
+          growthReserve: undefined
+        })
+      ).state
+    ).toBe('normal')
+    expect(
+      assessRisk(
+        calibrated({
+          currentLoad: 100_000,
+          growthReserve: undefined
+        })
+      ).state
+    ).toBe('high')
+  })
+
+  it('includes unsent composer text before send', () => {
+    const withoutDraft = assessRisk(
+      calibrated({
+        currentLoad: 90_000,
+        composerDraftLoad: 0,
+        growthReserve: 5_000
+      })
+    )
+    const withDraft = assessRisk(
+      calibrated({
+        currentLoad: 90_000,
+        composerDraftLoad: 5_001,
+        growthReserve: 5_000
+      })
+    )
+
+    expect(withoutDraft.state).toBe('organize')
+    expect(withDraft.state).toBe('high')
+    expect(withDraft.projectedLoad).toBe(100_001)
+    expect(withDraft.reasons).toContain('composer_draft_included')
+  })
+
+  it('allows conservative empirical references without pretending they are strong', () => {
+    const result = assessRisk(
+      calibrated({
+        currentLoad: 100_000,
+        calibrationState: 'calibrated_conservative',
+        failureReference: {
+          load: 100_000,
+          quality: 'conservative',
+          sourceConversationCount: 1
+        },
+        growthReserve: undefined
+      })
+    )
+    expect(result.state).toBe('high')
+    expect(result.reasons).toContain(
+      'conservative_failure_reference'
+    )
+  })
+
+  it('maps usable local references onto a 0-100 visual reference position', () => {
+    const atReference = assessRisk(
+      calibrated({ currentLoad: 100_000, growthReserve: undefined })
+    )
+    expect(atReference.referencePositionScore).toBe(100)
+
+    const unknown = assessRisk(
+      calibrated({
+        currentLoad: 100_000,
+        calibrationState: 'uncalibrated',
+        failureReference: undefined
+      })
+    )
+    expect(unknown.referencePositionScore).toBe(0)
   })
 })

@@ -1,6 +1,10 @@
-import type { ObservedMessageRecord } from '../core/types'
+import type {
+  ObservedMessageRecord,
+  UncertaintySource
+} from '../core/types'
 import type { PageMessageSnapshot } from '../core/page-adapter'
 import { findConversationScrollContainer, readMessages } from './dom-reader'
+import { detectUncertaintySources } from './environment'
 
 export type HistoryScanFailureReason =
   | 'no_scroll_container'
@@ -43,15 +47,18 @@ export interface HistoryScanResult {
   observedMessages: ObservedMessageRecord[]
   messageCount: number
   attachmentCount: number
+  uncertaintySources: UncertaintySource[]
   unknownRoleCount: number
   diagnostics: HistoryScanDiagnostic[]
 }
 
 export interface HistoryScanOptions {
   maxHeadRounds?: number
+  requiredHeadStableRounds?: number
   maxSweepSteps?: number
   requiredStableRounds?: number
   maxEmptyWindowRetries?: number
+  maxAlignmentRetries?: number
   stepRatio?: number
   settle?: () => Promise<void>
   headSettle?: () => Promise<void>
@@ -66,6 +73,7 @@ interface ScrollSurface {
 interface HistoryScanSource {
   surface: ScrollSurface
   readWindow(): PageMessageSnapshot[]
+  readUncertaintySources?(): UncertaintySource[]
   notifyScroll?(): void
   surfaceHint?: string
   scrollMode?: 'normal' | 'reversed'
@@ -89,6 +97,7 @@ export async function scanConversationHistory(
     {
       surface,
       readWindow: () => readMessages(doc),
+      readUncertaintySources: () => detectUncertaintySources(doc),
       notifyScroll: () => surface.dispatchEvent(new Event('scroll', { bubbles: true })),
       surfaceHint: describeScrollSurface(surface, doc),
       scrollMode: detectScrollMode(surface)
@@ -103,10 +112,12 @@ export async function scanHistorySource(
   observeWindow: ObserveWindow,
   options: HistoryScanOptions = {}
 ): Promise<HistoryScanResult> {
-  const maxHeadRounds = options.maxHeadRounds ?? 8
+  const maxHeadRounds = options.maxHeadRounds ?? 32
   const maxSweepSteps = options.maxSweepSteps ?? 2000
   const requiredStableRounds = options.requiredStableRounds ?? 3
+  const requiredHeadStableRounds = options.requiredHeadStableRounds ?? 4
   const maxEmptyWindowRetries = options.maxEmptyWindowRetries ?? 4
+  const maxAlignmentRetries = options.maxAlignmentRetries ?? 6
   const stepRatio = options.stepRatio ?? 0.6
   const settle = options.settle ?? defaultSettle
   const headSettle = options.headSettle ?? (options.settle ? settle : defaultHeadSettle)
@@ -115,6 +126,7 @@ export async function scanHistorySource(
   const recordsByIdentity = new Map<string, ObservedMessageRecord>()
   let activeIdentities: string[] = []
   let attachmentCount = 0
+  const uncertaintySources = new Set<UncertaintySource>()
 
   const maxTop = (): number =>
     Math.max(0, source.surface.scrollHeight - source.surface.clientHeight)
@@ -178,6 +190,7 @@ export async function scanHistorySource(
       observedMessages,
       messageCount: observedMessages.length,
       attachmentCount,
+      uncertaintySources: [...uncertaintySources],
       unknownRoleCount,
       diagnostics: [...diagnostics]
     }
@@ -214,6 +227,9 @@ export async function scanHistorySource(
     }
     if (pageMessages.length === 0) return { ok: false, reason: 'no_messages' }
 
+    for (const uncertaintySource of source.readUncertaintySources?.() ?? []) {
+      uncertaintySources.add(uncertaintySource)
+    }
     const observed = await observeWindow(pageMessages)
     record(phase, {
       ...(step !== undefined ? { step } : {}),
@@ -339,34 +355,44 @@ export async function scanHistorySource(
     return false
   }
 
-  record('start', source.surfaceHint ? { surfaceHint: source.surfaceHint } : {})
-
-  try {
-    if (!(await settleAtBottom())) return fail('tail_not_stable')
-
-    const initial = await captureBackward('capture')
-    if (!initial.ok) return fail(initial.reason)
-    const confirmedTailIdentity = initial.lastVisible
-    if (!confirmedTailIdentity) return fail('no_messages')
-
-    let reachedStableTop = false
+  const sweepToStableTop = async (): Promise<
+    | { ok: true }
+    | { ok: false; reason: HistoryScanFailureReason; step?: number }
+  > => {
     let topStableRounds = 0
 
     for (let step = 0; step < maxSweepSteps; step += 1) {
       const beforeHeight = source.surface.scrollHeight
+      const beforeTop = logicalTop()
       const stepSize = Math.max(200, Math.floor(source.surface.clientHeight * stepRatio))
-      const nextTop = Math.max(0, logicalTop() - stepSize)
+      const nextTop = Math.max(0, beforeTop - stepSize)
       moveSurface(nextTop)
       record('scroll_up', { step, totalMessageCount: activeIdentities.length })
 
       await waitForHeightStability(step)
 
-      const captured = await captureBackward(
+      let captured = await captureBackward(
         'capture',
         step,
         logicalTop() <= TOP_BOTTOM_TOLERANCE ? headSettle : settle
       )
-      if (!captured.ok) return fail(captured.reason, step)
+      if (!captured.ok && captured.reason === 'window_alignment_failed') {
+        const originalStep = Math.max(1, beforeTop - nextTop)
+        for (let retry = 1; retry <= maxAlignmentRetries; retry += 1) {
+          const reducedStep = Math.max(24, Math.floor(originalStep / (2 ** retry)))
+          const recoveryTop = Math.max(nextTop, beforeTop - reducedStep)
+          moveSurface(recoveryTop)
+          record('scroll_up', { step, totalMessageCount: activeIdentities.length })
+          await waitForHeightStability(step)
+          captured = await captureBackward(
+            'capture',
+            step,
+            logicalTop() <= TOP_BOTTOM_TOLERANCE ? headSettle : settle
+          )
+          if (captured.ok || captured.reason !== 'window_alignment_failed') break
+        }
+      }
+      if (!captured.ok) return { ok: false, reason: captured.reason, step }
 
       const atTop = logicalTop() <= TOP_BOTTOM_TOLERANCE
       const noProgress =
@@ -378,24 +404,80 @@ export async function scanHistorySource(
         topStableRounds = 0
       }
 
-      if (atTop && topStableRounds >= requiredStableRounds) {
-        reachedStableTop = true
-        break
-      }
+      if (atTop && topStableRounds >= requiredStableRounds) return { ok: true }
     }
 
-    if (!reachedStableTop) return fail('scan_limit_reached')
+    return { ok: false, reason: 'scan_limit_reached' }
+  }
+
+  const reconnectAfterPrependedHistory = async (
+    insertedHeight: number,
+    round: number
+  ): Promise<{ ok: true } | { ok: false; reason: HistoryScanFailureReason }> => {
+    const halfViewport = Math.max(48, Math.floor(source.surface.clientHeight / 2))
+    const expectedAnchorTop = Math.max(0, Math.min(maxTop(), insertedHeight))
+    const candidates = [
+      expectedAnchorTop,
+      expectedAnchorTop - halfViewport,
+      expectedAnchorTop + halfViewport,
+      expectedAnchorTop - source.surface.clientHeight,
+      expectedAnchorTop + source.surface.clientHeight,
+      logicalTop()
+    ]
+      .map((value) => Math.max(0, Math.min(maxTop(), Math.round(value))))
+      .filter((value, index, values) => values.indexOf(value) === index)
+
+    for (const candidate of candidates) {
+      moveSurface(candidate)
+      record('scroll_up', { step: round, totalMessageCount: activeIdentities.length })
+      await waitForHeightStability(round)
+      const captured = await captureBackward('top_probe', round, settle)
+      if (captured.ok) return { ok: true }
+      if (captured.reason !== 'window_alignment_failed') return captured
+    }
+
+    return { ok: false, reason: 'window_alignment_failed' }
+  }
+
+  record('start', source.surfaceHint ? { surfaceHint: source.surfaceHint } : {})
+
+  try {
+    if (!(await settleAtBottom())) return fail('tail_not_stable')
+
+    const initial = await captureBackward('capture')
+    if (!initial.ok) return fail(initial.reason)
+    const confirmedTailIdentity = initial.lastVisible
+    if (!confirmedTailIdentity) return fail('no_messages')
+
+    const initialSweep = await sweepToStableTop()
+    if (!initialSweep.ok) return fail(initialSweep.reason, initialSweep.step)
 
     let confirmedHeadIdentity = ''
     let previousHeadHeight = -1
     let headStableRounds = 0
 
     for (let round = 0; round < maxHeadRounds; round += 1) {
+      const heightBeforeProbe = source.surface.scrollHeight
       moveSurface(10)
       await settle()
       moveSurface(0)
       await headSettle()
 
+      const heightAfterProbe = source.surface.scrollHeight
+      const insertedHeight = Math.max(0, heightAfterProbe - heightBeforeProbe)
+      if (insertedHeight > 0) {
+        const reconnected = await reconnectAfterPrependedHistory(insertedHeight, round)
+        if (!reconnected.ok) return fail(reconnected.reason, round)
+        const expandedSweep = await sweepToStableTop()
+        if (!expandedSweep.ok) return fail(expandedSweep.reason, expandedSweep.step)
+        confirmedHeadIdentity = ''
+        previousHeadHeight = source.surface.scrollHeight
+        headStableRounds = 0
+        continue
+      }
+
+      moveSurface(0)
+      await settle()
       const captured = await captureBackward('top_probe', round, headSettle)
       if (!captured.ok) return fail(captured.reason, round)
 
@@ -409,10 +491,10 @@ export async function scanHistorySource(
       confirmedHeadIdentity = captured.firstVisible
       previousHeadHeight = source.surface.scrollHeight
 
-      if (headStableRounds >= requiredStableRounds) break
+      if (headStableRounds >= requiredHeadStableRounds) break
     }
 
-    if (headStableRounds < requiredStableRounds || !confirmedHeadIdentity) {
+    if (headStableRounds < requiredHeadStableRounds || !confirmedHeadIdentity) {
       return fail('head_not_stable')
     }
 
@@ -497,6 +579,7 @@ function emptyFailure(reason: HistoryScanFailureReason): HistoryScanResult {
     observedMessages: [],
     messageCount: 0,
     attachmentCount: 0,
+    uncertaintySources: [],
     unknownRoleCount: 0,
     diagnostics: [
       {
@@ -517,6 +600,6 @@ async function defaultSettle(): Promise<void> {
 }
 
 async function defaultHeadSettle(): Promise<void> {
-  await new Promise<void>((resolve) => window.setTimeout(resolve, 900))
+  await new Promise<void>((resolve) => window.setTimeout(resolve, 1200))
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 }

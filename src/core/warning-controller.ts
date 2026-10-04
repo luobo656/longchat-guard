@@ -1,92 +1,31 @@
-import type { ConversationControl, RiskAssessment, RiskLevel } from './types'
+import type { ConversationControl, RiskState } from './types'
 
-const LEVEL_RANK: Record<RiskLevel, number> = {
+const STATE_RANK: Record<RiskState, number> = {
+  unknown: -1,
   normal: 0,
   long: 1,
   organize: 2,
-  high: 3,
-  unreliable: 4
-}
-
-// Product UX defaults only; not OpenAI thresholds.
-const EXIT_SCORE = {
-  long: 42,
-  organize: 61,
-  high: 76
-} as const
-
-export function stabilizeRiskLevel(
-  raw: RiskAssessment,
-  previous?: RiskLevel
-): RiskLevel {
-  if (raw.level === 'unreliable') return 'unreliable'
-  if (!previous || previous === 'unreliable') return raw.level
-
-  if (previous === 'high' && raw.level !== 'high' && raw.score >= EXIT_SCORE.high) {
-    return 'high'
-  }
-  if (
-    previous === 'organize' &&
-    LEVEL_RANK[raw.level] < LEVEL_RANK.organize &&
-    raw.score >= EXIT_SCORE.organize
-  ) {
-    return 'organize'
-  }
-  if (
-    previous === 'long' &&
-    raw.level === 'normal' &&
-    raw.score >= EXIT_SCORE.long
-  ) {
-    return 'long'
-  }
-  return raw.level
+  high: 3
 }
 
 export function shouldDrawAttention(input: {
-  level: RiskLevel
-  score: number
-  userTurn: number
+  state: RiskState
   control?: ConversationControl
 }): boolean {
-  const { level, score, userTurn, control } = input
+  const { state, control } = input
   if (control?.muted) return false
-  if (
-    control?.snoozeUntilUserTurn !== undefined &&
-    userTurn < control.snoozeUntilUserTurn
-  ) {
-    return false
-  }
-  if (level !== 'organize' && level !== 'high') return false
+  if (state !== 'organize' && state !== 'high') return false
 
-  const lastLevel = control?.lastAlertLevel
-  if (!lastLevel || LEVEL_RANK[level] > LEVEL_RANK[lastLevel]) return true
-
-  const lastTurn = control?.lastAlertUserTurn ?? -Infinity
-  const lastScore = control?.lastAlertScore ?? -Infinity
-  return userTurn - lastTurn >= 5 && score >= lastScore + 8
+  const lastState = control?.lastAlertState
+  return !lastState || STATE_RANK[state] > STATE_RANK[lastState]
 }
 
 export function withAlertRecorded(
   control: ConversationControl | undefined,
-  level: RiskLevel,
-  score: number,
-  userTurn: number
+  state: RiskState
 ): ConversationControl {
   return {
     ...(control ?? {}),
-    lastDisplayedLevel: level,
-    lastAlertLevel: level,
-    lastAlertScore: score,
-    lastAlertUserTurn: userTurn
-  }
-}
-
-export function withDisplayedLevel(
-  control: ConversationControl | undefined,
-  level: RiskLevel
-): ConversationControl {
-  return {
-    ...(control ?? {}),
-    lastDisplayedLevel: level
+    lastAlertState: state
   }
 }
