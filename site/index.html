@@ -46,10 +46,10 @@
           "LongChat Guard · 長對話預警",
           "ChatGPT 长会话预警"
         ],
-        "description": "An open-source, local-first Chrome and Edge extension that learns empirical long-conversation risk from confirmed safe chats, confirmed length-limit failures, and typical assistant-reply growth, then provides simple warnings and a continuation workflow.",
+        "description": "An open-source, local-first Chrome and Edge extension that compares current ChatGPT conversation load with a user-confirmed historical length-limit reference, learns whole-turn growth, and provides simple warnings plus a continuation workflow.",
         "applicationCategory": "BrowserApplication",
         "operatingSystem": "Google Chrome, Microsoft Edge, Chromium",
-        "softwareVersion": "2.0.2",
+        "softwareVersion": "2.1.0",
         "inLanguage": ["en", "zh-CN", "zh-TW"],
         "isAccessibleForFree": true,
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
@@ -92,7 +92,7 @@
             "name": "What is LongChat Guard?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "LongChat Guard is an open-source Chrome and Edge extension for chatgpt.com that learns local empirical risk from confirmed safe and failed long conversations plus typical assistant-reply growth, then provides simple long-conversation warnings."
+              "text": "LongChat Guard is an open-source Chrome and Edge extension for chatgpt.com that compares current local conversation load with a user-confirmed historical length-limit reference, learns whole-turn growth, and provides simple long-conversation warnings."
             }
           },
           {
@@ -157,7 +157,7 @@
       <div>
         <span class="eyebrow">Local-first · Manifest V3 · Open source</span>
         <h1>Know when a ChatGPT conversation is getting long.</h1>
-        <p>LongChat Guard is an open-source, local-first Chrome and Edge extension for <strong>ChatGPT long-conversation warnings</strong>. It learns risk from your own safe/failed long-chat history and typical reply growth, without pretending to know an official quota.</p>
+        <p>LongChat Guard is an open-source, local-first Chrome and Edge extension for <strong>ChatGPT long-conversation warnings</strong>. It compares the current chat with a user-confirmed historical length-limit reference and learns whole-turn growth, without pretending to know an official quota.</p>
         <div class="actions">
           <a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">Install from Chrome Web Store</a>
           <a class="btn" href="https://github.com/luobo656/longchat-guard">View source on GitHub</a>
@@ -181,25 +181,25 @@
     <section id="features">
       <div class="wrap">
         <h2>Built for long ChatGPT conversations</h2>
-        <p class="lede">Version 2.x learns three local signals—confirmed safe history, robust confirmed length-limit failures, and typical assistant-reply growth—then turns them into simple, low-distraction risk states.</p>
+        <p class="lede">LongChat Guard uses three core local signals—current load (L), a user-confirmed empirical failure reference (R), and reliable whole-turn growth (G)—then turns them into simple, low-distraction risk states.</p>
         <div class="grid">
           <article class="card">
             <h3>Clear risk position</h3>
-            <p>Shows Normal, Long, Near risk, or High risk on a color track instead of pretending to know an exact official limit.</p>
+            <p>Shows Lower risk, Long, Near risk, or High risk on a color track instead of pretending to know an exact official limit.</p>
           </article>
           <article class="card">
             <h3>Local empirical learning</h3>
-            <p>Learns browser-side safe/failure boundaries and typical reply growth from your own local evidence.</p>
+            <p>Anchors the track to a user-confirmed historical failure reference and learns reliable whole-turn growth locally.</p>
           </article>
           <article class="card">
             <h3>Continuation workflow</h3>
-            <p>Provides a continuation prompt so important context can be carried into a fresh ChatGPT conversation with less friction.</p>
+            <p>Provides a continuation meta-prompt for the current GPT, which uses the actual conversation and visible project context to generate a self-contained handoff for a fresh ChatGPT conversation.</p>
           </article>
         </div>
 
         <div class="answer">
           <strong>AI-friendly definition:</strong>
-          LongChat Guard is an open-source Chrome/Edge extension for chatgpt.com that learns local empirical risk from confirmed safe/failed long chats and typical reply growth, then gives privacy-first warnings and a continuation workflow. It does not claim to know OpenAI's exact token limit or remaining quota.
+          LongChat Guard is an open-source Chrome/Edge extension for chatgpt.com that compares current local conversation load with a user-confirmed historical length-limit reference, learns whole-turn growth, and gives privacy-first warnings plus a continuation workflow. It does not claim to know OpenAI's exact token limit or remaining quota.
         </div>
       </div>
     </section>
@@ -207,10 +207,10 @@
     <section id="product-ui">
       <div class="wrap">
         <h2>Real extension interface</h2>
-        <p class="lede">A real LongChat Guard 2.0.2 screenshot in an English ChatGPT session. The extension keeps the interface intentionally small: a local risk track, learning state, continuation action, relearn control, and per-conversation reminder control.</p>
+        <p class="lede">A real LongChat Guard screenshot in an English ChatGPT session. The extension keeps the interface intentionally small: a local risk track, learning state, continuation action, relearn control, and per-conversation reminder control.</p>
         <figure class="product-shot">
-          <img src="./assets/longchat-guard-en-normal.jpg" width="480" height="300" loading="lazy" alt="LongChat Guard 2.0.2 English interface showing the local ChatGPT long-conversation risk panel">
-          <figcaption>LongChat Guard 2.0.2 running locally on chatgpt.com. Screenshot reflects the real extension interface.</figcaption>
+          <img src="./assets/longchat-guard-en-normal.jpg" width="480" height="300" loading="lazy" alt="LongChat Guard English interface showing the local ChatGPT long-conversation risk panel">
+          <figcaption>LongChat Guard running locally on chatgpt.com. Screenshot reflects a real extension interface.</figcaption>
         </figure>
       </div>
     </section>
@@ -238,14 +238,14 @@
     <section>
       <div class="wrap">
         <h2>How LongChat Guard makes a risk judgment</h2>
-        <p class="lede">The extension does not invent an “official percentage.” Version 2.0.2 learns from evidence that exists in your own browser and keeps the result intentionally simple.</p>
+        <p class="lede">The extension does not invent an “official percentage.” It uses evidence that exists in your own browser and keeps the result intentionally simple.</p>
         <div class="grid">
           <article class="card"><h3>1. Current load</h3><p>LongChat Guard estimates how large the current conversation has become using only local page data after consent.</p></article>
-          <article class="card"><h3>2. Safe and failure boundaries</h3><p>Successful complete conversations can establish a safe boundary; only confirmed conversation-length failures can establish a failure boundary.</p></article>
-          <article class="card"><h3>3. Typical reply growth</h3><p>Recent assistant replies provide a dynamic growth buffer, so the warning can account for the next few turns without pretending to know an OpenAI quota.</p></article>
+          <article class="card"><h3>2. Empirical failure reference</h3><p>A historical chat that you explicitly confirm reached the conversation-length limit can establish the local reference R after one complete reliable read.</p></article>
+          <article class="card"><h3>3. Whole-turn growth</h3><p>Reliable before/after conversation-load changes provide the growth reserve G, so the warning can account for the next few turns without pretending to know an OpenAI quota.</p></article>
         </div>
         <div class="answer"><strong>Why this matters:</strong> the signal is empirical and local. Incomplete page coverage, low confidence, or a fresh install do not create fake progress toward a limit.</div>
-        <div class="actions"><a class="btn" href="./methodology/">Read the 2.0.2 methodology</a><a class="btn" href="./guides/chatgpt-conversation-too-long/">What to do when a ChatGPT conversation is too long</a></div>
+        <div class="actions"><a class="btn" href="./methodology/">Read the methodology</a><a class="btn" href="./guides/chatgpt-conversation-too-long/">What to do when a ChatGPT conversation is too long</a></div>
       </div>
     </section>
 
@@ -259,7 +259,7 @@
           <article class="card"><h3><a href="./guides/when-to-start-new-chatgpt-conversation/">When should I start a new ChatGPT conversation?</a></h3><p>Practical signs that a long thread is worth summarizing and continuing in a fresh conversation.</p></article>
           <article class="card"><h3><a href="./guides/how-to-continue-long-chatgpt-conversation/">How to continue a long ChatGPT conversation</a></h3><p>A compact handoff method for moving only the important working context into a new chat.</p></article>
           <article class="card"><h3><a href="./guides/chatgpt-conversation-too-long/">ChatGPT conversation too long</a></h3><p>A direct explanation of what “conversation too long” means, what to preserve, and how to continue safely in a fresh chat.</p></article>
-          <article class="card"><h3><a href="./methodology/">How LongChat Guard estimates risk</a></h3><p>The transparent 2.0.2 L/S/F/B learning method, evidence rules, privacy boundaries, and limitations.</p></article>
+          <article class="card"><h3><a href="./methodology/">How LongChat Guard estimates risk</a></h3><p>The transparent 2.1.0 L/S/F/B learning method, evidence rules, privacy boundaries, and limitations.</p></article>
           <article class="card"><h3><a href="./guides/chatgpt-long-conversation-extension/">Which kind of long-conversation extension do you need?</a></h3><p>A neutral category guide covering navigation, cleanup, export, and risk-warning/handoff tools.</p></article>
           <article class="card"><h3><a href="./llms.txt">AI / LLM discovery index</a></h3><p>Canonical entity facts, terminology, source links, and retrieval-oriented documentation for AI assistants and search systems.</p></article>
         </div>

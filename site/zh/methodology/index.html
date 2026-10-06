@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LongChat Guard 2.0.2 风险判断方法：本地安全边界、失败边界与回复增长</title>
-  <meta name="description" content="公开解释 LongChat Guard 2.0.2 如何使用当前负载、安全边界、失败边界和典型回复增长在本地判断 ChatGPT 长会话风险。">
+  <title>LongChat Guard 风险判断方法：本地负载、经验失败参考与整轮增长</title>
+  <meta name="description" content="公开解释 LongChat Guard 如何使用当前本地负载、用户确认的经验失败参考和整轮增长在本地判断 ChatGPT 长会话风险。">
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
   <link rel="canonical" href="https://luobo656.github.io/longchat-guard/zh/methodology/">
   <link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/methodology/">
@@ -14,24 +14,24 @@
   <link rel="icon" href="../../icon128.png">
   <link rel="stylesheet" href="../../styles.css">
   <meta property="og:type" content="article">
-  <meta property="og:title" content="LongChat Guard 2.0.2 风险判断方法：本地安全边界、失败边界与回复增长">
-  <meta property="og:description" content="公开解释 LongChat Guard 2.0.2 如何使用当前负载、安全边界、失败边界和典型回复增长在本地判断 ChatGPT 长会话风险。">
+  <meta property="og:title" content="LongChat Guard 风险判断方法：本地负载、经验失败参考与整轮增长">
+  <meta property="og:description" content="公开解释 LongChat Guard 如何使用当前本地负载、用户确认的经验失败参考和整轮增长在本地判断 ChatGPT 长会话风险。">
   <meta property="og:url" content="https://luobo656.github.io/longchat-guard/zh/methodology/">
   <meta property="og:image" content="https://luobo656.github.io/longchat-guard/icon128.png">
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"TechArticle","headline":"LongChat Guard 2.0.2 风险判断方法：本地安全边界、失败边界与回复增长","description":"公开解释 LongChat Guard 2.0.2 如何使用当前负载、安全边界、失败边界和典型回复增长在本地判断 ChatGPT 长会话风险。","datePublished":"2026-10-01","dateModified":"2026-10-01","inLanguage":"zh-CN","mainEntityOfPage":"https://luobo656.github.io/longchat-guard/zh/methodology/","author":{"@type":"Person","name":"luobo656","url":"https://github.com/luobo656"},"about":{"@type":"SoftwareApplication","name":"LongChat Guard","softwareVersion":"2.0.2","url":"https://luobo656.github.io/longchat-guard/"}}
+  {"@context":"https://schema.org","@type":"TechArticle","headline":"LongChat Guard 风险判断方法：本地负载、经验失败参考与整轮增长","description":"公开解释 LongChat Guard 如何使用当前本地负载、用户确认的经验失败参考和整轮增长缓冲判断 ChatGPT 长会话风险。","datePublished":"2026-10-01","dateModified":"2026-10-06","inLanguage":"zh-CN","mainEntityOfPage":"https://luobo656.github.io/longchat-guard/zh/methodology/","author":{"@type":"Person","name":"luobo656","url":"https://github.com/luobo656"},"about":{"@type":"SoftwareApplication","name":"LongChat Guard","softwareVersion":"2.1.0","url":"https://luobo656.github.io/longchat-guard/"}}
   </script>
 </head>
 <body>
   <header class="topbar"><div class="wrap nav"><a class="brand" href="../../"><img src="../../icon128.png" alt="LongChat Guard"><span>LongChat Guard</span></a><nav class="navlinks"><a href="../../">首页</a><a href="../../PRIVACY.md">隐私</a><a href="https://github.com/luobo656/longchat-guard">GitHub</a></nav></div></header>
   <main>
     <article class="wrap">
-      <section><span class="eyebrow">LongChat Guard 2.0.2 · 判断方法</span><h1>LongChat Guard 如何在不知道官方额度的情况下判断长会话风险？</h1><p class="lede">LongChat Guard 不知道 OpenAI 私有的“剩余会话额度”，也不会伪造一个看起来很精确的百分比。2.0.2 只使用浏览器本机里真实出现的证据进行学习。</p><div class="answer"><strong>一句话：</strong>模型使用四个概念——当前负载 L、已确认安全边界 S、稳健的已确认失败边界 F、动态单轮增长缓冲 B。目的不是预测官方 token 上限，而是在“未来几轮典型增长可能逼近本机已经观察到的失败边界”时提前提醒。</div></section>
-      <section><h2>四个本地信号</h2><div class="grid"><article class="card"><h3>L：当前会话负载</h3><p>表示当前长会话已经增长到什么程度的内部估算，不作为“官方 token 数”展示。</p></article><article class="card"><h3>S：已确认安全边界</h3><p>只有历史完整、解析健康并正常完成的 Assistant 回复才能建立安全边界，同一会话保留最高已确认安全点。</p></article><article class="card"><h3>F：已确认失败边界</h3><p>只有用户确认的“会话长度达到上限”失败才会建立 F。存在多个样本时使用稳健低分位，避免一个异常偏低样本永久主导判断。</p></article><article class="card"><h3>B：动态单轮增长缓冲</h3><p>根据最近 Assistant 回复增长的稳健高分位学习，适应不同用户每一轮回复通常增长多少。</p></article></div></section>
-      <section><h2>风险分档怎么形成？</h2><p>当 F 和 B 都存在时，系统会判断当前负载距离失败边界还容得下大约几次“典型增长”。如果已经达到 F，或者再增长一个 B 就会触及 F，则为高风险；两个 B 左右为接近风险；三个 B 左右为偏长；距离更远则保持正常。</p><p>如果只有安全边界，没有失败边界，系统不会凭空给出高风险；如果还没有任何可靠边界，就保持学习状态，而不是假装已经知道“还剩多少百分比”。</p><div class="notice"><strong>重要：</strong>页面历史不完整、置信度不足、附件不确定或刚安装插件，都不会被硬算成风险进度。解析器不可靠时会保守停止可信判断。</div></section>
-      <section><h2>为什么不用固定阈值？</h2><p>ChatGPT 网页端并没有向普通浏览器扩展公开一个简单、统一、可以诚实称为“官方剩余会话额度”的接口。用固定数字做百分比会显得精确，但依据很弱。因此 LongChat Guard 更愿意使用你当前浏览器环境里真正观察到的安全完成、长度失败和典型回复增长。</p></section>
-      <section><h2>环境变化时怎么办？</h2><p>一次异常不会立刻推翻旧模型。系统会寻找多个彼此独立的冲突证据，例如明显早于旧失败边界发生的失败，或明显超过旧失败边界仍安全完成的会话。出现多个独立冲突后，会进入新的学习代际，并允许新证据淘汰已经过时的旧边界。</p></section>
-      <section><h2>隐私与本地证据</h2><p>只有用户明确同意后才开始监测。用户聊天原文、Assistant 回复原文、输入草稿和附件正文不会持久化保存。本地只保留匿名指纹、内部估算、学习边界、增长历史和提醒设置。成功的历史扫描不会留下诊断记录；扫描失败时最多保留 7 天的有限结构诊断，不包含聊天原文和会话网址。</p></section>
+      <section><span class="eyebrow">LongChat Guard · 判断方法</span><h1>LongChat Guard 如何在不知道官方额度的情况下判断长会话风险？</h1><p class="lede">LongChat Guard 不知道 OpenAI 私有的“剩余会话额度”，也不会伪造精确百分比。它在本机测量当前会话，并把它和你亲自确认曾达到会话长度上限的历史会话进行经验比较。</p><div class="answer"><strong>一句话：</strong>核心使用当前负载 L、经验失败参考 R、整轮增长缓冲 G。目的不是预测官方 token 上限，而是显示当前会话相对你本地真实失败参考走到了哪里。</div></section>
+      <section><h2>三个核心本地信号</h2><div class="grid"><article class="card"><h3>L：当前会话负载</h3><p>表示当前长会话增长程度的本地估算，不作为“官方 token 数”展示。</p></article><article class="card"><h3>R：经验失败参考</h3><p>来自一个你明确确认曾达到会话长度上限、并且插件能够完整可靠读取的历史会话。R 是本地经验参考，不是 OpenAI 官方上限。</p></article><article class="card"><h3>G：整轮增长缓冲</h3><p>从发送前 L 到 Assistant 完成后的 L 的可靠变化中学习，反映整个用户+Assistant 回合的典型增长，而不是只看 Assistant 单条回复。</p></article><article class="card"><h3>可选诊断信息</h3><p>parser / measurement schema 用来保护计量口径一致性。网页能读取到的模型标签只作为诊断元数据，不决定 R 质量、风险等级、校准有效性或是否需要重新校准。</p></article></div></section>
+      <section><h2>风险分档怎么形成？</h2><p>当 R 和 G 都可用时，系统会把当前负载（包括尚未发送的 Composer 草稿）与距离 R 还剩几个典型整轮增长缓冲进行比较，显示“风险较低 / 偏长 / 接近风险 / 高风险”。</p><p>如果 G 还没有学够，LongChat Guard 不会人为制造提前预警带；在样本足够前，以 R 作为经验高风险参考。</p><div class="notice"><strong>重要：</strong>历史不完整、解析退化、消息序列不可靠或没有可用 R 时，不会被硬算成风险进度；插件会停止确定性判断，而不是猜测。</div></section>
+      <section><h2>为什么不用固定阈值？</h2><p>ChatGPT 网页端没有向普通浏览器扩展公开一个简单、统一、可以诚实称为“官方剩余会话额度”的接口。固定百分比看起来精确，但依据很弱。因此 LongChat Guard 把提醒锚定在用户自己确认的本地失败参考和当前会话的真实增长上。</p></section>
+      <section><h2>测量口径变化时怎么办？</h2><p>parserSchemaVersion 和 measurementSchemaVersion 定义了“怎么量”。如果计量口径发生变化，旧 R 会降为 stale prior，需要重新校准后再恢复确定性风险。模型标签即使缺失或发生变化，也只属于诊断信息，不会让一个计量口径仍一致的校准失效。</p></section>
+      <section><h2>隐私与本地证据</h2><p>只有用户明确同意后才开始监测。用户聊天原文、Assistant 回复原文、输入草稿和附件正文不会持久化保存。本地只保留 pseudonymous 标识/指纹、内部估算、经验参考元数据、整轮增长样本和提醒设置。成功的历史扫描不会留下诊断记录；扫描失败时最多保留 7 天的有限结构诊断，不包含聊天原文和会话网址。</p></section>
       <section><h2>这个方法能告诉你什么？</h2><p>它能给出“当前长会话是否接近你本机实际观察到的风险区域”的经验信号；不能证明 OpenAI 的精确 token 数、模型上下文窗口、剩余额度、计费额度或统一会话上限。</p><div class="actions"><a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">安装 LongChat Guard</a><a class="btn" href="../guides/chatgpt-conversation-too-long/">ChatGPT 会话太长了怎么办？</a></div></section>
     </article></main>
   <footer><div class="wrap footer-grid"><span>LongChat Guard · MIT License</span><span><a href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">Chrome 商店</a> · <a href="https://github.com/luobo656/longchat-guard">源码</a></span></div></footer>

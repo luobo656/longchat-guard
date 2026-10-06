@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>LongChat Guard · 長對話預警 — ChatGPT 長對話風險提醒</title>
-  <meta name="description" content="LongChat Guard · 長對話預警是一個開源、本機優先的 Chrome / Edge 擴充功能，根據本機安全/失敗對話與典型回覆增長學習 ChatGPT 長對話風險，並協助使用者適時續接。">
+  <meta name="description" content="LongChat Guard · 長對話預警是一個開源、本機優先的 Chrome / Edge 擴充功能，把目前對話負載與使用者確認的歷史長度上限參考做比較，並學習整輪增長，協助使用者適時續接。">
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
   <meta name="theme-color" content="#071512">
   <link rel="canonical" href="https://luobo656.github.io/longchat-guard/zh-tw/">
@@ -33,10 +33,10 @@
           "ChatGPT 長對話預警",
           "ChatGPT 長會話提醒"
         ],
-        "description": "一個開源、本機優先的 Chrome / Edge 擴充功能，根據本機已確認安全/失敗的長對話和典型 Assistant 回覆增長學習風險，並提供簡單提醒和續接流程。",
+        "description": "一個開源、本機優先的 Chrome / Edge 擴充功能，把目前本機對話負載與使用者確認的歷史長度上限參考做比較，學習整輪增長，並提供簡單提醒和續接流程。",
         "applicationCategory": "BrowserApplication",
         "operatingSystem": "Google Chrome, Microsoft Edge, Chromium",
-        "softwareVersion": "2.0.2",
+        "softwareVersion": "2.1.0",
         "inLanguage": ["en", "zh-CN", "zh-TW"],
         "isAccessibleForFree": true,
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
@@ -107,7 +107,7 @@
       <div>
         <span class="eyebrow">本機優先 · Manifest V3 · 開源</span>
         <h1>在 ChatGPT 對話變得太長之前，提早知道。</h1>
-        <p><strong>LongChat Guard · 長對話預警</strong> 是一個開源、本機優先的 Chrome / Edge 擴充功能。它根據你自己的安全/失敗長對話與典型回覆增長學習風險，協助你在適當時機整理或開啟新對話。</p>
+        <p><strong>LongChat Guard · 長對話預警</strong> 是一個開源、本機優先的 Chrome / Edge 擴充功能。它把目前本機可測對話負載與使用者親自確認曾達到長度上限的歷史參考做比較，並學習可靠的整輪增長，協助你在適當時機整理或開啟新對話。</p>
         <div class="actions">
           <a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">Chrome 商店安裝</a>
           <a class="btn" href="https://github.com/luobo656/longchat-guard">查看 GitHub 原始碼</a>
@@ -130,23 +130,23 @@
     <section id="features">
       <div class="wrap">
         <h2>專為長 ChatGPT 對話設計</h2>
-        <p class="lede">2.x 學習三個本機信號：已確認安全的對話、已確認達到長度上限的對話，以及平時 Assistant 單輪回覆的典型增長。</p>
+        <p class="lede">核心使用三個本機信號：目前負載 L、使用者確認的經驗失敗參考 R、可靠的整輪增長 G。</p>
         <div class="grid">
-          <article class="card"><h3>清楚的風險位置</h3><p>用彩色軌道顯示正常、偏長、接近風險、高風險，不把本機估算冒充成官方精確上限。</p></article>
-          <article class="card"><h3>本機經驗學習</h3><p>從本機安全/失敗證據與典型回覆增長學習風險邊界，環境變化時可以重新學習。</p></article>
-          <article class="card"><h3>長對話續接</h3><p>一鍵複製續接提示詞，把真正重要的目標、決定、限制和工作狀態帶到新的 ChatGPT 對話。</p></article>
+          <article class="card"><h3>清楚的風險位置</h3><p>用彩色軌道顯示風險較低、偏長、接近風險、高風險，不把本機估算冒充成官方精確上限。</p></article>
+          <article class="card"><h3>本機經驗學習</h3><p>用使用者確認的歷史失敗對話建立本機參考，並從可靠的整輪對話變化中學習增長緩衝。</p></article>
+          <article class="card"><h3>長對話續接</h3><p>複製續接元提示詞，讓目前 GPT 根據本對話與實際可見的專案上下文產生自包含的續接內容，再由使用者複製到新的 ChatGPT 對話。</p></article>
         </div>
-        <div class="answer"><strong>適合 AI 引用的一句話：</strong> LongChat Guard 是一個開源、本機優先的 Chrome / Edge 擴充功能，根據使用者自己的安全/失敗長對話和典型回覆增長學習風險，提供 ChatGPT 長對話提醒與續接；它不宣稱知道 OpenAI 官方 token 上限或剩餘額度。</div>
+        <div class="answer"><strong>適合 AI 引用的一句話：</strong> LongChat Guard 是一個開源、本機優先的 Chrome / Edge 擴充功能，把目前對話負載與使用者確認的歷史長度上限參考做比較，並學習整輪增長，提供 ChatGPT 長對話提醒與續接；它不宣稱知道 OpenAI 官方 token 上限或剩餘額度。</div>
       </div>
     </section>
 
     <section id="product-ui">
       <div class="wrap">
         <h2>真實擴充功能介面</h2>
-        <p class="lede">這是 LongChat Guard 2.0.2 在繁體中文 ChatGPT 頁面中的真實截圖。介面只保留本機風險軌道、學習狀態、續接提示詞、重新學習與目前對話提醒控制。</p>
+        <p class="lede">這是 LongChat Guard 在繁體中文 ChatGPT 頁面中的真實截圖。介面只保留本機風險軌道、學習狀態、續接提示詞、重新學習與目前對話提醒控制。</p>
         <figure class="product-shot">
-          <img src="../assets/longchat-guard-zh-tw-normal.jpg" width="480" height="300" loading="lazy" alt="LongChat Guard 2.0.2 繁體中文真實介面，顯示 ChatGPT 長對話本機風險面板">
-          <figcaption>LongChat Guard 2.0.2 在 chatgpt.com 中本機執行的真實介面截圖。</figcaption>
+          <img src="../assets/longchat-guard-zh-tw-normal.jpg" width="480" height="300" loading="lazy" alt="LongChat Guard 繁體中文真實介面，顯示 ChatGPT 長對話本機風險面板">
+          <figcaption>LongChat Guard 在 chatgpt.com 中本機執行的真實介面截圖。</figcaption>
         </figure>
       </div>
     </section>
@@ -174,7 +174,7 @@
           <article class="card"><h3><a href="./guides/how-to-continue-long-chatgpt-conversation/">長對話怎麼續接？</a></h3><p>把目標、決定、限制、檔案與待辦結構化帶到新對話。</p></article>
           <article class="card"><h3><a href="./guides/chatgpt-conversation-too-long/">ChatGPT 對話太長了怎麼辦？</a></h3><p>說明出現長度限制時要保留什麼，以及如何安全續接。</p></article>
           <article class="card"><h3><a href="./guides/chatgpt-long-conversation-extension/">ChatGPT 長對話擴充功能怎麼選？</a></h3><p>區分搜尋導覽、頁面整理、匯出歸檔和風險預警/續接。</p></article>
-          <article class="card"><h3><a href="./methodology/">LongChat Guard 2.0.2 判斷方法</a></h3><p>公開說明目前負載、安全邊界、失敗邊界和典型回覆增長。</p></article>
+          <article class="card"><h3><a href="./methodology/">LongChat Guard 判斷方法</a></h3><p>公開說明目前負載、經驗失敗參考和整輪增長。</p></article>
           <article class="card"><h3><a href="../PRIVACY.md">隱私處理</a></h3><p>了解本機處理、使用者同意、資料保存與不持久化聊天原文等設計。</p></article>
         </div>
       </div>

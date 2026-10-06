@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ChatGPT 長對話預警：什麼時候該整理或續接？— LongChat Guard</title>
-  <meta name="description" content="ChatGPT 長對話越來越難管理時怎麼辦？了解 LongChat Guard 2.0.2 如何以本機安全、失敗與回覆增長證據提供風險提醒。">
+  <meta name="description" content="ChatGPT 長對話越來越難管理時怎麼辦？了解 LongChat Guard 2.1.0 如何以本機安全、失敗與回覆增長證據提供風險提醒。">
   <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large">
   <link rel="canonical" href="https://luobo656.github.io/longchat-guard/zh-tw/guides/chatgpt-long-conversation-warning/">
   <link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-warning/">
@@ -12,16 +12,16 @@
   <link rel="alternate" hreflang="x-default" href="https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-warning/">
   <link rel="icon" href="../../../icon128.png"><link rel="stylesheet" href="../../../styles.css">
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"TechArticle","headline":"ChatGPT 長對話預警：什麼時候該整理或續接？","description":"LongChat Guard 2.0.2 的本機長對話風險提醒與續接指南。","datePublished":"2026-10-01","dateModified":"2026-10-01","mainEntityOfPage":"https://luobo656.github.io/longchat-guard/zh-tw/guides/chatgpt-long-conversation-warning/","about":{"@type":"SoftwareApplication","name":"LongChat Guard","softwareVersion":"2.0.2"}}
+  {"@context":"https://schema.org","@type":"TechArticle","headline":"ChatGPT 長對話預警：什麼時候該整理或續接？","description":"LongChat Guard 2.1.0 的本機長對話風險提醒與續接指南。","datePublished":"2026-10-01","dateModified":"2026-10-06","mainEntityOfPage":"https://luobo656.github.io/longchat-guard/zh-tw/guides/chatgpt-long-conversation-warning/","about":{"@type":"SoftwareApplication","name":"LongChat Guard","softwareVersion":"2.1.0"}}
   </script>
 </head>
 <body>
 <header class="topbar"><div class="wrap nav"><a class="brand" href="../../../"><img src="../../../icon128.png" alt="LongChat Guard 圖示"><span>LongChat Guard</span></a><nav class="navlinks"><a href="../../">繁中首頁</a><a href="../chatgpt-context-window-warning/">上下文指南</a><a href="../../../zh/guides/chatgpt-long-conversation-warning/" hreflang="zh-CN">简中</a><a href="../../../guides/chatgpt-long-conversation-warning/" hreflang="en">English</a></nav></div></header>
 <main><article class="wrap">
-<section><span class="eyebrow">LongChat Guard 2.0.2 · 長對話指南</span><h1>ChatGPT 對話越來越長時，什麼時候該整理或續接？</h1><p class="lede">LongChat Guard 把長對話問題當成<strong>本機經驗風險</strong>，而不是 OpenAI 官方剩餘額度。它的目的，是在工作執行緒已經接近本機觀察到的風險區域時，提早提醒你整理工作狀態或開啟新對話。</p><div class="answer"><strong>2.0.2 的差異：</strong>不再用固定「魔法數字」。風險來自目前負載、已確認安全邊界、已確認長度失敗邊界，以及近期 Assistant 回覆的典型增長。</div></section>
+<section><span class="eyebrow">LongChat Guard · 長對話指南</span><h1>ChatGPT 對話越來越長時，什麼時候該整理或續接？</h1><p class="lede">LongChat Guard 把長對話問題當成<strong>本機經驗風險</strong>，而不是 OpenAI 官方剩餘額度。它的目的，是在工作執行緒已經接近本機觀察到的風險區域時，提早提醒你整理工作狀態或開啟新對話。</p><div class="answer"><strong>核心方法：</strong>不使用固定「魔法數字」。風險來自目前負載 L、使用者確認的經驗失敗參考 R，以及可靠的整輪增長 G。</div></section>
 <section><h2>長對話真正增加的是管理成本</h2><div class="grid"><article class="card"><h3>決定與限制分散</h3><p>專案越長，已確認決定、技術限制、檔案狀態和待辦越容易散落在不同回合。</p></article><article class="card"><h3>續接成本上升</h3><p>等到真的碰到限制才整理，通常比提早做一次結構化交接更麻煩。</p></article><article class="card"><h3>沒有官方剩餘量儀表</h3><p>一般瀏覽器擴充功能沒有一個可以誠實稱為 OpenAI 官方「還剩多少」的通用讀值。</p></article></div></section>
-<section><h2>看到提醒後怎麼做？</h2><div class="grid"><article class="card"><h3>正常</h3><p>繼續工作即可，讓本機模型累積更多安全證據。</p></article><article class="card"><h3>偏長 / 接近風險</h3><p>整理目標、決定、限制、檔案狀態與未完成事項，準備乾淨續接。</p></article><article class="card"><h3>高風險</h3><p>優先完成交接並在新對話繼續，避免把更多關鍵工作狀態只留在單一長執行緒裡。</p></article></div></section>
-<section><div class="notice">LongChat Guard 不是精確 token 計數器、OpenAI 官方 context-window 儀表或官方剩餘額度查詢工具。</div><div class="actions"><a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">安裝 LongChat Guard</a><a class="btn" href="../../methodology/">查看 2.0.2 判斷方法</a><a class="btn" href="../chatgpt-conversation-too-long/">對話太長了怎麼辦？</a></div></section>
+<section><h2>看到提醒後怎麼做？</h2><div class="grid"><article class="card"><h3>風險較低</h3><p>繼續工作即可，進度條只表示相對本機歷史參考的位置。</p></article><article class="card"><h3>偏長 / 接近風險</h3><p>整理目標、決定、限制、檔案狀態與未完成事項，準備乾淨續接。</p></article><article class="card"><h3>高風險</h3><p>優先完成交接並在新對話繼續，避免把更多關鍵工作狀態只留在單一長執行緒裡。</p></article></div></section>
+<section><div class="notice">LongChat Guard 不是精確 token 計數器、OpenAI 官方 context-window 儀表或官方剩餘額度查詢工具。</div><div class="actions"><a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">安裝 LongChat Guard</a><a class="btn" href="../../methodology/">查看判斷方法</a><a class="btn" href="../chatgpt-conversation-too-long/">對話太長了怎麼辦？</a></div></section>
 </article></main>
 <footer><div class="wrap footer-grid"><span>LongChat Guard · MIT License</span><span><a href="../../">繁中首頁</a> · <a href="https://github.com/luobo656/longchat-guard">GitHub</a></span></div></footer>
 </body></html>

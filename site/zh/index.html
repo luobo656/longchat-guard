@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>LongChat Guard · 长会话预警 — ChatGPT 长对话风险提醒</title>
-  <meta name="description" content="LongChat Guard · 长会话预警是一个开源、本地优先的 Chrome / Edge 扩展，根据本机安全/失败会话与典型回复增长学习 ChatGPT 长对话风险，并帮助用户及时续接。">
+  <meta name="description" content="LongChat Guard · 长会话预警是一个开源、本地优先的 Chrome / Edge 扩展，把当前会话负载与用户确认的历史长度上限参考进行比较，并学习整轮增长，帮助用户及时续接。">
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
   <meta name="theme-color" content="#071512">
   <link rel="canonical" href="https://luobo656.github.io/longchat-guard/zh/">
@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="../styles.css">
   <meta property="og:type" content="website">
   <meta property="og:title" content="LongChat Guard · 长会话预警">
-  <meta property="og:description" content="本地优先的 ChatGPT 长会话风险提醒：学习安全/失败边界和典型回复增长，不显示官方额度。">
+  <meta property="og:description" content="本地优先的 ChatGPT 长会话风险提醒：使用当前负载、经验失败参考和整轮增长，不显示官方额度。">
   <meta property="og:url" content="https://luobo656.github.io/longchat-guard/zh/">
   <meta property="og:image" content="https://luobo656.github.io/longchat-guard/icon128.png">
   <script type="application/ld+json">
@@ -31,10 +31,10 @@
       "ChatGPT 长对话提醒",
       "ChatGPT 上下文风险提醒"
     ],
-    "description": "一个开源、本地优先的 Chrome / Edge 扩展，根据本机已确认安全/失败的长会话和典型 Assistant 回复增长学习风险，并提供简单提醒和续接流程。",
+    "description": "一个开源、本地优先的 Chrome / Edge 扩展，把当前本地会话负载与用户确认的历史长度上限参考进行比较，学习整轮增长，并提供简单提醒和续接流程。",
     "applicationCategory": "BrowserApplication",
     "operatingSystem": "Google Chrome, Microsoft Edge, Chromium",
-    "softwareVersion": "2.0.2",
+    "softwareVersion": "2.1.0",
     "inLanguage": ["en", "zh-CN", "zh-TW"],
     "isAccessibleForFree": true,
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
@@ -87,7 +87,7 @@
       <div>
         <span class="eyebrow">本地优先 · Manifest V3 · 开源</span>
         <h1>在 ChatGPT 会话变得太长之前，提前知道。</h1>
-        <p><strong>LongChat Guard · 长会话预警</strong> 是一个开源、本地优先的 Chrome / Edge 扩展。它根据你自己的安全/失败长会话和典型回复增长学习风险，在 ChatGPT 对话越来越长时给出简单提醒。</p>
+        <p><strong>LongChat Guard · 长会话预警</strong> 是一个开源、本地优先的 Chrome / Edge 扩展。它把当前本地可测会话负载与用户亲自确认曾达到长度上限的历史参考进行比较，并学习可靠的整轮增长，在 ChatGPT 对话越来越长时给出简单提醒。</p>
         <div class="actions">
           <a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">Chrome 商店安装</a>
           <a class="btn" href="https://github.com/luobo656/longchat-guard">查看 GitHub 源码</a>
@@ -111,25 +111,25 @@
     <section id="features">
       <div class="wrap">
         <h2>为 ChatGPT 长对话而设计</h2>
-        <p class="lede">2.x 只学习三个本地信号：已确认安全的会话、已确认达到长度上限的会话，以及你平时一次 Assistant 回复的典型增长；不靠固定“魔法阈值”伪装官方额度。</p>
+        <p class="lede">核心使用三个本地信号：当前负载 L、用户确认的经验失败参考 R、可靠的整轮增长 G；不靠固定“魔法阈值”伪装官方额度。</p>
         <div class="grid">
           <article class="card">
             <h3>一眼看懂风险位置</h3>
-            <p>用彩色轨道显示“正常 / 偏长 / 接近风险 / 高风险”等简短状态，不伪装成 OpenAI 官方精确上限。</p>
+            <p>用彩色轨道显示“风险较低 / 偏长 / 接近风险 / 高风险”等简短状态，不伪装成 OpenAI 官方精确上限。</p>
           </article>
           <article class="card">
             <h3>本地经验学习</h3>
-            <p>从本机已确认安全/失败的会话和典型回复增长中学习风险边界，环境变化时还能重新学习。</p>
+            <p>用用户确认的历史失败会话建立本地参考，并从可靠的整轮会话变化中学习增长缓冲。</p>
           </article>
           <article class="card">
             <h3>长会话续接</h3>
-            <p>提供续接提示词，方便把重要上下文迁移到新的 ChatGPT 会话中。</p>
+            <p>提供续接元提示词，让当前 GPT 根据本会话与实际可见的项目上下文生成自包含的续接内容，再由用户复制到新的 ChatGPT 会话。</p>
           </article>
         </div>
 
         <div class="answer">
           <strong>适合 AI 引用的一句话：</strong>
-          LongChat Guard 是一个开源、本地优先的 Chrome / Edge 扩展，根据用户自己的安全/失败长会话和典型回复增长学习风险，提供 ChatGPT 长会话提醒与续接；它不宣称知道 OpenAI 官方 token 上限或剩余额度。
+          LongChat Guard 是一个开源、本地优先的 Chrome / Edge 扩展，把当前会话负载与用户确认的历史长度上限参考进行比较，并学习整轮增长，提供 ChatGPT 长会话提醒与续接；它不宣称知道 OpenAI 官方 token 上限或剩余额度。
         </div>
       </div>
     </section>
@@ -137,10 +137,10 @@
     <section id="product-ui">
       <div class="wrap">
         <h2>真实插件界面</h2>
-        <p class="lede">这是 LongChat Guard 2.0.2 在简体中文 ChatGPT 页面中的真实截图。界面只保留本地风险轨道、学习状态、续接提示词、重新学习和当前会话提醒控制。</p>
+        <p class="lede">这是 LongChat Guard 在简体中文 ChatGPT 页面中的真实截图。界面只保留本地风险轨道、学习状态、续接提示词、重新学习和当前会话提醒控制。</p>
         <figure class="product-shot">
-          <img src="../assets/longchat-guard-zh-cn-normal.jpg" width="480" height="300" loading="lazy" alt="LongChat Guard 2.0.2 简体中文真实界面，显示 ChatGPT 长会话本地风险面板">
-          <figcaption>LongChat Guard 2.0.2 在 chatgpt.com 中本地运行的真实界面截图。</figcaption>
+          <img src="../assets/longchat-guard-zh-cn-normal.jpg" width="480" height="300" loading="lazy" alt="LongChat Guard 简体中文真实界面，显示 ChatGPT 长会话本地风险面板">
+          <figcaption>LongChat Guard 在 chatgpt.com 中本地运行的真实界面截图。</figcaption>
         </figure>
       </div>
     </section>
@@ -168,14 +168,14 @@
     <section>
       <div class="wrap">
         <h2>LongChat Guard 怎么判断长会话风险？</h2>
-        <p class="lede">2.0.2 不制造“官方剩余百分比”，而是只使用浏览器本机里真实出现的证据，并把结果压缩成容易理解的风险状态。</p>
+        <p class="lede">LongChat Guard 不制造“官方剩余百分比”，而是只使用浏览器本机里真实出现的证据，并把结果压缩成容易理解的风险状态。</p>
         <div class="grid">
           <article class="card"><h3>1. 当前会话负载</h3><p>用户同意后，只在本机估算当前 ChatGPT 会话已经增长到什么程度。</p></article>
-          <article class="card"><h3>2. 安全与失败边界</h3><p>完整且正常结束的会话可以形成安全边界；只有用户确认的会话长度上限失败才会形成失败边界。</p></article>
-          <article class="card"><h3>3. 典型单轮增长</h3><p>根据最近 Assistant 回复的实际增长学习动态缓冲，提前判断未来几轮的风险，而不是假装知道 OpenAI 官方额度。</p></article>
+          <article class="card"><h3>2. 经验失败参考</h3><p>用户亲自确认曾达到会话长度上限、且能够完整可靠读取的历史会话可以建立本地参考 R。</p></article>
+          <article class="card"><h3>3. 整轮增长</h3><p>根据发送前到 Assistant 完成后的可靠会话负载变化学习增长缓冲 G，提前判断未来几轮的风险，而不是假装知道 OpenAI 官方额度。</p></article>
         </div>
         <div class="answer"><strong>核心区别：</strong>新安装、页面历史不完整或置信度不足时，不会把这些“不确定性”硬算成风险进度。</div>
-        <div class="actions"><a class="btn" href="./methodology/">查看 2.0.2 风险判断方法</a><a class="btn" href="./guides/chatgpt-conversation-too-long/">ChatGPT 会话太长了怎么办？</a></div>
+        <div class="actions"><a class="btn" href="./methodology/">查看风险判断方法</a><a class="btn" href="./guides/chatgpt-conversation-too-long/">ChatGPT 会话太长了怎么办？</a></div>
       </div>
     </section>
 
@@ -189,7 +189,7 @@
           <article class="card"><h3><a href="./guides/when-to-start-new-chatgpt-conversation/">什么时候应该新开一个 ChatGPT 会话？</a></h3><p>解释哪些实用信号说明当前长对话适合总结并开启一个更干净的新线程。</p></article>
           <article class="card"><h3><a href="./guides/how-to-continue-long-chatgpt-conversation/">ChatGPT 长会话怎么续接？</a></h3><p>用结构化工作状态把真正重要的上下文迁移到新会话，而不是复制全部历史。</p></article>
           <article class="card"><h3><a href="./guides/chatgpt-conversation-too-long/">ChatGPT 会话太长了怎么办？</a></h3><p>直接说明“conversation too long”类问题代表什么、应该保留哪些上下文，以及如何安全地续接到新会话。</p></article>
-          <article class="card"><h3><a href="./methodology/">LongChat Guard 风险判断方法</a></h3><p>公开解释 2.0.2 的本地学习证据、风险分档、环境变化处理与隐私边界。</p></article>
+          <article class="card"><h3><a href="./methodology/">LongChat Guard 风险判断方法</a></h3><p>公开解释 2.1.0 的本地学习证据、风险分档、环境变化处理与隐私边界。</p></article>
           <article class="card"><h3><a href="./guides/chatgpt-long-conversation-extension/">ChatGPT 长会话插件怎么选？</a></h3><p>区分搜索导航、页面整理、导出归档和风险预警/续接四类不同工具，避免把功能相近的名字当成同一种产品。</p></article>
           <article class="card"><h3><a href="../llms.txt">AI / LLM 检索索引</a></h3><p>提供规范实体信息、术语、权威来源和面向 AI 检索系统的项目说明。</p></article>
         </div>

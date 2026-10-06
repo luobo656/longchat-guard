@@ -34,7 +34,7 @@
     <span class="eyebrow">指南 · ChatGPT 长会话续接</span>
     <h1>ChatGPT 长会话怎么续接到一个新的对话？</h1>
     <p class="lede">最好的续接通常不是复制完整聊天记录，而是迁移“当前工作状态”：已经决定了什么、还有哪些约束、哪些问题没解决、下一步具体做什么。</p>
-    <div class="answer"><strong>一句话：</strong>先把当前状态结构化总结，再保留必要约束和源资料，最后用一个明确的下一步任务启动新会话。LongChat Guard 的续接提示词就是为了降低这个迁移成本。</div>
+    <div class="answer"><strong>一句话：</strong>让当前 GPT 直接根据本会话真实状态生成一份自包含的续接上下文，再把这份生成结果粘贴到新会话。LongChat Guard 提供的就是这条元提示词：它要求 GPT 优先保留最新目标、已确认决定、约束、已排除方案、未解决问题、必要技术状态和下一步，而不是机械套固定摘要模板。</div>
     <h2>一个简洁的续接结构</h2>
     <div class="grid">
       <article class="card"><h3>目标</h3><p>说明整个项目或对话最终要完成什么。</p></article>

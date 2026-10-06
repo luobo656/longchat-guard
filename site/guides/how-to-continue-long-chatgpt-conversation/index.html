@@ -38,7 +38,7 @@
     <span class="eyebrow">Guide · continue a long ChatGPT conversation</span>
     <h1>How do you continue a long ChatGPT conversation in a new chat?</h1>
     <p class="lede">The cleanest handoff is usually not a full transcript. A better continuation contains the current working state: what has been decided, what still matters, what remains unresolved, and what should happen next.</p>
-    <div class="answer"><strong>Short answer:</strong> summarize the current state, preserve constraints and decisions, reference the important source material, and start the new conversation with one concrete next task. LongChat Guard includes a continuation-prompt workflow to make this handoff easier.</div>
+    <div class="answer"><strong>Short answer:</strong> ask the current GPT to turn the real conversation state into a self-contained handoff, then paste that generated handoff into the new chat. LongChat Guard provides the meta-prompt for this workflow, so it can preserve the latest goal, confirmed decisions, constraints, rejected paths, unresolved issues, technical state, and next action without forcing a rigid summary template.</div>
     <h2>A compact long-chat handoff structure</h2>
     <div class="grid">
       <article class="card"><h3>Goal</h3><p>What the overall project or conversation is trying to accomplish.</p></article>

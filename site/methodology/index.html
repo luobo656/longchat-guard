@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>How LongChat Guard Estimates Long-Conversation Risk</title>
-  <meta name="description" content="How LongChat Guard 2.0.2 uses current load, safe and failure boundaries, and reply-growth buffers for local ChatGPT long-conversation warnings.">
+  <meta name="description" content="How LongChat Guard uses current local load, a user-confirmed empirical failure reference, and whole-turn growth for local ChatGPT long-conversation warnings.">
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
   <link rel="canonical" href="https://luobo656.github.io/longchat-guard/methodology/">
   <link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/methodology/">
@@ -14,12 +14,12 @@
   <link rel="icon" href="../icon128.png">
   <link rel="stylesheet" href="../styles.css">
   <meta property="og:type" content="article">
-  <meta property="og:title" content="How LongChat Guard Estimates ChatGPT Long-Conversation Risk (2.0.2)">
-  <meta property="og:description" content="Transparent methodology for LongChat Guard 2.0.2: current load, confirmed safe boundary, robust failure boundary, dynamic reply-growth buffer, privacy, and limitations.">
+  <meta property="og:title" content="How LongChat Guard Estimates ChatGPT Long-Conversation Risk">
+  <meta property="og:description" content="Transparent methodology for LongChat Guard: current local load, empirical failure reference, whole-turn growth reserve, privacy, and limitations.">
   <meta property="og:url" content="https://luobo656.github.io/longchat-guard/methodology/">
   <meta property="og:image" content="https://luobo656.github.io/longchat-guard/icon128.png">
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"TechArticle","headline":"How LongChat Guard Estimates ChatGPT Long-Conversation Risk (2.0.2)","description":"Transparent methodology for LongChat Guard 2.0.2: current load, confirmed safe boundary, robust failure boundary, dynamic reply-growth buffer, privacy, and limitations.","datePublished":"2026-10-01","dateModified":"2026-10-01","mainEntityOfPage":"https://luobo656.github.io/longchat-guard/methodology/","author":{"@type":"Person","name":"luobo656","url":"https://github.com/luobo656"},"about":{"@type":"SoftwareApplication","name":"LongChat Guard","softwareVersion":"2.0.2","url":"https://luobo656.github.io/longchat-guard/"}}
+  {"@context":"https://schema.org","@type":"TechArticle","headline":"How LongChat Guard Estimates ChatGPT Long-Conversation Risk","description":"Transparent methodology for LongChat Guard: current local load, a user-confirmed empirical failure reference, whole-turn growth reserve, privacy, and limitations.","datePublished":"2026-10-01","dateModified":"2026-10-06","mainEntityOfPage":"https://luobo656.github.io/longchat-guard/methodology/","author":{"@type":"Person","name":"luobo656","url":"https://github.com/luobo656"},"about":{"@type":"SoftwareApplication","name":"LongChat Guard","softwareVersion":"2.1.0","url":"https://luobo656.github.io/longchat-guard/"}}
   </script>
 </head>
 <body>
@@ -27,38 +27,38 @@
   <main>
     <article class="wrap">
       <section>
-        <span class="eyebrow">LongChat Guard 2.0.2 · Methodology</span>
+        <span class="eyebrow">LongChat Guard 2.1.0 · Methodology</span>
         <h1>How LongChat Guard estimates long-conversation risk without an official quota</h1>
-        <p class="lede">LongChat Guard does not know OpenAI's private remaining-conversation allowance. Instead, version 2.0.2 learns from local evidence in your own browser and keeps uncertainty separate from risk.</p>
-        <div class="answer"><strong>Short answer:</strong> the model uses four concepts—current load (L), confirmed safe boundary (S), robust confirmed failure boundary (F), and a dynamic reply-growth buffer (B). The purpose is not to predict an official token limit; it is to warn when the next few turns are getting close to a boundary that your own usage has actually observed.</div>
+        <p class="lede">LongChat Guard does not know OpenAI's private remaining-conversation allowance. It measures the current chat locally and compares it with a historical chat that you personally confirmed reached the conversation-length limit.</p>
+        <div class="answer"><strong>Short answer:</strong> the risk model uses current local load (L), an empirical failure reference (R), and a whole-turn growth reserve (G). The purpose is not to predict an official token limit; it is to show where the current conversation sits relative to a failure point observed in your own local history.</div>
       </section>
       <section>
-        <h2>The four local signals</h2>
+        <h2>The three core local signals</h2>
         <div class="grid">
           <article class="card"><h3>L — current conversation load</h3><p>A local estimate of how much conversation material is present. It is an internal signal, not a user-facing official token count.</p></article>
-          <article class="card"><h3>S — confirmed safe boundary</h3><p>Only complete, healthy assistant completions can establish S. Within the same conversation, the highest confirmed safe point is retained.</p></article>
-          <article class="card"><h3>F — confirmed failure boundary</h3><p>Only user-confirmed conversation-length-limit failures establish F. With multiple samples, LongChat Guard uses a robust low quantile so one unusual low outlier does not dominate forever.</p></article>
-          <article class="card"><h3>B — dynamic turn buffer</h3><p>B is learned from recent assistant-reply growth using a robust high quantile. It adapts to whether your conversations typically grow in small or large chunks.</p></article>
+          <article class="card"><h3>R — empirical failure reference</h3><p>R is established from a historical chat that the user explicitly confirms reached the conversation-length limit and that can be read completely and reliably. It is local evidence, not an official OpenAI maximum.</p></article>
+          <article class="card"><h3>G — whole-turn growth reserve</h3><p>G is learned from reliable conversation-load changes from before a user turn to after the assistant completes it. It represents whole-turn growth rather than only the assistant reply.</p></article>
+          <article class="card"><h3>Optional diagnostics</h3><p>Parser and measurement schema versions protect measurement compatibility. A readable model label may be retained for diagnostics, but it does not determine R quality, risk level, calibration validity, or whether recalibration is required.</p></article>
         </div>
       </section>
       <section>
         <h2>How the warning bands work</h2>
-        <p>When both a confirmed failure boundary and reply-growth buffer exist, the engine compares the current load with the room needed for roughly the next one, two, or three typical reply-growth steps. At or beyond the confirmed failure boundary—or when the next typical growth step would reach it—the state is High risk. Two growth steps away is Near risk, three growth steps away is Long, and farther away is Normal.</p>
-        <p>If the extension has only a safe boundary, it never jumps straight to a precise high-risk claim. If it has no meaningful boundary evidence yet, it stays in learning mode instead of fabricating a progress percentage.</p>
-        <div class="notice"><strong>Important:</strong> incomplete DOM coverage, low confidence, attachment uncertainty, or a new installation are not converted into artificial “risk progress.” Parser failure closes the system conservatively instead of pretending the estimate is trustworthy.</div>
+        <p>When R and G are both usable, the engine compares the current load—including an unsent Composer draft—with the room needed for roughly the next one, two, or three typical whole-turn growth reserves. The user-facing states are Lower risk, Long, Near risk, and High risk.</p>
+        <p>If G is still being learned, LongChat Guard does not invent warning bands; it uses R as the empirical high-risk reference until enough reliable whole-turn samples exist.</p>
+        <div class="notice"><strong>Important:</strong> incomplete history, degraded parsing, uncertain sequence order, or a missing usable R are not converted into artificial “risk progress.” The system stops the determinate risk judgment instead of guessing.</div>
       </section>
       <section>
-        <h2>Why LongChat Guard uses empirical boundaries</h2>
-        <p>ChatGPT's web product does not expose a simple, universal public “conversation remaining” meter that a browser extension can truthfully present as official. A fixed magic threshold would therefore look precise while being weakly grounded. LongChat Guard instead anchors warnings to observations from the current browser environment: what has completed safely, what the user has confirmed as a length-limit failure, and how quickly assistant replies usually grow.</p>
+        <h2>Why LongChat Guard uses an empirical reference</h2>
+        <p>ChatGPT's web product does not expose a simple, universal public “conversation remaining” meter that a browser extension can truthfully present as official. A fixed magic threshold would therefore look precise while being weakly grounded. LongChat Guard instead anchors warnings to a user-confirmed local failure reference and the conversation's own measured growth.</p>
         <p>This is also why the visual track is a local risk indicator rather than an official OpenAI quota meter.</p>
       </section>
       <section>
-        <h2>Adapting when the environment changes</h2>
-        <p>A single surprising conversation does not immediately erase the old model. LongChat Guard looks for multiple independent conflicts—for example, failures that happen materially earlier than the learned boundary or successful completions materially beyond it. Repeated independent conflicts start a new learning generation, warm-started from previous evidence but able to drop stale boundaries when new evidence contradicts them.</p>
+        <h2>Measurement compatibility and recalibration</h2>
+        <p>Parser and measurement schema versions define the measurement ruler. If that ruler changes, the previous R becomes a stale prior and a fresh calibration is required before determinate risk is shown again. A model label, when readable, is diagnostic metadata only and does not invalidate an otherwise compatible calibration.</p>
       </section>
       <section>
         <h2>Privacy and retained evidence</h2>
-        <p>Monitoring starts only after affirmative consent. Raw user messages, assistant replies, composer drafts, and attachment body text are not persisted. Local storage contains anonymous fingerprints, estimates, learned boundary metadata, growth history, and reminder controls. Successful history scans leave no diagnostic record; a failed history scan may keep only a bounded structural diagnostic locally for up to seven days, without raw chat text or the conversation URL.</p>
+        <p>Monitoring starts only after affirmative consent. Raw user messages, assistant replies, composer drafts, and attachment body text are not persisted. Local storage contains pseudonymous fingerprints/identifiers, estimates, empirical reference metadata, whole-turn growth samples, and reminder controls. Successful history scans leave no diagnostic record; a failed history scan may keep only a bounded structural diagnostic locally for up to seven days, without raw chat text or the conversation URL.</p>
       </section>
       <section>
         <h2>What this method can and cannot tell you</h2>

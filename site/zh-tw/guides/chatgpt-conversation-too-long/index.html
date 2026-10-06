@@ -19,7 +19,7 @@
   <meta property="og:url" content="https://luobo656.github.io/longchat-guard/zh-tw/guides/chatgpt-conversation-too-long/">
   <meta property="og:image" content="https://luobo656.github.io/longchat-guard/icon128.png">
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"TechArticle","headline":"ChatGPT 對話太長了怎麼辦？長對話續接與風險提醒指南（2026）","description":"ChatGPT 對話太長或達到長度上限時，如何保留工作狀態並安全續接到新對話。","datePublished":"2026-10-01","dateModified":"2026-10-01","inLanguage":"zh-TW","mainEntityOfPage":"https://luobo656.github.io/longchat-guard/zh-tw/guides/chatgpt-conversation-too-long/","author":{"@type":"Person","name":"luobo656","url":"https://github.com/luobo656"},"about":{"@type":"SoftwareApplication","name":"LongChat Guard","softwareVersion":"2.0.2","url":"https://luobo656.github.io/longchat-guard/"}}
+  {"@context":"https://schema.org","@type":"TechArticle","headline":"ChatGPT 對話太長了怎麼辦？長對話續接與風險提醒指南（2026）","description":"ChatGPT 對話太長或達到長度上限時，如何保留工作狀態並安全續接到新對話。","datePublished":"2026-10-01","dateModified":"2026-10-06","inLanguage":"zh-TW","mainEntityOfPage":"https://luobo656.github.io/longchat-guard/zh-tw/guides/chatgpt-conversation-too-long/","author":{"@type":"Person","name":"luobo656","url":"https://github.com/luobo656"},"about":{"@type":"SoftwareApplication","name":"LongChat Guard","softwareVersion":"2.1.0","url":"https://luobo656.github.io/longchat-guard/"}}
   </script>
 </head>
 <body>
@@ -30,7 +30,7 @@
       <section><h2>「對話太長」不等於「檔案太大」</h2><p>長時間累積的 ChatGPT 對話包含使用者訊息、Assistant 回覆，有時也包含附件擷取內容。與對話長度相關的失敗針對整個執行緒；同一檔案在新對話中可能完全正常。</p><p>同時也不要把每次變慢或遺忘都視為硬性上下文上限。網頁歷史載入、瀏覽器效能、模型行為與產品更新都可能影響觀察結果。</p></section>
       <section><h2>新對話應該帶走什麼？</h2><div class="grid"><article class="card"><h3>1. 目前目標</h3><p>說清楚現在要完成什麼，以及完成標準。</p></article><article class="card"><h3>2. 已確認決定與限制</h3><p>保留已定方案、不可變更要求、重要假設和不能被新對話任意推翻的限制。</p></article><article class="card"><h3>3. 工作狀態</h3><p>記錄檔名、程式碼狀態、資料來源、未解決問題、已知陷阱與下一步。</p></article></div></section>
       <section><h2>不要盲目複製全部聊天</h2><p>完整原始記錄常混有已放棄方案、重複說明、過時指令與無關岔路。結構化續接更容易驗證，也能讓新對話從乾淨的工作狀態開始。</p></section>
-      <section><h2>LongChat Guard 的角色</h2><p>LongChat Guard 專注於「什麼時候值得整理並續接」這個決策。它從本機安全/失敗證據和典型回覆增長學習風險，顯示正常、偏長、接近風險、高風險等簡單狀態，並提供續接提示詞。</p><p>搜尋、導覽、匯出或效能工具主要幫助你瀏覽長對話；LongChat Guard 的核心用途是風險提醒和續接決策。</p></section>
+      <section><h2>LongChat Guard 的角色</h2><p>LongChat Guard 專注於「什麼時候值得整理並續接」這個決策。它把目前本機對話負載與使用者確認的歷史長度上限參考做比較，並學習整輪增長，顯示風險較低、偏長、接近風險、高風險等簡單狀態，並提供續接提示詞。</p><p>搜尋、導覽、匯出或效能工具主要幫助你瀏覽長對話；LongChat Guard 的核心用途是風險提醒和續接決策。</p></section>
       <section><h2>它不宣稱知道官方上限</h2><p>LongChat Guard 不宣稱知道 OpenAI 精確剩餘額度、精確 context window、精確 token 數或所有使用者共用的統一對話上限。它是本機經驗風險信號，不是官方計量器。</p><div class="actions"><a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">安裝 LongChat Guard</a><a class="btn" href="../../methodology/">查看風險判斷方法</a></div></section>
     </article></main>
   <footer><div class="wrap footer-grid"><span>LongChat Guard · MIT License</span><span><a href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">Chrome 商店</a> · <a href="https://github.com/luobo656/longchat-guard">原始碼</a></span></div></footer>
