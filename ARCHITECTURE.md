@@ -1,4 +1,4 @@
-# LongChat Guard 架构基线（Unreleased）
+# LongChat Guard 2.1.0 架构基线
 
 ## 1. 技术栈与边界
 
@@ -28,11 +28,13 @@ ChatGPT DOM
   -> Shadow DOM pill/panel
 ```
 
-产品不再由 BaselineState / ReferenceAction / RiskLevel 三套状态分别控制 UI。统一领域维度为 MeasurementState、CalibrationState、RiskState。
+产品统一领域维度为 MeasurementState、CalibrationState、RiskState。
 
 ## 3. Page Adapter 与 MeasurementState
 
 `dom-reader.ts` 负责读取当前 DOM 可见消息、Composer、可见错误、生成状态和 tail evidence；不持久化原始文字。
+
+当前 ChatGPT renderer 可能在一轮回答前后切换结构。dom-reader 会同时评估 grouped `[data-turn-key]` 表示和 generic author-role 表示，优先选择 user/assistant 配对更完整的表示，而不是固定偏好某一套 selector。
 
 `page-adapter.ts` 输出 coverage/parser health。随后 `product-state.ts` 将 coverage、parser、sequence 和 DOM support 归约为：
 
@@ -41,7 +43,7 @@ ChatGPT DOM
 - complete
 - uncertain
 
-只有 complete 可进入风险计算。degraded parser 不再允许“正常”。
+只有 complete + healthy + reliable 可进入新的风险计算。degraded parser 不允许把未知包装成“风险较低”。
 
 ## 4. Calibration
 
@@ -79,7 +81,13 @@ G 来自非 uncertain 的 whole-turn delta p80。少于最小样本数时 reserv
 
 S 不参与 normal/long/organize/high 判定。
 
-风险结论与视觉位置分开：`RiskState` 回答是否有资格给出 normal/long/organize/high；`referencePositionScore` 只表示当前本地负载相对 empirical failure reference 的位置，并驱动 16 段视觉轨道。环境无法验证时，低负载仍可保持 RiskState=unknown，但只要 measurement complete 且当前 calibration 可用，referencePositionScore 仍可显示本地历史参考位置；这不会被解释成官方额度或安全认证。
+风险结论与视觉位置分开：
+
+```text
+referencePositionScore = clamp((L + composerDraftLoad) / R, 0, 1)
+```
+
+G 不参与轨道缩放。16 段轨道使用已跨过的完整分段显示，避免低位向上取整造成视觉虚高。
 
 ## 6. Generation 与 EnvironmentSignature
 
@@ -87,17 +95,17 @@ Generation 用于隔离校准环境。EnvironmentSignature 只包含：
 
 - parserSchemaVersion
 - measurementSchemaVersion
-- 可可靠读取时的 modelHint
+- 可可靠读取时的 modelHint（optional diagnostics only）
 
-modelHint 的缺失与明确冲突分开处理：校准时 modelHint 已知、当前暂时不可读 → environment_unknown；校准时 modelHint 本来就不可读 → EnvironmentConfidence=unverified，历史 R 只能用于参考位置和提前预警，不能认证 Normal；双方 modelHint 已知且不同，或 parser/measurement schema 不同 → mismatch/stale。
+Environment compatibility 只比较 parserSchemaVersion 与 measurementSchemaVersion。modelHint 不参与 equality、R 质量、RiskState、generation 切换或 stale 判定；即使 modelHint 缺失或与历史标签不同，只要测量口径一致，当前 calibration 仍可正常使用。
 
 `startNewGeneration(recalibrate/environment_change)` 创建空 samples + 空 turnGrowthSamples。旧 R/S 仅写入 warmStartPrior，属于 stale prior；旧 Assistant-only growth 不迁入新 G。
 
-环境 signature 明确冲突、change-point 建议或只有 prior 时，CalibrationState=stale。
+parser/measurement signature 明确冲突、change-point 建议或只有 prior 时，CalibrationState=stale。
 
-## 7. Storage schema 10
+## 7. Storage schema 10 与 authoritative ledger
 
-Schema 10 的 ledger 新增：
+Schema 10 的 ledger 包含：
 
 - ledgerRevision
 - observationEpoch
@@ -114,9 +122,15 @@ Schema 10 的 ledger 新增：
 
 `observeWindow` 需要调用方携带 `baseRevision`。baseRevision 与当前 ledgerRevision 不同即返回 `staleObservation`，不写旧测量。
 
+Passive observation 与 authoritative ledger 明确分层。`measurement-authority.ts` 负责唯一的写入资格判断：complete + healthy + reliable 的被动候选才是 authoritative measurement；partial / degraded / uncertain 都只是 transient observation。
+
+当 existing ledger 在当前 generation + measurement environment 下已经 authoritative 时，任何 weaker passive observation 都直接返回 `retained_authoritative`，不写 storage、不增加 ledgerRevision，也不根据该弱窗口里“看起来像新 user”的 DOM 片段推断状态迁移。用户真实发送由 content script 的 `PendingTurnIntent` 记录；只有后续 authoritative observation 成功 `committed` 后，才接受该 turn intent 并继续 completion / TurnGrowth 流程。
+
+如果 generation 或 measurement environment 已改变，旧 ledger 不再具有当前环境下的 authoritative 资格；此时新观测按正常 fail-closed 规则建立当前状态。显式 full-read / calibration commit 是独立 authoritative transaction，不受 passive observation 写入门控限制。
+
 Completion/Failure event 也携带 expectedLedgerRevision，避免旧标签页追加旧证据。
 
-跨标签页的 `chrome.storage.onChanged` 只用于重新读取状态并本地重绘 UI，绝不触发新的 observation 写入。这样既能同步 mute/calibration，又不会形成 “storage change → observe → write → storage change” 的反馈回路。
+跨标签页的 `chrome.storage.onChanged` 只用于重新读取状态并本地重绘 UI，绝不触发新的 observation 写入。这样既能同步 mute/calibration，又不会形成 storage-change 反馈回路。
 
 ## 8. Migration
 
@@ -125,9 +139,9 @@ Schema 9 及更旧状态升级为 10：
 - conversation references 继续统一转换为 install-salted SHA-256 pseudonymous key。
 - `firstConfirmedFailureLoad` 迁移为 `empiricalFailureLoad`。
 - legacy strong/conservative 质量可保留；无法映射的质量降为 provisional。
-- 旧环境信息缺失，因此旧有效 R 迁移后在当前产品状态中表现为 stale，而不是自动视为当前 calibration。
+- 旧环境信息缺失，因此旧有效 R 迁移后表现为 stale，而不是自动视为当前 calibration。
 - 旧 `recentAssistantTokenCounts` 不迁移为 TurnGrowthSample。
-- 旧 `hasUnmeasuredAttachments` 只在 migration 时转换为 uncertaintySources；新 schema 不再让 attachment 永久粘住整个会话。
+- 旧 `hasUnmeasuredAttachments` 只在 migration 时转换为 uncertaintySources。
 - migration 可重复运行，结果幂等。
 
 ## 9. History Scan Transactions
@@ -143,27 +157,42 @@ Schema 9 及更旧状态升级为 10：
 
 扫描结束前会再次验证 conversation identity；Background commit 再验证 generation/revision。任一改变则拒绝提交。刷新/extension reload 会销毁 content script 内的 scan session，因此没有可提交的半成品。
 
-**Measurement recovery scan**：用于已经存在可用提醒基准、但当前普通旧历史会话只有 partial/uncertain measurement 的情况。它同样记录 conversation identity、expectedGenerationId、expectedLedgerRevision，并在完整读取后只提交该会话的 authoritative complete/reliable ledger；不得写 empirical failure reference、不得增加 calibration sample、不得创建 pending confirmation。这样旧会话可以恢复自己的 L，而不会被误当作上限样本。
+**User-initiated full-read scan**：overflow menu 始终提供“完整读取当前会话”。用户可在任意具体会话中主动重新完整读取；扫描同样记录 conversation identity、expectedGenerationId、expectedLedgerRevision，并在完整读取后只提交该会话的 authoritative complete/reliable ledger。它不得写 empirical failure reference、不得增加 calibration sample、不得增加 growth sample、不得切换 generation、不得创建 pending confirmation。
 
 Scanner 继续使用稳定 head/tail、虚拟窗口重叠、有限恢复和 fail-closed 策略。
 
-## 10. UI
+## 10. Conversation Session 与新会话生命周期
+
+当前会话身份由 content script 的 `ConversationSessionState` 独立维护，不再由某一次 DOM parser 结果反推。它只保存页面生命周期所需的最小状态：当前 conversation ID、该 ID 是否从空白会话开始被连续观察，以及同标签页 document navigation 所需的短期 start evidence；不保存草稿正文。
+
+空白 ChatGPT 会话面被观察到后，首次出现 user message + conversation ID 时会把该 ID 绑定为 `observed_from_start`。这个事实对同一个 conversation 是单调的：Assistant streaming、renderer settle、URL 临时变化、canonical/data-conversation-id 暂时消失或 parser 瞬时降级，都不能清除当前 conversation identity，也不能把 coverage 从 observed-from-start 改回 none。
+
+Conversation identity 与 Measurement authority 是两层独立状态：Session 决定“当前是哪一个会话、是否从开始观察”，authoritative ledger 决定“哪一次测量可持久化”。如果瞬时 DOM 无法再次给出 conversation ID，Session 仍可把页面映射回当前 authoritative ledger；弱观测本身仍不能写 storage。
+
+Identity source 有明确优先级：URL 中的 `/c/<id>` 是可切换 Session 的强证据；已经绑定的 `ConversationSessionState.activeConversationId` 在 URL 暂时没有 `/c/<id>` 时优先于任何新的 DOM hint；DOM 的 `data-conversation-id` 只允许从当前消息树的祖先范围读取，不能从整个 document/侧边栏枚举。根路径 + 空消息 DOM 只是 transient observation，不能自行调用 reset。这样 renderer settle 期间既不会因 identity 暂时消失而丢会话，也不会被另一个侧边栏会话 ID 抢占。
+
+只有明确导航到另一个历史会话、浏览器 back/forward 等正向导航事件才重置 ConversationSessionState。页面/内容脚本重载后则依靠已持久化 authoritative ledger；新会话发生同标签页 document navigation 时用 30 秒 sessionStorage start evidence 做一次性桥接。
+
+Assistant streaming / settle 期间，DOM stable hint、renderer grouping 或正文可变化；sequence-reconciler 允许在有可靠锚点时使用 ordinal + role 桥接同一逻辑消息，但完全不相干的窗口仍保持 uncertain。
+
+## 11. UI
 
 `GuardUiModel` 直接携带三维领域状态。
 
-`shouldRenderRiskTrack()` 在 UI 层再次 hard gate，基础资格为：
+`shouldRenderRiskTrack()` 在 UI 层再次 hard gate：
 
 ```text
 measurement=complete
 and calibration in {calibrated, calibrated_conservative}
 and trackAvailable=true
+and risk != unknown
 ```
 
-在此基础上，`risk != unknown` 时正常渲染轨道；唯一例外是 `EnvironmentConfidence=unverified`，此时即使低负载仍为 `RiskState=unknown`，也可以渲染 `referencePositionScore` 表示本地历史参考位置，但不得认证为 Normal。environment_unknown / stale / uncalibrated 或 measurement 非 complete 时仍隐藏轨道。
+低位状态对用户显示为“风险较低”；modelHint 不参与 UI 主状态。environment_unknown / stale / uncalibrated 或 measurement 非 complete 时隐藏轨道。
 
-Overflow menu 使用 fixed positioning、trigger anchoring、viewport clamp；键盘 ArrowUp/ArrowDown/Home/End/Escape 与 focus restoration 保留。
+Overflow menu 固定包含完整读取当前会话、重新校准提醒基准、本会话不提醒/恢复提醒；使用 fixed positioning、trigger anchoring、viewport clamp，键盘 ArrowUp/ArrowDown/Home/End/Escape 与 focus restoration 保留。菜单底部显示当前开发构建版本，便于确认本地 unpacked extension 是否真正更新。
 
-## 11. 隐私
+## 12. 隐私
 
 Raw conversation text、Composer text 和附件内容只在内存瞬时处理。Storage 只保存 pseudonymous key、匿名 fingerprints、本地估算和状态元数据。扫描诊断不含 URL、正文或原始 fingerprint。
 

@@ -59,6 +59,81 @@ describe('chatgpt DOM reader', () => {
     ])
   })
 
+  it('prefers the complete author-role representation when grouped renderer is temporarily incomplete', () => {
+    const user = el(
+      'div',
+      { 'data-message-author-role': 'user', 'data-message-id': 'transition-u' },
+      [],
+      'hello during renderer transition'
+    )
+    const assistant = el(
+      'div',
+      {
+        'data-message-author-role': 'assistant',
+        'data-message-id': 'transition-a',
+        'data-markdown-text-style': 'assistant-message'
+      },
+      [],
+      'world during renderer transition'
+    )
+    const group = el(
+      'div',
+      { 'data-turn-key': 'transition-turn' },
+      [assistant]
+    )
+    const doc = fakeDocument([user, group])
+
+    expect(
+      readMessages(doc as unknown as Document).map((message) => [
+        message.role,
+        message.text,
+        message.ordinalHint
+      ])
+    ).toEqual([
+      ['user', 'hello during renderer transition', 0],
+      ['assistant', 'world during renderer transition', 1]
+    ])
+  })
+
+  it('reads grouped user messages exposed through data-message-author-role', () => {
+    const user = el(
+      'div',
+      { 'data-message-author-role': 'user', 'data-message-id': 'turn-current-u' },
+      [],
+      'hello from current renderer'
+    )
+    const assistant = el(
+      'div',
+      {
+        'data-message-author-role': 'assistant',
+        'data-message-id': 'turn-current-a'
+      },
+      [],
+      'world from current renderer'
+    )
+    const group = el(
+      'div',
+      { 'data-turn-key': 'turn-current' },
+      [user, assistant]
+    )
+    const doc = fakeDocument([group])
+
+    expect(
+      readMessages(doc as unknown as Document).map((message) => [
+        message.role,
+        message.text,
+        message.stableHint
+      ])
+    ).toEqual([
+      ['user', 'hello from current renderer', 'turn-key:turn-current:user'],
+      [
+        'assistant',
+        'world from current renderer',
+        'turn-key:turn-current:assistant'
+      ]
+    ])
+  })
+
   it('uses an assistant content unit when the grouped renderer has only a role marker', () => {
     const marker = el('h4', { 'data-conversation-role': 'assistant' })
     const paragraph = el('p', {}, [], 'answer text')
@@ -82,13 +157,41 @@ describe('chatgpt DOM reader', () => {
   it('extracts canonical conversation ids only from /c/id paths', () => {
     const doc = fakeDocument([
       el('link', { rel: 'canonical', href: 'https://chatgpt.com/c/canonical123?x=1' }),
-      el('div', { 'data-conversation-id': 'explicit456' })
+      el('nav', { 'data-conversation-id': 'sidebar456' })
     ])
 
-    expect(readConversationHints(doc as unknown as Document, 'https://chatgpt.com/')).toEqual([
-      'canonical123',
-      'explicit456'
-    ])
+    expect(
+      readConversationHints(
+        doc as unknown as Document,
+        'https://chatgpt.com/'
+      )
+    ).toEqual(['canonical123'])
+  })
+
+  it('uses only conversation ids scoped to the active message tree, not sidebar history ids', () => {
+    const user = el(
+      'div',
+      { 'data-message-author-role': 'user' },
+      [],
+      'hello'
+    )
+    const currentConversation = el(
+      'main',
+      { 'data-conversation-id': 'current123456' },
+      [user]
+    )
+    const sidebar = el(
+      'nav',
+      { 'data-conversation-id': 'sidebar999999' }
+    )
+    const doc = fakeDocument([sidebar, currentConversation])
+
+    expect(
+      readConversationHints(
+        doc as unknown as Document,
+        'https://chatgpt.com/workspace/current'
+      )
+    ).toEqual(['current123456'])
   })
 
   it('keeps directly opened /c/id incomplete', () => {
@@ -124,6 +227,37 @@ describe('chatgpt DOM reader', () => {
     ])
 
     expect(readComposerText(doc as unknown as Document)).toBe('real prompt')
+  })
+
+  it('recognizes the current Chinese ChatGPT composer without legacy prompt ids', () => {
+    const doc = fakeDocument([
+      el(
+        'textarea',
+        { placeholder: '询问 ChatGPT', value: '真实草稿内容' },
+        [],
+        ''
+      )
+    ])
+
+    expect(readComposerText(doc as unknown as Document)).toBe('真实草稿内容')
+  })
+
+  it('recognizes a ProseMirror composer even when its aria label is workspace-specific', () => {
+    const doc = fakeDocument([
+      el(
+        'div',
+        {
+          class: 'ProseMirror',
+          contenteditable: 'true',
+          role: 'textbox',
+          'aria-label': '项目工作区'
+        },
+        [],
+        '真实草稿内容'
+      )
+    ])
+
+    expect(readComposerText(doc as unknown as Document)).toBe('真实草稿内容')
   })
 
   it('detects stop-generation control semantically', () => {
@@ -330,6 +464,15 @@ function descendantsOf(root: FakeElement): FakeElement[] {
 
 function matchesSingleSelector(element: FakeElement, selector: string): boolean {
   if (selector.startsWith('#')) return element.id === selector.slice(1)
+  const tagClassAttribute = selector.match(/^([a-zA-Z0-9-]+)\.([a-zA-Z0-9_-]+)(\[.+\])$/)
+  if (tagClassAttribute?.[1] && tagClassAttribute[2] && tagClassAttribute[3]) {
+    const classes = (element.getAttribute('class') ?? '').split(/\s+/)
+    return (
+      element.tagName.toLowerCase() === tagClassAttribute[1].toLowerCase() &&
+      classes.includes(tagClassAttribute[2]) &&
+      matchesSingleSelector(element, tagClassAttribute[3])
+    )
+  }
   const tagWithAttribute = selector.match(/^([a-zA-Z0-9-]+)(\[.+\])$/)
   if (tagWithAttribute?.[1] && tagWithAttribute[2]) {
     return (

@@ -71,36 +71,33 @@ describe('risk engine product invariants', () => {
     expect(result.referencePositionScore).toBeGreaterThan(0)
   })
 
-  it('never certifies normal from an unverified environment warning prior', () => {
+  it('does not let missing diagnostic environment metadata suppress a low-risk result', () => {
     const result = assessRisk(
       calibrated({
         currentLoad: 20_000,
         environmentConfidence: 'unverified',
-        calibrationState: 'calibrated_conservative',
+        calibrationState: 'calibrated',
         failureReference: {
           load: 100_000,
-          quality: 'conservative',
+          quality: 'strong',
           sourceConversationCount: 1
         },
         growthReserve: 5_000
       })
     )
-    expect(result.state).toBe('unknown')
+    expect(result.state).toBe('normal')
     expect(result.referencePositionScore).toBeGreaterThan(0)
-    expect(result.reasons).toContain(
-      'environment_unverified_cannot_certify_normal'
-    )
   })
 
-  it('uses an unverified historical reference asymmetrically for warnings', () => {
+  it('keeps warning thresholds independent of optional environment metadata', () => {
     const near = assessRisk(
       calibrated({
         currentLoad: 90_000,
         environmentConfidence: 'unverified',
-        calibrationState: 'calibrated_conservative',
+        calibrationState: 'calibrated',
         failureReference: {
           load: 100_000,
-          quality: 'conservative',
+          quality: 'strong',
           sourceConversationCount: 1
         },
         growthReserve: 5_000
@@ -110,10 +107,10 @@ describe('risk engine product invariants', () => {
       calibrated({
         currentLoad: 100_000,
         environmentConfidence: 'unverified',
-        calibrationState: 'calibrated_conservative',
+        calibrationState: 'calibrated',
         failureReference: {
           load: 100_000,
-          quality: 'conservative',
+          quality: 'strong',
           sourceConversationCount: 1
         },
         growthReserve: undefined
@@ -121,7 +118,7 @@ describe('risk engine product invariants', () => {
     )
 
     expect(near.state).toBe('organize')
-    expect(near.referencePositionScore).toBe(75)
+    expect(near.referencePositionScore).toBe(90)
     expect(atReference.state).toBe('high')
     expect(atReference.referencePositionScore).toBe(100)
   })
@@ -196,7 +193,26 @@ describe('risk engine product invariants', () => {
     expect(withoutDraft.state).toBe('organize')
     expect(withDraft.state).toBe('high')
     expect(withDraft.projectedLoad).toBe(100_001)
+    expect(withoutDraft.referencePositionScore).toBe(90)
+    expect(withDraft.referencePositionScore).toBeCloseTo(95.001)
     expect(withDraft.reasons).toContain('composer_draft_included')
+  })
+
+  it('keeps the visual track linear to the empirical failure reference even when growth reserve is large', () => {
+    const smallChat = assessRisk(
+      calibrated({
+        currentLoad: 4_000,
+        failureReference: {
+          load: 50_000,
+          quality: 'strong',
+          sourceConversationCount: 1
+        },
+        growthReserve: 10_000
+      })
+    )
+
+    expect(smallChat.state).toBe('normal')
+    expect(smallChat.referencePositionScore).toBe(8)
   })
 
   it('allows conservative empirical references without pretending they are strong', () => {

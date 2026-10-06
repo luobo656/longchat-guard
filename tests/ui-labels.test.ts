@@ -31,7 +31,6 @@ function model(
     growthReserveReady: true,
     muted: false,
     pendingFailureConfirmation: false,
-    measurementRecoveryAvailable: false,
     uncertaintySources: [],
     ...overrides
   }
@@ -51,9 +50,7 @@ describe('guard UI product contract', () => {
     expect(en.actionMeasureCurrentChat.message).toBe(
       'Read full current chat'
     )
-    expect(en.actionMeasureCurrentChatHelp.message).toContain(
-      'does not change your alert reference'
-    )
+    expect("actionMeasureCurrentChatHelp" in en).toBe(false)
     expect(allEnglishCopy).not.toContain('Scan current chat')
     expect(allEnglishCopy).not.toContain('Establish current progress')
     expect(allEnglishCopy).not.toContain('Scan a chat that reached the limit')
@@ -62,9 +59,9 @@ describe('guard UI product contract', () => {
   })
 
   it('hard-blocks the risk track when the reference or measurement is unusable', () => {
-    expect(en.statusEnvironmentUnknown.message).toBe('Confirming environment')
-    expect(en.statusEnvironmentUnknownHelp.message).toContain('automatically restore')
-    expect(en.statusStaleHelp.message).toContain('confirmed to differ')
+    expect(en.statusEnvironmentUnknown.message).toBe('Unable to assess')
+    expect(en.statusEnvironmentUnknownHelp.message).toContain('temporarily unavailable')
+    expect(en.statusStaleHelp.message).toContain('measurement method has changed')
     expect(shouldRenderRiskTrack(model())).toBe(true)
     expect(
       shouldRenderRiskTrack(
@@ -98,38 +95,21 @@ describe('guard UI product contract', () => {
     ).toBe(false)
   })
 
-  it('renders the segmented local-reference track for an unverified environment without certifying Normal', () => {
+  it('centers calibrated UI copy on risk rather than optional model metadata', () => {
+    expect(en.riskNormal.message).toBe('Lower risk')
+    expect(en.riskAdviceNormal.message).toContain('lower-risk range')
     expect(
       shouldRenderRiskTrack(
         model({
-          calibrationState: 'calibrated_conservative',
           environmentConfidence: 'unverified',
-          riskState: 'unknown',
+          riskState: 'normal',
           trackAvailable: true,
           referencePositionScore: 20
         })
       )
     ).toBe(true)
-    expect(
-      shouldRenderRiskTrack(
-        model({
-          calibrationState: 'calibrated_conservative',
-          environmentConfidence: 'unverified',
-          riskState: 'high',
-          trackAvailable: true,
-          referencePositionScore: 100
-        })
-      )
-    ).toBe(true)
-    expect(en.statusEnvironmentUnverified.message).toBe(
-      'Model environment unconfirmed'
-    )
-    expect(en.statusEnvironmentUnverifiedHelp.message).toContain(
-      'local historical reference'
-    )
-    expect(en.statusEnvironmentUnverifiedHelp.message).toContain(
-      'not an official ChatGPT limit'
-    )
+    expect('statusEnvironmentUnverified' in en).toBe(false)
+    expect('statusEnvironmentUnverifiedHelp' in en).toBe(false)
   })
 
   it('allows a conservative calibrated reference to render calibrated risk', () => {
@@ -184,7 +164,11 @@ describe('guard UI product contract', () => {
     expect(activeRiskSegmentCount(0)).toBe(0)
     expect(activeRiskSegmentCount(0.1)).toBe(1)
     expect(activeRiskSegmentCount(6.25)).toBe(1)
-    expect(activeRiskSegmentCount(6.26)).toBe(2)
+    expect(activeRiskSegmentCount(6.26)).toBe(1)
+    expect(activeRiskSegmentCount(12.49)).toBe(1)
+    expect(activeRiskSegmentCount(12.5)).toBe(2)
+    expect(activeRiskSegmentCount(18.74)).toBe(2)
+    expect(activeRiskSegmentCount(18.75)).toBe(3)
     expect(activeRiskSegmentCount(62.5)).toBe(10)
     expect(activeRiskSegmentCount(75)).toBe(12)
     expect(activeRiskSegmentCount(87.5)).toBe(14)

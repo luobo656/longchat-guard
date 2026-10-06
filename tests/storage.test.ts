@@ -46,7 +46,7 @@ class MemoryStorage implements LocalStorageArea {
 }
 
 const env = {
-  parserSchemaVersion: 'chatgpt-dom-2026-10-v2',
+  parserSchemaVersion: 'chatgpt-dom-2026-10-v3',
   measurementSchemaVersion: 2,
   modelHint: 'GPT Fixture'
 } as const
@@ -276,6 +276,120 @@ describe('chrome local storage persistence model', () => {
     expect(JSON.stringify(state)).not.toContain(
       'chatgpt:legacy-limit'
     )
+    const writesAfterMigration = storage.setCount
+    const reloaded = await loadState(storage)
+    expect(reloaded).toEqual(state)
+    expect(storage.setCount).toBe(writesAfterMigration)
+  })
+
+  it('migrates the published v2.0.2 schema 7 state without losing consent, mute state, or local evidence', async () => {
+    const storage = new MemoryStorage()
+    storage.seed('conversationGuardState', {
+      schemaVersion: 7,
+      installSalt: 'published-2.0.2-salt',
+      settings: {
+        enabled: true,
+        generationId: 'g1',
+        privacyConsentVersion: 1,
+        privacyConsentedAt: 77
+      },
+      generations: [
+        {
+          id: 'g1',
+          createdAt: 1,
+          createdReason: 'initial',
+          samples: [
+            {
+              conversationKey: 'chatgpt:published-limit',
+              generationId: 'g1',
+              highestConfirmedSafeLoad: 60_000,
+              firstConfirmedFailureLoad: 77_324,
+              coverageState: 'complete',
+              parserHealth: 'healthy',
+              successEvidenceQuality: 'complete',
+              failureEvidenceQuality: 'confirmed',
+              updatedAt: 2
+            }
+          ],
+          confidence: 0.8,
+          suspiciousChangeCount: 0,
+          recentAssistantTokenCounts: [900, 1800],
+          growthHistoryConversationKeys: ['chatgpt:published-limit'],
+          environmentConflictKeys: [],
+          pendingFailureConfirmations: [],
+          changePointSuggested: false,
+          verificationFactor: 1
+        }
+      ],
+      ledgers: {
+        'chatgpt:published-limit': {
+          conversationKey: 'chatgpt:published-limit',
+          generationId: 'g1',
+          coverageState: 'complete',
+          parserHealth: 'healthy',
+          messages: [
+            {
+              fingerprint: 'legacy-message',
+              contentFingerprint: 'legacy-content',
+              role: 'user',
+              tokenEstimate: 100,
+              charCount: 400,
+              observedAt: 3,
+              localBranchId: 'active',
+              ordinalHint: 0,
+              attachmentCount: 1
+            }
+          ],
+          activeFingerprints: ['legacy-message'],
+          currentEstimatedLoad: 77_324,
+          completedAssistantFingerprints: [],
+          confirmedFailureFingerprints: ['legacy-failure'],
+          dismissedFailureKeys: [],
+          updatedAt: 5
+        }
+      },
+      conversationControls: {
+        'chatgpt:published-limit': {
+          muted: true,
+          lastAlertLevel: 'high',
+          updatedAt: 6
+        }
+      }
+    })
+
+    const state = await loadState(storage)
+    const key = await anonymizeConversationKey(
+      'chatgpt:published-limit',
+      'published-2.0.2-salt'
+    )
+    const generation = state.generations[0]!
+    const migratedLedger = state.ledgers[key]!
+
+    expect(state.schemaVersion).toBe(CURRENT_SCHEMA_VERSION)
+    expect(state.installSalt).toBe('published-2.0.2-salt')
+    expect(state.settings.privacyConsentVersion).toBe(1)
+    expect(state.settings.privacyConsentedAt).toBe(77)
+    expect(generation.id).toBe('g1')
+    expect(generation.turnGrowthSamples).toEqual([])
+    expect(generation.samples[0]?.highestConfirmedSafeLoad).toBe(60_000)
+    expect(generation.samples[0]?.empiricalFailureLoad).toBe(77_324)
+    expect(generation.samples[0]?.failureReferenceQuality).toBe('provisional')
+    expect(
+      deriveCalibrationState({
+        generation,
+        currentEnvironment: env
+      })
+    ).toBe('stale')
+    expect(migratedLedger.ledgerRevision).toBe(1)
+    expect(migratedLedger.observationEpoch).toBe(5)
+    expect(migratedLedger.sequenceReliability).toBe('reliable')
+    expect(migratedLedger.uncertaintySources).toEqual(['attachment'])
+    expect(migratedLedger.confirmedFailureFingerprints).toEqual([
+      'legacy-failure'
+    ])
+    expect(state.conversationControls[key]?.muted).toBe(true)
+    expect(JSON.stringify(state)).not.toContain('chatgpt:published-limit')
+
     const writesAfterMigration = storage.setCount
     const reloaded = await loadState(storage)
     expect(reloaded).toEqual(state)

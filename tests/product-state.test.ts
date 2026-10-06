@@ -5,6 +5,7 @@ import {
   recordSuccessfulAssistantCompletion
 } from '../src/core/calibration'
 import {
+  calibrationNeedsFreshGeneration,
   compareEnvironmentSignatures,
   deriveCalibrationState,
   deriveEnvironmentConfidence,
@@ -14,7 +15,7 @@ import {
 import type { PersistedConversationLedger } from '../src/core/types'
 
 const env = {
-  parserSchemaVersion: 'chatgpt-dom-2026-10-v2',
+  parserSchemaVersion: 'chatgpt-dom-2026-10-v3',
   measurementSchemaVersion: 2,
   modelHint: 'GPT Fixture'
 } as const
@@ -114,7 +115,7 @@ describe('unified product state', () => {
     ).toBe('calibrated_conservative')
   })
 
-  it('makes calibration stale only after a confirmed environment mismatch', () => {
+  it('makes calibration stale after a parser-schema mismatch', () => {
     let generation = createGeneration('g1', 1)
     generation = recordConfirmedFailureReference(generation, {
       conversationKey: 'limit',
@@ -134,13 +135,39 @@ describe('unified product state', () => {
         generation,
         currentEnvironment: {
           ...env,
-          modelHint: 'different-model'
+          parserSchemaVersion: 'different-parser'
         }
       })
     ).toBe('stale')
   })
 
-  it('distinguishes transient unknown environment from confirmed mismatch and recovers automatically', () => {
+  it('requires a fresh generation before recalibrating a usable reference after parser-schema drift', () => {
+    let generation = createGeneration('g1', 1)
+    generation = recordConfirmedFailureReference(generation, {
+      conversationKey: 'limit',
+      generationId: 'g1',
+      estimatedLoad: 60_000,
+      errorKind: 'conversation_length_limit',
+      coverageState: 'complete',
+      parserHealth: 'healthy',
+      sequenceReliability: 'reliable',
+      uncertaintySources: [],
+      environmentSignature: {
+        ...env,
+        parserSchemaVersion: 'chatgpt-dom-2026-10-v2'
+      },
+      observedAt: 2
+    })
+
+    expect(
+      calibrationNeedsFreshGeneration({
+        generation,
+        currentEnvironment: env
+      })
+    ).toBe(true)
+  })
+
+  it('treats model labels as diagnostics while keeping missing signatures fail-closed', () => {
     let generation = createGeneration('g1', 1)
     generation = recordConfirmedFailureReference(generation, {
       conversationKey: 'limit',
@@ -158,10 +185,7 @@ describe('unified product state', () => {
     expect(
       deriveCalibrationState({
         generation,
-        currentEnvironment: {
-          parserSchemaVersion: env.parserSchemaVersion,
-          measurementSchemaVersion: env.measurementSchemaVersion
-        }
+        currentEnvironment: undefined
       })
     ).toBe('environment_unknown')
 
@@ -175,12 +199,18 @@ describe('unified product state', () => {
     expect(
       deriveCalibrationState({
         generation,
+        currentEnvironment: envWithoutModel
+      })
+    ).toBe('calibrated')
+    expect(
+      deriveCalibrationState({
+        generation,
         currentEnvironment: { ...env, modelHint: 'different-model' }
       })
-    ).toBe('stale')
+    ).toBe('calibrated')
   })
 
-  it('keeps a calibration conservative when the model was not observable at calibration time', () => {
+  it('keeps a complete calibration strong when the model label was not observable', () => {
     let generation = createGeneration('g1', 1)
     generation = recordConfirmedFailureReference(generation, {
       conversationKey: 'limit',
@@ -200,22 +230,22 @@ describe('unified product state', () => {
         generation,
         currentEnvironment: envWithoutModel
       })
-    ).toBe('calibrated_conservative')
+    ).toBe('calibrated')
     expect(
       deriveEnvironmentConfidence(
         generation.environmentSignature,
         envWithoutModel
       )
-    ).toBe('unverified')
+    ).toBe('verified')
     expect(
       deriveCalibrationState({
         generation,
         currentEnvironment: env
       })
-    ).toBe('calibrated_conservative')
+    ).toBe('calibrated')
     expect(
       deriveEnvironmentConfidence(generation.environmentSignature, env)
-    ).toBe('unverified')
+    ).toBe('verified')
   })
 
   it('treats a warm-start prior as stale, never current calibration', () => {
@@ -272,7 +302,7 @@ describe('unified product state', () => {
     ).toBe('unavailable')
   })
 
-  it('compares environment signatures as match, model-unverified, unknown or mismatch', () => {
+  it('compares only parser and measurement schemas; model labels are diagnostic-only', () => {
     expect(compareEnvironmentSignatures(env, env)).toBe('match')
     expect(environmentSignaturesMatch(env, env)).toBe(true)
     expect(deriveEnvironmentConfidence(env, env)).toBe('verified')
@@ -281,10 +311,10 @@ describe('unified product state', () => {
     expect(environmentSignaturesMatch(undefined, env)).toBe(false)
     expect(
       compareEnvironmentSignatures(envWithoutModel, envWithoutModel)
-    ).toBe('model_unverified')
+    ).toBe('match')
     expect(
       environmentSignaturesMatch(envWithoutModel, envWithoutModel)
-    ).toBe(false)
+    ).toBe(true)
     expect(
       compareEnvironmentSignatures(
         { ...env, modelHint: 'GPT A' },
@@ -293,7 +323,7 @@ describe('unified product state', () => {
           measurementSchemaVersion: env.measurementSchemaVersion
         }
       )
-    ).toBe('unknown')
+    ).toBe('match')
     expect(
       compareEnvironmentSignatures(
         env,
@@ -311,18 +341,18 @@ describe('unified product state', () => {
         { ...env, modelHint: 'GPT A' },
         env
       )
-    ).toBe(false)
+    ).toBe(true)
     expect(
       environmentSignaturesMatch(
         env,
         { ...env, modelHint: 'GPT A' }
       )
-    ).toBe(false)
+    ).toBe(true)
     expect(
       environmentSignaturesMatch(
         { ...env, modelHint: 'GPT A' },
         { ...env, modelHint: 'GPT B' }
       )
-    ).toBe(false)
+    ).toBe(true)
   })
 })

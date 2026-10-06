@@ -28,7 +28,7 @@ class MemoryStorage implements LocalStorageArea {
 }
 
 const env = {
-  parserSchemaVersion: 'chatgpt-dom-2026-10-v2',
+  parserSchemaVersion: 'chatgpt-dom-2026-10-v3',
   measurementSchemaVersion: 2,
   modelHint: 'GPT Fixture'
 } as const
@@ -123,8 +123,132 @@ describe('storage mutation coordinator state transitions', () => {
     })
 
     expect(stale.staleObservation).toBe(true)
+    expect(stale.observationDisposition).toBe('stale')
     expect(stale.snapshot.ledgerRevision).toBe(2)
     expect(stale.snapshot.currentEstimatedLoad).toBe(200)
+  })
+
+  it('does not downgrade a trusted complete ledger from a weaker passive observation', async () => {
+    const coordinator = new StorageMutationCoordinator(
+      new MemoryStorage()
+    )
+    const first = await observe(coordinator, {
+      conversationKey: 'chatgpt:trusted-passive',
+      baseRevision: 0,
+      observationEpoch: 10,
+      tokens: 1_000
+    })
+    const revision = first.snapshot.ledgerRevision
+
+    const incomplete = await coordinator.observeWindow({
+      conversationKey: 'chatgpt:trusted-passive',
+      coverageState: 'incomplete',
+      parserHealth: 'healthy',
+      tailEvidence: 'unknown',
+      observedMessages: [
+        message('stable-main', 'user', 1_000, 20)
+      ],
+      composerTokenEstimate: 0,
+      environmentSignature: env,
+      uncertaintySources: [],
+      expectedGenerationId: first.state.settings.generationId,
+      baseRevision: revision,
+      observationEpoch: 20,
+      observedAt: 20
+    })
+    expect(incomplete.observationDisposition).toBe('retained_authoritative')
+    expect(incomplete.snapshot?.coverageState).toBe('complete')
+    expect(incomplete.snapshot?.parserHealth).toBe('healthy')
+    expect(incomplete.snapshot?.sequenceReliability).toBe('reliable')
+    expect(incomplete.snapshot?.ledgerRevision).toBe(revision)
+    expect(incomplete.snapshot?.currentEstimatedLoad).toBe(1_000)
+
+    const degraded = await coordinator.observeWindow({
+      conversationKey: 'chatgpt:trusted-passive',
+      coverageState: 'complete',
+      parserHealth: 'degraded',
+      tailEvidence: 'unknown',
+      observedMessages: [
+        message('stable-main', 'user', 1_000, 30)
+      ],
+      composerTokenEstimate: 0,
+      environmentSignature: env,
+      uncertaintySources: [],
+      expectedGenerationId: first.state.settings.generationId,
+      baseRevision: revision,
+      observationEpoch: 30,
+      observedAt: 30
+    })
+    expect(degraded.observationDisposition).toBe('retained_authoritative')
+    if (!degraded.snapshot) throw new Error('expected_degraded_snapshot')
+    expect(degraded.snapshot.coverageState).toBe('complete')
+    expect(degraded.snapshot.parserHealth).toBe('healthy')
+    expect(degraded.snapshot.sequenceReliability).toBe('reliable')
+    expect(degraded.snapshot.ledgerRevision).toBe(revision)
+    expect(
+      deriveMeasurementState({
+        supported: true,
+        ledger: degraded.snapshot
+      })
+    ).toBe('complete')
+
+    const changedWhileWeak = await coordinator.observeWindow({
+      conversationKey: 'chatgpt:trusted-passive',
+      coverageState: 'incomplete',
+      parserHealth: 'degraded',
+      tailEvidence: 'unknown',
+      observedMessages: [
+        message('stable-main', 'user', 1_000, 40),
+        message('new-user-while-weak', 'user', 100, 40)
+      ],
+      composerTokenEstimate: 0,
+      environmentSignature: env,
+      uncertaintySources: [],
+      expectedGenerationId: first.state.settings.generationId,
+      baseRevision: revision,
+      observationEpoch: 40,
+      observedAt: 40
+    })
+    expect(changedWhileWeak.observationDisposition).toBe(
+      'retained_authoritative'
+    )
+    if (!changedWhileWeak.snapshot) {
+      throw new Error('expected_changed_while_weak_snapshot')
+    }
+    expect(changedWhileWeak.snapshot.ledgerRevision).toBe(revision)
+    expect(
+      deriveMeasurementState({
+        supported: true,
+        ledger: changedWhileWeak.snapshot
+      })
+    ).toBe('complete')
+
+    const recovered = await coordinator.observeWindow({
+      conversationKey: 'chatgpt:trusted-passive',
+      coverageState: 'complete',
+      parserHealth: 'healthy',
+      tailEvidence: 'at_tail',
+      observedMessages: [
+        message('stable-main', 'user', 1_000, 50),
+        message('new-user-while-weak', 'user', 100, 50)
+      ],
+      composerTokenEstimate: 0,
+      environmentSignature: env,
+      uncertaintySources: [],
+      expectedGenerationId: first.state.settings.generationId,
+      baseRevision: revision,
+      observationEpoch: 50,
+      observedAt: 50
+    })
+    expect(recovered.observationDisposition).toBe('committed')
+    if (!recovered.snapshot) throw new Error('expected_recovered_snapshot')
+    expect(recovered.snapshot.ledgerRevision).toBeGreaterThan(revision)
+    expect(
+      deriveMeasurementState({
+        supported: true,
+        ledger: recovered.snapshot
+      })
+    ).toBe('complete')
   })
 
   it('rejects stale observation, completion, and failure events from an old generation', async () => {

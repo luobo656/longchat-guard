@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { StorageMutationCoordinator } from '../src/background/coordinator'
 import { summarizeGeneration } from '../src/core/calibration'
 import {
+  calibrationNeedsFreshGeneration,
   deriveCalibrationState,
   deriveMeasurementState
 } from '../src/core/product-state'
@@ -28,19 +29,19 @@ class MemoryStorage implements LocalStorageArea {
 }
 
 const env = {
-  parserSchemaVersion: 'chatgpt-dom-2026-10-v2',
+  parserSchemaVersion: 'chatgpt-dom-2026-10-v3',
   measurementSchemaVersion: 2,
   modelHint: 'GPT Fixture'
-} as const
-
-const envB = {
-  ...env,
-  modelHint: 'different-model'
 } as const
 
 const envWithoutModel = {
   parserSchemaVersion: env.parserSchemaVersion,
   measurementSchemaVersion: env.measurementSchemaVersion
+} as const
+
+const previousParserEnv = {
+  ...env,
+  parserSchemaVersion: 'chatgpt-dom-2026-10-v2'
 } as const
 
 function observed(
@@ -140,7 +141,6 @@ describe('product-flow integration matrix', () => {
         growthReserveReady: false,
         muted: false,
         pendingFailureConfirmation: false,
-        measurementRecoveryAvailable: false,
         uncertaintySources: []
       })
     ).toBe(false)
@@ -212,7 +212,6 @@ describe('product-flow integration matrix', () => {
         growthReserveReady: false,
         muted: false,
         pendingFailureConfirmation: false,
-        measurementRecoveryAvailable: false,
         uncertaintySources: []
       })
     ).toBe(true)
@@ -304,16 +303,16 @@ describe('product-flow integration matrix', () => {
     ).toBe('conservative')
   })
 
-  it('uses a model-unverified failure reference only as an asymmetric warning prior', async () => {
+  it('treats missing model labels as diagnostics and keeps the calibrated reference strong', async () => {
     const coordinator = new StorageMutationCoordinator(
       new MemoryStorage()
     )
     const initial = await coordinator.loadState()
     const calibrated = await coordinator.commitCalibration({
-      conversationKey: 'chatgpt:model-unverified-limit',
+      conversationKey: 'chatgpt:no-model-label-limit',
       expectedGenerationId: initial.settings.generationId,
       expectedLedgerRevision: 0,
-      scanSessionId: 'scan-model-unverified',
+      scanSessionId: 'scan-no-model-label',
       environmentSignature: envWithoutModel,
       uncertaintySources: [],
       observedMessages: [
@@ -326,7 +325,7 @@ describe('product-flow integration matrix', () => {
     const generation = calibrated.state.generations[0]!
     expect(summarizeGeneration(generation).failureReference).toEqual({
       load: 100_000,
-      quality: 'conservative',
+      quality: 'strong',
       sourceConversationCount: 1
     })
     expect(
@@ -334,12 +333,12 @@ describe('product-flow integration matrix', () => {
         generation,
         currentEnvironment: envWithoutModel
       })
-    ).toBe('calibrated_conservative')
+    ).toBe('calibrated')
     expect(calibrated.risk.state).toBe('high')
     expect(calibrated.risk.referencePositionScore).toBe(100)
 
     const low = await coordinator.observeWindow({
-      conversationKey: 'chatgpt:model-unverified-low',
+      conversationKey: 'chatgpt:no-model-label-low',
       coverageState: 'complete',
       parserHealth: 'healthy',
       tailEvidence: 'at_tail',
@@ -352,14 +351,11 @@ describe('product-flow integration matrix', () => {
       observationEpoch: 20,
       observedAt: 20
     })
-    expect(low.risk?.state).toBe('unknown')
+    expect(low.risk?.state).toBe('normal')
     expect(low.risk?.referencePositionScore).toBeGreaterThan(0)
-    expect(low.risk?.reasons).toContain(
-      'environment_unverified_cannot_certify_normal'
-    )
   })
 
-  it('environment mismatch and generation reset both remove eligibility for normal risk', async () => {
+  it('schema mismatch and generation reset both remove eligibility for normal risk', async () => {
     const coordinator = new StorageMutationCoordinator(
       new MemoryStorage()
     )
@@ -369,7 +365,7 @@ describe('product-flow integration matrix', () => {
     expect(
       deriveCalibrationState({
         generation,
-        currentEnvironment: envB
+        currentEnvironment: previousParserEnv
       })
     ).toBe('stale')
 
@@ -386,6 +382,78 @@ describe('product-flow integration matrix', () => {
       })
     ).toBe('stale')
     expect(next.turnGrowthSamples).toEqual([])
+  })
+
+  it('parser drift rotates to a clean generation before a replacement calibration is committed', async () => {
+    const coordinator = new StorageMutationCoordinator(
+      new MemoryStorage()
+    )
+    const initial = await coordinator.loadState()
+    const oldCalibration = await coordinator.commitCalibration({
+      conversationKey: 'chatgpt:old-parser-limit',
+      expectedGenerationId: initial.settings.generationId,
+      expectedLedgerRevision: 0,
+      scanSessionId: 'scan-old-parser',
+      environmentSignature: previousParserEnv,
+      uncertaintySources: [],
+      observedMessages: [
+        observed('old-limit-u', 'user', 20_000, 10),
+        observed('old-limit-a', 'assistant', 40_000, 10)
+      ],
+      observedAt: 11
+    })
+    const oldGeneration = oldCalibration.state.generations[0]!
+
+    expect(
+      calibrationNeedsFreshGeneration({
+        generation: oldGeneration,
+        currentEnvironment: env
+      })
+    ).toBe(true)
+    expect(
+      deriveCalibrationState({
+        generation: oldGeneration,
+        currentEnvironment: env
+      })
+    ).toBe('stale')
+
+    const rotated = await coordinator.startGeneration(
+      'environment_change',
+      20
+    )
+    const freshGeneration = rotated.generations[0]!
+    expect(freshGeneration.id).not.toBe(oldGeneration.id)
+    expect(freshGeneration.samples).toEqual([])
+    expect(freshGeneration.turnGrowthSamples).toEqual([])
+    expect(freshGeneration.warmStartPrior?.failureReference?.load).toBe(
+      60_000
+    )
+
+    const recalibrated = await coordinator.commitCalibration({
+      conversationKey: 'chatgpt:new-parser-limit',
+      expectedGenerationId: freshGeneration.id,
+      expectedLedgerRevision: 0,
+      scanSessionId: 'scan-new-parser',
+      environmentSignature: env,
+      uncertaintySources: [],
+      observedMessages: [
+        observed('new-limit-u', 'user', 22_000, 30),
+        observed('new-limit-a', 'assistant', 43_000, 30)
+      ],
+      observedAt: 31
+    })
+    const current = recalibrated.state.generations[0]!
+
+    expect(current.id).toBe(freshGeneration.id)
+    expect(current.samples).toHaveLength(1)
+    expect(current.turnGrowthSamples).toEqual([])
+    expect(summarizeGeneration(current).failureReference?.load).toBe(65_000)
+    expect(
+      deriveCalibrationState({
+        generation: current,
+        currentEnvironment: env
+      })
+    ).toBe('calibrated')
   })
 
   it('reload preserves current calibration without upgrading evidence', async () => {

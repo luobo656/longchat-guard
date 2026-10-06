@@ -9,7 +9,7 @@ import {
 } from '../src/core/calibration'
 
 const env = {
-  parserSchemaVersion: 'chatgpt-dom-2026-10-v2',
+  parserSchemaVersion: 'chatgpt-dom-2026-10-v3',
   measurementSchemaVersion: 2,
   modelHint: 'GPT Fixture'
 } as const
@@ -64,10 +64,10 @@ describe('calibration evidence model', () => {
     expect(generation.environmentSignature).toEqual(env)
   })
 
-  it('downgrades an otherwise strong model-unverified calibration to conservative', () => {
+  it('keeps a complete calibration strong when the model label is unavailable', () => {
     let generation = createGeneration('g1', 1)
     generation = recordConfirmedFailureReference(generation, {
-      conversationKey: 'limit-model-unverified',
+      conversationKey: 'limit-no-model-label',
       generationId: 'g1',
       estimatedLoad: 60_000,
       errorKind: 'conversation_length_limit',
@@ -81,7 +81,7 @@ describe('calibration evidence model', () => {
 
     expect(summarizeGeneration(generation).failureReference).toEqual({
       load: 60_000,
-      quality: 'conservative',
+      quality: 'strong',
       sourceConversationCount: 1
     })
   })

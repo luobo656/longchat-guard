@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { analyzePageSnapshot } from '../src/core/page-adapter'
+import {
+  analyzePageSnapshot,
+  resolveConversationId
+} from '../src/core/page-adapter'
 
 describe('chatgpt.com page adapter', () => {
   it('extracts a healthy semantic conversation fixture', () => {
@@ -82,6 +85,21 @@ describe('chatgpt.com page adapter', () => {
     })
 
     expect(result.conversationKey).toBe('chatgpt:nested123456')
+  })
+
+  it('resolves conversation identity independently from message parser health', () => {
+    expect(
+      resolveConversationId({
+        url: 'https://chatgpt.com/workspace/current',
+        conversationIdHints: ['identity123456']
+      })
+    ).toBe('identity123456')
+    expect(
+      resolveConversationId({
+        url: 'https://chatgpt.com/c/url123456',
+        conversationIdHints: ['different123456']
+      })
+    ).toBe('url123456')
   })
 
   it('fails closed when conversation identity is not reliable', () => {
