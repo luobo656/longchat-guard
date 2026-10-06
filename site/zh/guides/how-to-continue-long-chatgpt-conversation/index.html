@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ChatGPT 长会话怎么续接到新对话？— LongChat Guard</title>
-  <meta name="description" content="ChatGPT 长会话怎么续接到新对话？通过结构化总结当前状态、保留约束和决策、引用重要资料，把必要上下文干净迁移到新会话。">
+  <title>ChatGPT 长会话怎么续接？不丢上下文的迁移方法</title>
+  <meta name="description" content="ChatGPT 长会话怎么续接才不丢上下文？让当前 GPT 生成自包含交接内容，保留目标、决定、约束、文件状态、未解决问题和下一步。">
   <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large">
   <link rel="canonical" href="https://luobo656.github.io/longchat-guard/zh/guides/how-to-continue-long-chatgpt-conversation/">
   <link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/guides/how-to-continue-long-chatgpt-conversation/">
@@ -32,7 +32,7 @@
   <header class="topbar"><div class="wrap nav"><a class="brand" href="../../../"><img src="../../../icon128.png" alt="LongChat Guard 图标"><span>LongChat Guard</span></a><nav class="navlinks"><a href="../../">中文主页</a><a href="../when-to-start-new-chatgpt-conversation/">什么时候新开会话</a><a href="https://github.com/luobo656/longchat-guard">GitHub</a><a class="lang" href="../../../guides/how-to-continue-long-chatgpt-conversation/" hreflang="en">English</a></nav></div></header>
   <main><section><div class="wrap">
     <span class="eyebrow">指南 · ChatGPT 长会话续接</span>
-    <h1>ChatGPT 长会话怎么续接到一个新的对话？</h1>
+    <h1>ChatGPT 长会话怎么续接，才能不丢关键上下文？</h1>
     <p class="lede">最好的续接通常不是复制完整聊天记录，而是迁移“当前工作状态”：已经决定了什么、还有哪些约束、哪些问题没解决、下一步具体做什么。</p>
     <div class="answer"><strong>一句话：</strong>让当前 GPT 直接根据本会话真实状态生成一份自包含的续接上下文，再把这份生成结果粘贴到新会话。LongChat Guard 提供的就是这条元提示词：它要求 GPT 优先保留最新目标、已确认决定、约束、已排除方案、未解决问题、必要技术状态和下一步，而不是机械套固定摘要模板。</div>
     <h2>一个简洁的续接结构</h2>
