@@ -23,6 +23,7 @@ import {
   deriveEnvironmentConfidence,
   deriveMeasurementState
 } from '../core/product-state'
+import { passiveObservationDisposition } from '../core/measurement-authority'
 import type {
   CalibrationGeneration,
   ConversationControl,
@@ -106,6 +107,12 @@ export type BackgroundRequest =
   | { type: 'guard.updateControl'; conversationKey: string; patch: Partial<ConversationControl> }
   | { type: 'guard.updatePrivacyConsent'; accepted: boolean; observedAt: number }
 
+export type ObservationDisposition =
+  | 'stale'
+  | 'retained_authoritative'
+  | 'equivalent'
+  | 'committed'
+
 export type BackgroundResponse =
   | {
       ok: true
@@ -113,6 +120,7 @@ export type BackgroundResponse =
       snapshot?: PersistedConversationLedger
       risk?: RiskAssessment
       staleObservation?: boolean
+      observationDisposition?: ObservationDisposition
     }
   | { ok: false; error: string }
 
@@ -134,6 +142,7 @@ export class StorageMutationCoordinator {
     snapshot?: PersistedConversationLedger
     risk?: RiskAssessment
     staleObservation: boolean
+    observationDisposition: ObservationDisposition
   }> {
     return this.enqueue(async () => {
       const state = await loadState(this.storage)
@@ -159,7 +168,8 @@ export class StorageMutationCoordinator {
                 )
               }
             : {}),
-          staleObservation: true
+          staleObservation: true,
+          observationDisposition: 'stale'
         }
       }
 
@@ -175,7 +185,8 @@ export class StorageMutationCoordinator {
             generation,
             window.composerTokenEstimate
           ),
-          staleObservation: true
+          staleObservation: true,
+          observationDisposition: 'stale'
         }
       }
 
@@ -188,6 +199,31 @@ export class StorageMutationCoordinator {
         parserHealth: window.parserHealth,
         now: window.observedAt
       })
+
+      const disposition = passiveObservationDisposition({
+        existing,
+        candidate: {
+          generationId: generation.id,
+          coverageState: reconcileResult.coverageState,
+          parserHealth: reconcileResult.parserHealth,
+          sequenceReliability: reconcileResult.reliability,
+          environmentSignature: window.environmentSignature
+        }
+      })
+
+      if (disposition === 'retain_authoritative' && existing) {
+        return {
+          state,
+          snapshot: existing,
+          risk: riskFor(
+            existing,
+            generation,
+            window.composerTokenEstimate
+          ),
+          staleObservation: false,
+          observationDisposition: 'retained_authoritative'
+        }
+      }
 
       const retainedPrefixLoad =
         reconcileResult.reliability === 'reliable'
@@ -255,7 +291,8 @@ export class StorageMutationCoordinator {
             generation,
             window.composerTokenEstimate
           ),
-          staleObservation: false
+          staleObservation: false,
+          observationDisposition: 'equivalent'
         }
       }
 
@@ -271,7 +308,8 @@ export class StorageMutationCoordinator {
         state,
         snapshot: merged,
         risk,
-        staleObservation: false
+        staleObservation: false,
+        observationDisposition: 'committed'
       }
     })
   }
@@ -966,8 +1004,7 @@ function sameEnvironment(
   if (!left || !right) return left === right
   return (
     left.parserSchemaVersion === right.parserSchemaVersion &&
-    left.measurementSchemaVersion === right.measurementSchemaVersion &&
-    left.modelHint === right.modelHint
+    left.measurementSchemaVersion === right.measurementSchemaVersion
   )
 }
 

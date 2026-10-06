@@ -48,10 +48,6 @@ export function assessRisk(input: RiskInput): RiskAssessment {
       : 0
   const referenceLoad = failureReference.load
   const projectedLoad = baseLoad + reserve
-  const environmentUnverified = input.environmentConfidence === 'unverified'
-  if (environmentUnverified) {
-    reasons.push('environment_unverified_warning_prior_only')
-  }
 
   let state: Exclude<RiskState, 'unknown'> = 'normal'
 
@@ -77,22 +73,12 @@ export function assessRisk(input: RiskInput): RiskAssessment {
 
   const referencePositionScore = computeReferencePositionScore(
     baseLoad,
-    referenceLoad,
-    reserve
+    referenceLoad
   )
 
   if (input.environmentConfidence === 'mismatch') {
     reasons.push('environment_mismatch')
     return unknownAssessment(projectedLoad, reasons)
-  }
-
-  if (environmentUnverified && state === 'normal') {
-    reasons.push('environment_unverified_cannot_certify_normal')
-    return unknownAssessment(
-      projectedLoad,
-      reasons,
-      referencePositionScore
-    )
   }
 
   return {
@@ -120,43 +106,10 @@ function unknownAssessment(
 
 function computeReferencePositionScore(
   load: number,
-  failureReference: number,
-  reserve: number
+  failureReference: number
 ): number {
   if (load <= 0 || failureReference <= 0) return 0
-
-  if (reserve > 0) {
-    const longStart = Math.max(0, failureReference - 3 * reserve)
-    const organizeStart = Math.max(longStart, failureReference - 2 * reserve)
-    const highStart = Math.max(organizeStart, failureReference - reserve)
-
-    if (longStart > 0 && load < longStart) {
-      return clamp((load / longStart) * 62.5, 2, 62.5)
-    }
-    if (organizeStart > longStart && load < organizeStart) {
-      return clamp(
-        62.5 + ((load - longStart) / (organizeStart - longStart)) * 12.5,
-        62.5,
-        75
-      )
-    }
-    if (highStart > organizeStart && load < highStart) {
-      return clamp(
-        75 + ((load - organizeStart) / (highStart - organizeStart)) * 12.5,
-        75,
-        87.5
-      )
-    }
-    if (failureReference > highStart) {
-      return clamp(
-        87.5 + ((load - highStart) / (failureReference - highStart)) * 12.5,
-        87.5,
-        100
-      )
-    }
-  }
-
-  return clamp((load / failureReference) * 100, 2, 100)
+  return clamp((load / failureReference) * 100, 0, 100)
 }
 
 function clamp(value: number, min: number, max: number): number {

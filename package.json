@@ -1,6 +1,6 @@
 {
   "name": "longchat-guard",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "description": "Local-first ChatGPT long-conversation warning, conversation length monitor and context-risk browser extension for Chrome and Edge.",
   "keywords": [
     "chatgpt",

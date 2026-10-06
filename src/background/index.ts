@@ -34,13 +34,20 @@ chrome.runtime.onMessage.addListener(
     if (request.type === 'guard.observeWindow') {
       coordinator
         .observeWindow(request.window)
-        .then(({ state, snapshot, risk, staleObservation }) =>
+        .then(({
+          state,
+          snapshot,
+          risk,
+          staleObservation,
+          observationDisposition
+        }) =>
           sendResponse({
             ok: true,
             state,
             snapshot,
             risk,
-            staleObservation
+            staleObservation,
+            observationDisposition
           })
         )
         .catch(fail)

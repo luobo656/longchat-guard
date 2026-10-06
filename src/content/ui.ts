@@ -18,7 +18,6 @@ export interface GuardUiModel {
   growthReserveReady: boolean
   muted: boolean
   pendingFailureConfirmation: boolean
-  measurementRecoveryAvailable: boolean
   uncertaintySources: UncertaintySource[]
 }
 
@@ -157,7 +156,7 @@ export class GuardUi {
 
     this.bindButton('copy', callbacks.onCopyContinuation)
     this.bindButton('calibrate', callbacks.onCalibrate)
-    this.bindButton('measure-current', callbacks.onMeasureCurrentChat)
+    this.bindMenuAction('measure-current', callbacks.onMeasureCurrentChat)
     this.bindMenuAction('relearn', callbacks.onRecalibrate)
     this.bindMenuAction('mute', callbacks.onToggleMute)
     this.bindButton('confirm-yes', () => callbacks.onConfirmFailure(true))
@@ -230,8 +229,9 @@ export class GuardUi {
 
     const calibrate = button(this.shadow, 'calibrate')
     const measureCurrent = button(this.shadow, 'measure-current')
-    measureCurrent.hidden = !model.measurementRecoveryAvailable
-    measureCurrent.disabled = this.measurementBusy
+    const relearn = button(this.shadow, 'relearn')
+    measureCurrent.disabled = this.measurementBusy || this.calibrationBusy
+    relearn.disabled = this.measurementBusy || this.calibrationBusy
     setText(
       this.shadow,
       'measure-current-label',
@@ -247,7 +247,9 @@ export class GuardUi {
         model.calibrationState === 'calibrating')
     calibrate.hidden = !showCalibrationAction
     calibrate.disabled =
-      this.calibrationBusy || model.calibrationState === 'calibrating'
+      this.calibrationBusy ||
+      this.measurementBusy ||
+      model.calibrationState === 'calibrating'
     setText(
       this.shadow,
       'calibrate-label',
@@ -351,7 +353,6 @@ export class GuardUi {
       growthReserveReady: false,
       muted: false,
       pendingFailureConfirmation: false,
-      measurementRecoveryAvailable: false,
       uncertaintySources: []
     })
   }
@@ -494,21 +495,18 @@ function visibleStatus(model: GuardUiModel): { label: string } {
     return { label: t('statusUnknown', 'Unable to assess') }
   }
   if (model.calibrationState === 'environment_unknown') {
-    return { label: t('statusEnvironmentUnknown', 'Confirming environment') }
+    return { label: t('statusEnvironmentUnknown', 'Unable to assess') }
   }
   if (model.calibrationState === 'stale') {
-    return { label: t('statusStale', 'Reference may be outdated') }
+    return { label: t('statusStale', 'Recalibration needed') }
   }
   if (model.calibrationState === 'uncalibrated') {
     return { label: t('statusUncalibrated', 'Not calibrated') }
   }
-  if (
-    model.environmentConfidence === 'unverified' &&
-    model.riskState === 'unknown'
-  ) {
-    return { label: t('statusEnvironmentUnverified', 'Model environment unconfirmed') }
+  if (model.measurementState === 'partial') {
+    return { label: t('statusUnknown', 'Unable to assess') }
   }
-  if (model.riskState === 'normal') return { label: t('riskNormal', 'Normal') }
+  if (model.riskState === 'normal') return { label: t('riskNormal', 'Lower risk') }
   if (model.riskState === 'long') return { label: t('riskLong', 'Long') }
   if (model.riskState === 'organize') {
     return { label: t('riskOrganize', 'Near risk') }
@@ -521,63 +519,61 @@ function statusDescription(model: GuardUiModel): string {
   if (model.calibrationState === 'calibrating') {
     return t(
       'statusCalibratingHelp',
-      'Reading the full chat. Keep this conversation open until calibration finishes.'
+      'Reading the full chat. Keep this page open.'
     )
   }
   if (model.measurementState !== 'complete') {
     return t(
       'statusMeasurementUncertainHelp',
-      'This page cannot be measured reliably right now, so LongChat Guard will not guess.'
+      'This chat has not been read reliably yet. Use More to run a full read.'
     )
   }
   if (model.calibrationState === 'environment_unknown') {
     return t(
       'statusEnvironmentUnknownHelp',
-      'The current model or environment is not observable yet. LongChat Guard will keep risk unknown and automatically restore the calibration if the same environment becomes verifiable.'
+      'Measurement is temporarily unavailable. Risk assessment will resume automatically.'
     )
   }
   if (model.calibrationState === 'stale') {
     return t(
       'statusStaleHelp',
-      'The previous reference cannot be proven valid for the current measurement environment. Calibrate again before relying on risk levels.'
+      'The measurement method has changed. Recalibrate to resume risk alerts.'
     )
   }
   if (model.calibrationState === 'uncalibrated') {
     return t(
       'statusUncalibratedHelp',
-      'Current chat length is recognized. To enable advance warnings, calibrate once with a historical chat you know reached the conversation-length limit.'
+      'To enable risk alerts, calibrate with a historical chat that reached the conversation-length limit.'
     )
-  }
-  if (model.environmentConfidence === 'unverified') {
-    const riskAdvice = standardRiskAdvice(model.riskState)
-    const referenceNote = t(
-      'statusEnvironmentUnverifiedHelp',
-      'The current model cannot be reliably confirmed. The bar shows position against your local historical reference, not an official ChatGPT limit.'
-    )
-    return riskAdvice ? `${riskAdvice} ${referenceNote}` : referenceNote
   }
   if (model.calibrationState === 'calibrated_conservative') {
     if (model.riskState === 'high') {
       return t(
         'riskAdviceHighConservative',
-        'High risk based on a conservative local reference. Continue in a new chat now.'
+        'This chat is in the high-risk range. The reference is conservative, so continue in a new chat soon.'
       )
     }
     return t(
       'statusConservativeCalibration',
-      'Reference established. This sample included context that cannot be measured precisely, so alerts are intentionally more conservative.'
+      'Reference established. This chat includes content that cannot be measured precisely, so alerts will be more conservative.'
     )
   }
   if (!model.growthReserveReady) {
     return t(
       'statusGrowthLearning',
-      'Reference established. LongChat Guard is still learning typical whole-turn growth; until then it only warns at the empirical failure reference.'
+      'Reference established. Learning chat growth; until enough samples are available, alerts trigger only at the historical reference.'
     )
   }
   return standardRiskAdvice(model.riskState)
 }
 
 function standardRiskAdvice(state: RiskState): string {
+  if (state === 'normal') {
+    return t(
+      'riskAdviceNormal',
+      'This chat is in the lower-risk range.'
+    )
+  }
   if (state === 'long') {
     return t(
       'riskAdviceLong',
@@ -587,16 +583,17 @@ function standardRiskAdvice(state: RiskState): string {
   if (state === 'organize') {
     return t(
       'riskAdviceOrganize',
-      'Prepare to continue in a new chat soon.'
+      'This chat is nearing the risk range. Prepare to continue in a new chat.'
     )
   }
   if (state === 'high') {
-    return t('riskAdviceHigh', 'Continue in a new chat now.')
+    return t('riskAdviceHigh', 'This chat is in the high-risk range. Continue in a new chat soon.')
   }
   return ''
 }
 
 function template(): string {
+  const extensionVersion = chrome.runtime.getManifest().version
   return `
     <style>
       :host { all: initial; }
@@ -623,6 +620,7 @@ function template(): string {
       button.menu-action + button.menu-action { margin-top:2px; }
       button.menu-action:hover:not(:disabled),button.menu-action:focus-visible { background:#f3f3f3; color:#171717; outline:none; }
       button.menu-action:disabled { opacity:.45; cursor:not-allowed; }
+      .menu-version { padding:6px 10px 2px; color:#9a9a9a; font-size:10px; line-height:1; text-align:right; user-select:none; }
       .trend { border-radius:13px; padding:10px 11px 9px; background:linear-gradient(180deg,#252527,#222224); color:#fff; box-shadow:inset 0 0 0 1px rgba(255,255,255,.045),0 7px 18px rgba(0,0,0,.09); }
       .risk-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
       .risk-head span { color:rgba(255,255,255,.68); font-size:11px; font-weight:400; }
@@ -693,10 +691,6 @@ function template(): string {
             <span data-value="calibrate-label">${t('actionCalibrateThisChat', 'Calibrate with this chat')}</span>
             <span class="calibrate-help">${t('actionCalibrateThisChatHelp', 'Only use a historical chat you know reached the conversation-length limit.')}</span>
           </button>
-          <button class="calibrate-link" data-action="measure-current" hidden>
-            <span data-value="measure-current-label">${t('actionMeasureCurrentChat', 'Read full current chat')}</span>
-            <span class="calibrate-help">${t('actionMeasureCurrentChatHelp', 'Use this to determine the current risk of an older chat. This does not change your alert reference.')}</span>
-          </button>
           <div class="scan-notice" data-role="scan-notice" role="status" aria-live="polite" hidden>
             <div data-role="scan-notice-text"></div>
             <button class="scan-notice-dismiss" type="button" data-action="scan-notice-dismiss" aria-label="${t('actionDismiss', 'Dismiss')}">×</button>
@@ -726,8 +720,10 @@ function template(): string {
         </div>
       </div>
       <div class="menu-popover" data-role="menu-popover" role="menu" aria-label="${t('menuMore', 'More')}" hidden>
+        <button class="menu-action" type="button" role="menuitem" tabindex="-1" data-action="measure-current"><span data-value="measure-current-label">${t('actionMeasureCurrentChat', 'Read full current chat')}</span></button>
         <button class="menu-action" type="button" role="menuitem" tabindex="-1" data-action="relearn">${t('actionRecalibrate', 'Recalibrate alert reference')}</button>
         <button class="menu-action" type="button" role="menuitem" tabindex="-1" data-action="mute"><span data-value="mute-label">${t('actionMute', 'Mute this chat')}</span></button>
+        <div class="menu-version" data-role="menu-version">v${extensionVersion}</div>
       </div>
       <button class="pill" data-role="pill" aria-expanded="false" aria-label="${t('pillAria', 'Open LongChat Guard')}">
         <span class="dot" data-role="status-dot"></span>
@@ -753,7 +749,7 @@ function clampReferencePositionScore(score: number): number {
 export function activeRiskSegmentCount(score: number): number {
   const clamped = clampReferencePositionScore(score)
   if (clamped <= 0) return 0
-  return Math.min(16, Math.max(1, Math.ceil(clamped / 6.25)))
+  return Math.min(16, Math.max(1, Math.floor(clamped / 6.25)))
 }
 
 export function shouldRenderRiskTrack(model: GuardUiModel): boolean {

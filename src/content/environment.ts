@@ -1,7 +1,7 @@
 import type { PageMessageSnapshot } from '../core/page-adapter'
 import type { EnvironmentSignature, UncertaintySource } from '../core/types'
 
-export const PARSER_SCHEMA_VERSION = 'chatgpt-dom-2026-10-v2'
+export const PARSER_SCHEMA_VERSION = 'chatgpt-dom-2026-10-v3'
 export const MEASUREMENT_SCHEMA_VERSION = 2
 
 export function parserCanaryPasses(

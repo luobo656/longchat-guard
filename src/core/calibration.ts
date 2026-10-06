@@ -294,15 +294,12 @@ export function summarizeGeneration(
   const strongFailures = generation.samples.filter(
     (sample) =>
       sample.empiricalFailureLoad !== undefined &&
-      sample.failureReferenceQuality === 'strong' &&
-      Boolean(sample.environmentSignature?.modelHint)
+      sample.failureReferenceQuality === 'strong'
   )
   const conservativeFailures = generation.samples.filter(
     (sample) =>
       sample.empiricalFailureLoad !== undefined &&
-      (sample.failureReferenceQuality === 'conservative' ||
-        (sample.failureReferenceQuality === 'strong' &&
-          !sample.environmentSignature?.modelHint))
+      sample.failureReferenceQuality === 'conservative'
   )
   const provisionalFailures = generation.samples.filter(
     (sample) =>

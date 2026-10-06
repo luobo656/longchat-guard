@@ -9,6 +9,7 @@ import {
 } from '../core/fingerprinter'
 import {
   parseConversationIdFromUrl,
+  resolveConversationId,
   analyzePageSnapshot
 } from '../core/page-adapter'
 import type { PageMessageSnapshot } from '../core/page-adapter'
@@ -17,8 +18,10 @@ import {
   deriveEnvironmentConfidence,
   deriveMeasurementState,
   calibrationIsUsable,
+  calibrationNeedsFreshGeneration,
   measurementIsUsable
 } from '../core/product-state'
+import { isAuthoritativeLedgerForEnvironment } from '../core/measurement-authority'
 import { assessRisk } from '../core/risk-engine'
 import {
   DEFAULT_COMPLETION_STABILITY_MS,
@@ -44,7 +47,19 @@ import {
   createCoalescedAsyncRunner,
   createDebouncedRunner
 } from './coalesced-runner'
-import { readPageSnapshot } from './dom-reader'
+import {
+  createConversationSessionState,
+  markNewChatStarted,
+  NEW_CHAT_START_EVIDENCE_TTL_MS,
+  resetConversationSession,
+  resolveConversationSession,
+  resolveSessionConversationId,
+  shouldArmNewChatFromComposerActivity
+} from './conversation-session'
+import {
+  findComposerElement,
+  readPageSnapshot
+} from './dom-reader'
 import {
   detectUncertaintySources,
   parserCanaryPasses,
@@ -55,12 +70,18 @@ import {
   type HistoryScanFailureReason,
   type HistoryScanResult
 } from './history-scanner'
-import { GuardUi } from './ui'
+import { GuardUi, type GuardUiModel } from './ui'
+import {
+  appendRuntimeDiagnosticSnapshot,
+  RuntimeDiagnosticsTrace,
+  type RuntimeDiagnosticValue,
+} from './runtime-diagnostics'
 import { t } from './i18n'
 
 const estimator = new HeuristicTokenEstimator()
 const SCAN_DIAGNOSTICS_KEY = 'longChatGuardLastScanDiagnostics'
 const SCAN_DIAGNOSTICS_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const NEW_CHAT_START_SESSION_KEY = 'longChatGuardRecentBlankStartAt'
 
 export interface StoredScanDiagnostics {
   version: 4
@@ -91,7 +112,7 @@ interface ActiveCalibrationScan {
   expectedLedgerRevision: number
 }
 
-interface PendingTurnStart {
+interface PendingTurnIntent {
   conversationKey?: string
   generationId: string
   ledgerRevision: number
@@ -162,10 +183,12 @@ async function cleanupExpiredScanDiagnostics(now: number): Promise<void> {
   }
 }
 
-const CONTINUATION_PROMPT = t(
-  'continuationPrompt',
-  "Create a continuation package for a new ChatGPT chat so work can resume without re-analysis. Preserve the current goal and exact stage, completed work, confirmed decisions, constraints and user preferences, key files/paths/repos/commits/code/config/data/platform state, unresolved issues and failed attempts, prioritized next actions, risks and pitfalls, and essential exact wording when needed. Clearly separate confirmed facts from inference and items still needing verification. If code or files are involved, state what was changed, tested, committed, pushed or published, and what remains pending. Finish with a short instruction telling the new chat to continue from the listed next action instead of starting over."
-)
+function continuationPrompt(): string {
+  return t(
+    'continuationPrompt',
+    "Create a continuation package for a new ChatGPT chat so work can resume without re-analysis. Preserve the current goal and exact stage, completed work, confirmed decisions, constraints and user preferences, key files/paths/repos/commits/code/config/data/platform state, unresolved issues and failed attempts, prioritized next actions, risks and pitfalls, and essential exact wording when needed. Clearly separate confirmed facts from inference and items still needing verification. If code or files are involved, state what was changed, tested, committed, pushed or published, and what remains pending. Finish with a short instruction telling the new chat to continue from the listed next action instead of starting over."
+  )
+}
 
 export async function startGuard(): Promise<void> {
   if (location.hostname !== 'chatgpt.com') return
@@ -174,20 +197,49 @@ export async function startGuard(): Promise<void> {
   await cleanupExpiredScanDiagnostics(Date.now())
 
   let latestState = initialResponse.state
+  const runtimeDiagnostics = new RuntimeDiagnosticsTrace(
+    chrome.runtime.getManifest().version
+  )
+  const diagnosticsStorage = {
+    get: (key: string) => chrome.storage.local.get(key),
+    set: (items: Record<string, unknown>) =>
+      chrome.storage.local.set(items)
+  }
+  let diagnosticsWriteQueue: Promise<void> = Promise.resolve()
+  let lastUiAssessable = false
+  let unavailablePersisted = false
+
+  const persistRuntimeDiagnostics = (reason: string): void => {
+    const snapshot = runtimeDiagnostics.snapshot(reason)
+    diagnosticsWriteQueue = diagnosticsWriteQueue
+      .then(async () => {
+        await appendRuntimeDiagnosticSnapshot(
+          diagnosticsStorage,
+          snapshot
+        )
+      })
+      .catch(() => undefined)
+  }
+
+  runtimeDiagnostics.record('instance_start', {
+    routeKind: diagnosticRouteKind(location.href),
+    visibility: document.visibilityState,
+    ledgerCount: Object.keys(latestState.ledgers).length
+  })
+
   const fingerprinter = new WebCryptoFingerprinter(latestState.installSalt)
   const persistedConversationKey = (value: string): Promise<string> =>
     anonymizeConversationKey(value, latestState.installSalt)
 
   let scheduleRun: (() => void) | undefined
   let latestConversationKey: string | undefined
-  let blankStartArmed = false
-  let pendingBlankStart = false
+  let conversationSession = createConversationSessionState()
   let monitoringStarted = false
   let historyScanInProgress = false
   let activeCalibrationScan: ActiveCalibrationScan | undefined
   let measurementScanInProgress = false
   let activeMeasurementScan: ActiveCalibrationScan | undefined
-  let pendingTurnStart: PendingTurnStart | undefined
+  let pendingTurnIntent: PendingTurnIntent | undefined
   let observationEpoch = Date.now()
   let completionTracker = new ResponseCompletionTracker()
 
@@ -205,16 +257,104 @@ export async function startGuard(): Promise<void> {
       calibrating: historyScanInProgress
     })
 
-  const renderCurrentUiFromState = (): void => {
+  const renderUiModel = (
+    model: GuardUiModel,
+    source: string
+  ): void => {
+    const assessable =
+      model.measurementState === 'complete' &&
+      calibrationIsUsable(model.calibrationState) &&
+      model.riskState !== 'unknown'
+
+    runtimeDiagnostics.record('ui_model', {
+      source,
+      assessable,
+      conversationKeyPresent: Boolean(model.conversationKey),
+      measurementState: model.measurementState,
+      calibrationState: model.calibrationState,
+      environmentConfidence: model.environmentConfidence,
+      riskState: model.riskState,
+      trackAvailable: model.trackAvailable,
+      referencePositionScore: Math.round(
+        model.referencePositionScore * 100
+      ) / 100
+    })
+
+    ui.update(model)
+
+    if (assessable && !lastUiAssessable) {
+      unavailablePersisted = false
+      persistRuntimeDiagnostics('ui_assessable')
+    } else if (
+      !assessable &&
+      (lastUiAssessable || !unavailablePersisted)
+    ) {
+      unavailablePersisted = true
+      persistRuntimeDiagnostics(
+        lastUiAssessable
+          ? 'ui_assessable_to_unassessable'
+          : 'ui_unassessable'
+      )
+    }
+    lastUiAssessable = assessable
+  }
+
+  const renderUnavailable = (
+    source: string,
+    calibrationState: CalibrationState,
+    extra: Record<string, RuntimeDiagnosticValue> = {}
+  ): void => {
+    runtimeDiagnostics.record('ui_unavailable', {
+      source,
+      routeKind: diagnosticRouteKind(location.href),
+      latestConversationKeyPresent: Boolean(latestConversationKey),
+      latestLedgerPresent: Boolean(
+        latestConversationKey &&
+          latestState.ledgers[latestConversationKey]
+      ),
+      sessionActive: Boolean(
+        conversationSession.activeConversationId
+      ),
+      sessionObservedFromStart: Boolean(
+        conversationSession.observedFromStartConversationId
+      ),
+      calibrationState,
+      ...extra
+    })
+    ui.showUnavailable(calibrationState)
+    if (lastUiAssessable || !unavailablePersisted) {
+      persistRuntimeDiagnostics(
+        lastUiAssessable
+          ? `drop:${source}`
+          : `unavailable:${source}`
+      )
+    }
+    lastUiAssessable = false
+    unavailablePersisted = true
+  }
+
+  const renderCurrentUiFromState = (
+    source = 'state_refresh'
+  ): void => {
     const conversationKey = latestConversationKey
     if (!conversationKey) {
-      ui.showUnavailable(currentCalibrationState())
+      renderUnavailable(
+        `${source}:missing_conversation_key`,
+        currentCalibrationState()
+      )
       return
     }
     const generation = currentGeneration()
     const ledger = latestState.ledgers[conversationKey]
     if (!generation || !ledger) {
-      ui.showUnavailable(currentCalibrationState())
+      renderUnavailable(
+        `${source}:missing_generation_or_ledger`,
+        currentCalibrationState(),
+        {
+          generationPresent: Boolean(generation),
+          ledgerPresent: Boolean(ledger)
+        }
+      )
       return
     }
     const measurementState = deriveMeasurementState({
@@ -250,27 +390,55 @@ export async function startGuard(): Promise<void> {
     })
     const control =
       latestState.conversationControls[conversationKey] ?? {}
-    ui.update({
-      conversationKey,
-      measurementState,
-      calibrationState,
-      environmentConfidence,
-      riskState: risk.state,
-      referencePositionScore: risk.referencePositionScore,
-      trackAvailable:
-        measurementIsUsable(measurementState) &&
-        calibrationIsUsable(calibrationState),
-      growthReserveReady: summary.growthReserveReady,
-      muted: control.muted ?? false,
-      pendingFailureConfirmation:
-        generation.pendingFailureConfirmations.some(
-          (item) => item.conversationKey === conversationKey
-        ),
-      measurementRecoveryAvailable:
-        measurementState !== 'complete' &&
-        calibrationIsUsable(calibrationState),
-      uncertaintySources: ledger.uncertaintySources
+    renderUiModel(
+      {
+        conversationKey,
+        measurementState,
+        calibrationState,
+        environmentConfidence,
+        riskState: risk.state,
+        referencePositionScore: risk.referencePositionScore,
+        trackAvailable:
+          measurementIsUsable(measurementState) &&
+          calibrationIsUsable(calibrationState),
+        growthReserveReady: summary.growthReserveReady,
+        muted: control.muted ?? false,
+        pendingFailureConfirmation:
+          generation.pendingFailureConfirmations.some(
+            (item) => item.conversationKey === conversationKey
+          ),
+        uncertaintySources: ledger.uncertaintySources
+      },
+      source
+    )
+  }
+
+  const renderAuthoritativeLedgerIfAvailable = (
+    conversationKey: string | undefined
+  ): boolean => {
+    if (!conversationKey) return false
+    const generation = currentGeneration()
+    const ledger = latestState.ledgers[conversationKey]
+    if (!generation || !ledger) return false
+    if (
+      !isAuthoritativeLedgerForEnvironment({
+        ledger,
+        generationId: generation.id,
+        environmentSignature: readEnvironmentSignature(document)
+      })
+    ) {
+      return false
+    }
+    latestConversationKey = conversationKey
+    runtimeDiagnostics.record('authoritative_fallback', {
+      routeKind: diagnosticRouteKind(location.href),
+      ledgerRevision: ledger.ledgerRevision,
+      coverageState: ledger.coverageState,
+      parserHealth: ledger.parserHealth,
+      sequenceReliability: ledger.sequenceReliability
     })
+    renderCurrentUiFromState('authoritative_fallback')
+    return true
   }
 
   const runAction = async (
@@ -321,9 +489,46 @@ export async function startGuard(): Promise<void> {
     return observedMessages
   }
 
+  const pageMessagesOverlapLedger = async (
+    messages: PageMessageSnapshot[],
+    ledger: PersistedConversationLedger
+  ): Promise<boolean> => {
+    if (messages.length === 0 || ledger.messages.length === 0) return false
+    const activeFingerprints = new Set(ledger.activeFingerprints)
+    const ledgerMessages = ledger.messages.filter(
+      (message) =>
+        activeFingerprints.size === 0 ||
+        activeFingerprints.has(message.fingerprint)
+    )
+
+    for (const message of messages) {
+      if (message.role === 'unknown' || !message.text.trim()) continue
+      const contentFingerprint = await fingerprinter.fingerprint(
+        `${message.role}\u001f${message.text}`
+      )
+      const stableHintHash = message.stableHint
+        ? await fingerprinter.fingerprint(
+            `stable\u001f${message.stableHint}`
+          )
+        : undefined
+      if (
+        ledgerMessages.some(
+          (existing) =>
+            existing.role === message.role &&
+            (existing.contentFingerprint === contentFingerprint ||
+              (stableHintHash !== undefined &&
+                existing.stableHintHash === stableHintHash))
+        )
+      ) {
+        return true
+      }
+    }
+    return false
+  }
+
   const ui = new GuardUi({
     onCopyContinuation: () => {
-      void copyText(CONTINUATION_PROMPT)
+      void copyText(continuationPrompt())
         .then(() =>
           ui.showToast(
             t('toastContinuationCopied', 'Continuation prompt copied')
@@ -430,70 +635,249 @@ export async function startGuard(): Promise<void> {
     if (historyScanInProgress || measurementScanInProgress) return
 
     try {
-      const isRoot = isRootChatUrl(location.href)
       const preliminarySnapshot = readPageSnapshot(
         document,
         location.href,
         'none'
       )
-      const urlConversationId = parseConversationIdFromUrl(location.href)
-      const knownConversationKey = urlConversationId
+      const environmentSignature = readEnvironmentSignature(document)
+      const previousSessionConversationId =
+        conversationSession.activeConversationId
+      const routeConversationId =
+        parseConversationIdFromUrl(location.href)
+      const observedConversationId =
+        resolveConversationId(preliminarySnapshot)
+      const resolvedConversationId =
+        resolveSessionConversationId({
+          activeConversationId:
+            previousSessionConversationId,
+          routeConversationId,
+          observedConversationId
+        })
+      const previousSessionConversationKey =
+        previousSessionConversationId
+          ? await persistedConversationKey(
+              `chatgpt:${previousSessionConversationId}`
+            )
+          : undefined
+      const previousSessionLedger =
+        previousSessionConversationKey
+          ? latestState.ledgers[previousSessionConversationKey]
+          : undefined
+      const identityChanged = Boolean(
+        previousSessionConversationId &&
+          resolvedConversationId &&
+          previousSessionConversationId !== resolvedConversationId
+      )
+      const sameConversationEvidence = Boolean(
+        identityChanged &&
+          previousSessionConversationId &&
+          conversationSession.observedFromStartConversationId ===
+            previousSessionConversationId &&
+          previousSessionLedger &&
+          (await pageMessagesOverlapLedger(
+            preliminarySnapshot.messages,
+            previousSessionLedger
+          ))
+      )
+      runtimeDiagnostics.record('page_observation', {
+        routeKind: diagnosticRouteKind(location.href),
+        routeConversationIdPresent: Boolean(routeConversationId),
+        observedConversationIdPresent: Boolean(
+          observedConversationId
+        ),
+        resolvedConversationIdPresent: Boolean(
+          resolvedConversationId
+        ),
+        identityChanged,
+        sameConversationEvidence,
+        routeMatchesSession: Boolean(
+          routeConversationId &&
+            conversationSession.activeConversationId &&
+            routeConversationId ===
+              conversationSession.activeConversationId
+        ),
+        observedMatchesSession: Boolean(
+          observedConversationId &&
+            conversationSession.activeConversationId &&
+            observedConversationId ===
+              conversationSession.activeConversationId
+        ),
+        sessionActive: Boolean(
+          conversationSession.activeConversationId
+        ),
+        sessionObservedFromStart: Boolean(
+          conversationSession.observedFromStartConversationId
+        ),
+        blankSurfaceObserved: Boolean(
+          conversationSession.blankSurfaceObserved
+        ),
+        messageCount: preliminarySnapshot.messages.length,
+        userCount: preliminarySnapshot.messages.filter(
+          (message) => message.role === 'user'
+        ).length,
+        assistantCount: preliminarySnapshot.messages.filter(
+          (message) => message.role === 'assistant'
+        ).length
+      })
+      const blankConversationSurface =
+        !resolvedConversationId &&
+        preliminarySnapshot.messages.length === 0
+      const lookupConversationId =
+        resolvedConversationId ??
+        conversationSession.activeConversationId
+      const knownConversationKey = lookupConversationId
         ? await persistedConversationKey(
-            `chatgpt:${urlConversationId}`
+            `chatgpt:${lookupConversationId}`
           )
         : undefined
       const knownLedger = knownConversationKey
         ? latestState.ledgers[knownConversationKey]
         : undefined
-      const persistedComplete =
-        knownLedger?.coverageState === 'complete' &&
-        knownLedger.sequenceReliability === 'reliable'
+      const persistedAuthoritative =
+        isAuthoritativeLedgerForEnvironment({
+          ledger: knownLedger,
+          generationId: latestState.settings.generationId,
+          environmentSignature
+        })
 
-      const lifecycle = resolveCoverageLifecycle({
-        isRoot,
-        hasConversationId: Boolean(urlConversationId),
-        messageCount: preliminarySnapshot.messages.length,
-        hasUserMessage: preliminarySnapshot.messages.some(
-          (message) => message.role === 'user'
+      const nowForSession = Date.now()
+      const sessionResolution = resolveConversationSession(
+        conversationSession,
+        {
+          conversationId: resolvedConversationId,
+          isBlankSurface: blankConversationSurface,
+          messageCount: preliminarySnapshot.messages.length,
+          hasUserMessage: preliminarySnapshot.messages.some(
+            (message) => message.role === 'user'
+          ),
+          persistedAuthoritative,
+          sameConversationEvidence,
+          bridgedNewChatStartedAt:
+            readNewChatStartSessionEvidence(nowForSession),
+          now: nowForSession
+        }
+      )
+      conversationSession = sessionResolution.state
+      preliminarySnapshot.coverageEvidence =
+        sessionResolution.coverageEvidence
+      runtimeDiagnostics.record('session_resolution', {
+        coverageEvidence: sessionResolution.coverageEvidence,
+        activeConversationIdPresent: Boolean(
+          sessionResolution.activeConversationId
         ),
-        blankStartArmed,
-        pendingBlankStart,
-        persistedComplete
+        sessionActive: Boolean(
+          conversationSession.activeConversationId
+        ),
+        sessionObservedFromStart: Boolean(
+          conversationSession.observedFromStartConversationId
+        ),
+        blankSurfaceObserved: Boolean(
+          conversationSession.blankSurfaceObserved
+        ),
+        persistedAuthoritative,
+        identityChanged,
+        sameConversationEvidence,
+        identityRebound: Boolean(
+          identityChanged &&
+            sameConversationEvidence &&
+            sessionResolution.coverageEvidence ===
+              'observed_from_start'
+        ),
+        consumedBridgedStart:
+          sessionResolution.consumedBridgedStart
       })
-      blankStartArmed = lifecycle.blankStartArmed
-      pendingBlankStart = lifecycle.pendingBlankStart
-      preliminarySnapshot.coverageEvidence = lifecycle.coverageEvidence
+      if (sessionResolution.consumedBridgedStart) {
+        clearNewChatStartSessionEvidence()
+      }
 
+      const activeSessionConversationKey =
+        sessionResolution.activeConversationId
+          ? await persistedConversationKey(
+              `chatgpt:${sessionResolution.activeConversationId}`
+            )
+          : undefined
       const adapterResult = analyzePageSnapshot(preliminarySnapshot)
+      const parserCanary = parserCanaryPasses(
+        adapterResult.messages
+      )
       const conversationKey = adapterResult.conversationKey
         ? await persistedConversationKey(adapterResult.conversationKey)
-        : undefined
-      const environmentSignature = readEnvironmentSignature(document)
+        : activeSessionConversationKey
+
+      runtimeDiagnostics.record('adapter_result', {
+        conversationKeyPresent: Boolean(conversationKey),
+        adapterConversationKeyPresent: Boolean(
+          adapterResult.conversationKey
+        ),
+        activeSessionKeyPresent: Boolean(
+          activeSessionConversationKey
+        ),
+        matchesLatestConversationKey: Boolean(
+          conversationKey &&
+            latestConversationKey &&
+            conversationKey === latestConversationKey
+        ),
+        health: adapterResult.health,
+        coverageState: adapterResult.coverageState,
+        parserCanary,
+        reasons: adapterResult.reasons,
+        messageCount: adapterResult.messages.length
+      })
 
       if (
         !conversationKey ||
         adapterResult.health === 'unreliable' ||
-        !parserCanaryPasses(adapterResult.messages)
+        !parserCanary
       ) {
-        latestConversationKey = undefined
-        ui.showUnavailable(
+        if (renderAuthoritativeLedgerIfAvailable(conversationKey)) {
+          return
+        }
+        latestConversationKey = conversationKey
+        renderUnavailable(
+          'process_unreadable',
           deriveCalibrationState({
             generation: currentGeneration(),
             currentEnvironment: environmentSignature
-          })
+          }),
+          {
+            conversationKeyPresent: Boolean(conversationKey),
+            adapterHealth: adapterResult.health,
+            adapterCoverageState: adapterResult.coverageState,
+            parserCanary,
+            adapterReasons: adapterResult.reasons
+          }
         )
         return
       }
 
       if (conversationKey !== latestConversationKey) {
+        const identityRebound = Boolean(
+          sameConversationEvidence &&
+            previousSessionConversationKey &&
+            previousSessionConversationKey === latestConversationKey
+        )
+        const pendingIntent = pendingTurnIntent
         if (
-          pendingTurnStart?.conversationKey &&
-          pendingTurnStart.conversationKey !== conversationKey
+          identityRebound &&
+          pendingIntent &&
+          pendingIntent.conversationKey ===
+            previousSessionConversationKey
         ) {
-          pendingTurnStart = undefined
+          pendingTurnIntent = {
+            ...pendingIntent,
+            conversationKey
+          }
+        } else if (
+          pendingIntent?.conversationKey &&
+          pendingIntent.conversationKey !== conversationKey
+        ) {
+          pendingTurnIntent = undefined
         }
         latestConversationKey = conversationKey
-        completionTracker = new ResponseCompletionTracker()
+        if (!identityRebound) {
+          completionTracker = new ResponseCompletionTracker()
+        }
       }
 
       const previousLedger = latestState.ledgers[conversationKey]
@@ -509,7 +893,8 @@ export async function startGuard(): Promise<void> {
               (message.stableHintHash &&
                 existing.stableHintHash === message.stableHintHash) ||
               (!message.stableHintHash &&
-                existing.contentFingerprint === message.contentFingerprint &&
+                existing.contentFingerprint ===
+                  message.contentFingerprint &&
                 existing.role === 'user')
           )
       ).length
@@ -545,9 +930,22 @@ export async function startGuard(): Promise<void> {
         }
       })
       latestState = response.state
+      runtimeDiagnostics.record('background_observation', {
+        staleObservation: Boolean(response.staleObservation),
+        disposition:
+          response.observationDisposition ?? 'none',
+        snapshotPresent: Boolean(response.snapshot),
+        snapshotRevision:
+          response.snapshot?.ledgerRevision ?? 0,
+        snapshotCoverage:
+          response.snapshot?.coverageState ?? 'none',
+        snapshotParser:
+          response.snapshot?.parserHealth ?? 'none',
+        snapshotSequence:
+          response.snapshot?.sequenceReliability ?? 'none'
+      })
 
       if (response.staleObservation) {
-        pendingTurnStart = undefined
         window.setTimeout(() => scheduleRun?.(), 50)
         return
       }
@@ -559,31 +957,28 @@ export async function startGuard(): Promise<void> {
       }
       if (!persistedSnapshot) throw new Error('missing_persisted_snapshot')
 
-      if (pendingTurnStart && newUserCount > 0) {
+      if (
+        pendingTurnIntent &&
+        newUserCount > 0 &&
+        response.observationDisposition === 'committed'
+      ) {
         const expectedRevision = previousLedger?.ledgerRevision ?? 0
         const sameConversation =
-          !pendingTurnStart.conversationKey ||
-          pendingTurnStart.conversationKey === conversationKey
+          !pendingTurnIntent.conversationKey ||
+          pendingTurnIntent.conversationKey === conversationKey
         const validTurnStart =
           sameConversation &&
-          pendingTurnStart.generationId === persistedSnapshot.generationId &&
-          pendingTurnStart.ledgerRevision === expectedRevision &&
+          pendingTurnIntent.generationId ===
+            persistedSnapshot.generationId &&
+          pendingTurnIntent.ledgerRevision === expectedRevision &&
           newUserCount === 1
-        pendingTurnStart = validTurnStart
+        pendingTurnIntent = validTurnStart
           ? {
-              ...pendingTurnStart,
+              ...pendingTurnIntent,
               conversationKey,
               accepted: true
             }
           : undefined
-      }
-
-      if (
-        pendingBlankStart &&
-        adapterResult.coverageState === 'complete'
-      ) {
-        blankStartArmed = false
-        pendingBlankStart = false
       }
 
       for (const error of adapterResult.visibleErrors) {
@@ -635,7 +1030,7 @@ export async function startGuard(): Promise<void> {
 
       if (
         completion.state === 'completed' &&
-        pendingTurnStart?.accepted
+        pendingTurnIntent?.accepted
       ) {
         const completionResponse = await sendBackground({
           type: 'guard.recordCompletion',
@@ -643,7 +1038,7 @@ export async function startGuard(): Promise<void> {
             conversationKey,
             assistantFingerprint:
               completion.candidate.assistantFingerprint,
-            beforeTurnLoad: pendingTurnStart.load,
+            beforeTurnLoad: pendingTurnIntent.load,
             expectedGenerationId: persistedSnapshot.generationId,
             expectedLedgerRevision: persistedSnapshot.ledgerRevision,
             observedAt: now
@@ -651,7 +1046,7 @@ export async function startGuard(): Promise<void> {
         })
         latestState = completionResponse.state
         latestRisk = completionResponse.risk ?? latestRisk
-        pendingTurnStart = undefined
+        pendingTurnIntent = undefined
       } else if (
         completion.state === 'pending' &&
         completion.candidate &&
@@ -665,8 +1060,16 @@ export async function startGuard(): Promise<void> {
 
       const generation = currentGeneration()
       const ledger = latestState.ledgers[conversationKey]
-      if (!generation || !ledger || !latestRisk) {
-        ui.showUnavailable(currentCalibrationState())
+      if (!generation || !ledger) {
+        renderUnavailable(
+          'process_missing_generation_or_ledger',
+          currentCalibrationState(),
+          {
+            generationPresent: Boolean(generation),
+            ledgerPresent: Boolean(ledger),
+            conversationKeyPresent: Boolean(conversationKey)
+          }
+        )
         return
       }
 
@@ -683,10 +1086,25 @@ export async function startGuard(): Promise<void> {
         ledger.environmentSignature
       )
       const summary = summarizeGeneration(generation)
+      const effectiveRisk =
+        latestRisk ??
+        assessRisk({
+          currentLoad: ledger.currentEstimatedLoad,
+          composerDraftLoad: composerTokenEstimate,
+          measurementState,
+          calibrationState,
+          environmentConfidence,
+          ...(summary.failureReference
+            ? { failureReference: summary.failureReference }
+            : {}),
+          ...(summary.growthReserveReady
+            ? { growthReserve: summary.growthReserve }
+            : {})
+        })
       const control =
         latestState.conversationControls[conversationKey] ?? {}
       const attention = shouldDrawAttention({
-        state: latestRisk.state,
+        state: effectiveRisk.state,
         control
       })
 
@@ -694,7 +1112,7 @@ export async function startGuard(): Promise<void> {
         const controlResponse = await sendBackground({
           type: 'guard.updateControl',
           conversationKey,
-          patch: withAlertRecorded(control, latestRisk.state)
+          patch: withAlertRecorded(control, effectiveRisk.state)
         })
         latestState = controlResponse.state
       }
@@ -706,32 +1124,56 @@ export async function startGuard(): Promise<void> {
           (item) => item.conversationKey === conversationKey
         )
 
-      ui.update({
-        conversationKey,
-        measurementState,
-        calibrationState,
-        environmentConfidence,
-        riskState: latestRisk.state,
-        referencePositionScore: latestRisk.referencePositionScore,
-        trackAvailable:
-          measurementIsUsable(measurementState) &&
-          calibrationIsUsable(calibrationState),
-        growthReserveReady: summary.growthReserveReady,
-        muted: effectiveControl.muted ?? false,
-        pendingFailureConfirmation,
-        measurementRecoveryAvailable:
-          measurementState !== 'complete' &&
-          calibrationIsUsable(calibrationState),
-        uncertaintySources: ledger.uncertaintySources
-      })
+      renderUiModel(
+        {
+          conversationKey,
+          measurementState,
+          calibrationState,
+          environmentConfidence,
+          riskState: effectiveRisk.state,
+          referencePositionScore:
+            effectiveRisk.referencePositionScore,
+          trackAvailable:
+            measurementIsUsable(measurementState) &&
+            calibrationIsUsable(calibrationState),
+          growthReserveReady: summary.growthReserveReady,
+          muted: effectiveControl.muted ?? false,
+          pendingFailureConfirmation,
+          uncertaintySources: ledger.uncertaintySources
+        },
+        'process_final'
+      )
 
       if (pendingFailureConfirmation) {
         ui.focusPendingConfirmation()
       } else if (attention) {
         ui.drawAttention()
       }
-    } catch {
-      ui.showUnavailable(currentCalibrationState())
+    } catch (error) {
+      runtimeDiagnostics.record('process_exception', {
+        routeKind: diagnosticRouteKind(location.href),
+        error: diagnosticErrorCode(error),
+        latestConversationKeyPresent: Boolean(
+          latestConversationKey
+        ),
+        sessionActive: Boolean(
+          conversationSession.activeConversationId
+        )
+      })
+      const rawConversationKey =
+        rawConversationKeyFromUrl(location.href) ??
+        (conversationSession.activeConversationId
+          ? `chatgpt:${conversationSession.activeConversationId}`
+          : undefined)
+      const currentKey = rawConversationKey
+        ? await persistedConversationKey(rawConversationKey)
+        : latestConversationKey
+      if (renderAuthoritativeLedgerIfAvailable(currentKey)) return
+      renderUnavailable(
+        'process_exception_no_authoritative_fallback',
+        currentCalibrationState(),
+        { error: diagnosticErrorCode(error) }
+      )
     }
   }
 
@@ -903,6 +1345,21 @@ export async function startGuard(): Promise<void> {
       return
     }
 
+    const environmentAtStart = readEnvironmentSignature(document)
+    if (
+      calibrationNeedsFreshGeneration({
+        generation: currentGeneration(),
+        currentEnvironment: environmentAtStart
+      })
+    ) {
+      const generationResponse = await sendBackground({
+        type: 'guard.startGeneration',
+        reason: 'environment_change',
+        observedAt: Date.now()
+      })
+      latestState = generationResponse.state
+    }
+
     const persistedKey = await persistedConversationKey(
       rawConversationKey
     )
@@ -996,11 +1453,14 @@ export async function startGuard(): Promise<void> {
       const summary = generation
         ? summarizeGeneration(generation)
         : undefined
-      if (summary?.failureReference?.quality === 'conservative') {
+      if (
+        summary?.failureReference?.quality === 'conservative' &&
+        uncertaintySources.length > 0
+      ) {
         ui.showScanNotice(
           t(
             'calibrationConservativeSuccess',
-            'Reference established. This chat includes context that cannot be measured precisely, so alerts will be more conservative.'
+            'Reference established. This chat includes files, tools, or other context that cannot be measured precisely, so alerts will be more conservative.'
           ),
           'warning'
         )
@@ -1043,7 +1503,17 @@ export async function startGuard(): Promise<void> {
     void sendBackground({ type: 'guard.readState' })
       .then((response) => {
         latestState = response.state
-        renderCurrentUiFromState()
+        runtimeDiagnostics.record('storage_state_refresh', {
+          latestConversationKeyPresent: Boolean(
+            latestConversationKey
+          ),
+          latestLedgerPresent: Boolean(
+            latestConversationKey &&
+              latestState.ledgers[latestConversationKey]
+          ),
+          ledgerCount: Object.keys(latestState.ledgers).length
+        })
+        renderCurrentUiFromState('storage_change')
       })
       .catch(() => undefined)
   }
@@ -1059,8 +1529,8 @@ export async function startGuard(): Promise<void> {
 
     const now = Date.now()
     if (
-      pendingTurnStart &&
-      now - pendingTurnStart.capturedAt < 750
+      pendingTurnIntent &&
+      now - pendingTurnIntent.capturedAt < 750
     ) {
       return true
     }
@@ -1072,7 +1542,7 @@ export async function startGuard(): Promise<void> {
       : undefined
 
     if (conversationKey && ledger) {
-      pendingTurnStart = {
+      pendingTurnIntent = {
         conversationKey,
         generationId,
         ledgerRevision: ledger.ledgerRevision,
@@ -1083,12 +1553,47 @@ export async function startGuard(): Promise<void> {
       return true
     }
 
+    const snapshotConversationId = resolveConversationId(snapshot)
+    const recentPendingNewChatStart = Boolean(
+      conversationSession.pendingNewChatStartedAt !== undefined &&
+        now - conversationSession.pendingNewChatStartedAt >= 0 &&
+        now - conversationSession.pendingNewChatStartedAt <=
+          NEW_CHAT_START_EVIDENCE_TTL_MS
+    )
+    const emptyAssignedConversation = Boolean(
+      snapshotConversationId &&
+        !ledger &&
+        snapshot.messages.length === 0
+    )
     if (
-      isRootChatUrl(location.href) &&
-      !parseConversationIdFromUrl(location.href) &&
-      snapshot.messages.length === 0
+      snapshot.messages.length === 0 &&
+      (
+        !snapshotConversationId ||
+        conversationSession.blankSurfaceObserved === true ||
+        recentPendingNewChatStart ||
+        emptyAssignedConversation
+      )
     ) {
-      pendingTurnStart = {
+      conversationSession = markNewChatStarted(
+        conversationSession,
+        now
+      )
+      runtimeDiagnostics.record('turn_intent_new_chat_start', {
+        routeKind: diagnosticRouteKind(location.href),
+        messageCount: snapshot.messages.length,
+        preassignedConversationIdPresent: Boolean(
+          snapshotConversationId
+        ),
+        sessionActive: Boolean(
+          conversationSession.activeConversationId
+        ),
+        blankSurfaceObserved: Boolean(
+          conversationSession.blankSurfaceObserved
+        )
+      })
+      rememberNewChatStartSessionEvidence(now)
+      latestConversationKey = undefined
+      pendingTurnIntent = {
         generationId,
         ledgerRevision: 0,
         load: 0,
@@ -1101,29 +1606,78 @@ export async function startGuard(): Promise<void> {
     return false
   }
 
-  const markNewChatSend = (): void => {
-    if (!isRootChatUrl(location.href)) return
-    const snapshot = readPageSnapshot(
-      document,
-      location.href,
-      'none'
-    )
-    if (
-      parseConversationIdFromUrl(location.href) ||
-      snapshot.messages.length > 0
-    ) {
-      return
-    }
-    blankStartArmed = true
-    pendingBlankStart = true
+  const onSubmit = (event: SubmitEvent): void => {
+    captureTurnStart(event.target)
   }
 
-  const onSubmit = (event: SubmitEvent): void => {
-    if (captureTurnStart(event.target)) markNewChatSend()
+  const resetConversationNavigationState = (
+    reason: string
+  ): void => {
+    runtimeDiagnostics.record('session_reset', {
+      reason,
+      routeKind: diagnosticRouteKind(location.href),
+      sessionWasActive: Boolean(
+        conversationSession.activeConversationId
+      ),
+      latestConversationKeyPresent: Boolean(
+        latestConversationKey
+      )
+    })
+    conversationSession = resetConversationSession()
+    clearNewChatStartSessionEvidence()
+    latestConversationKey = undefined
+    pendingTurnIntent = undefined
+    completionTracker = new ResponseCompletionTracker()
   }
+
+  const armNewChatNavigationState = (reason: string): void => {
+    resetConversationNavigationState(reason)
+    const now = Date.now()
+    conversationSession = markNewChatStarted(
+      conversationSession,
+      now
+    )
+    rememberNewChatStartSessionEvidence(now)
+    runtimeDiagnostics.record('new_chat_navigation_armed', {
+      reason,
+      routeKind: diagnosticRouteKind(location.href),
+      pendingNewChatStart: true
+    })
+  }
+
+  const onPopState = (): void => {
+    resetConversationNavigationState('popstate')
+    scheduleRun?.()
+  }
+
   const onClick = (event: MouseEvent): void => {
     const element =
       event.target instanceof Element ? event.target : null
+    const navigationLink =
+      element?.closest<HTMLAnchorElement>('a[href]')
+    let newChatNavigationArmed = false
+    if (
+      navigationLink &&
+      isConversationNavigationHref(navigationLink.href)
+    ) {
+      if (isBlankConversationRoute(navigationLink.href)) {
+        armNewChatNavigationState('blank_navigation_link')
+        newChatNavigationArmed = true
+      } else {
+        resetConversationNavigationState('navigation_link')
+      }
+    }
+
+    const navigationControl =
+      element?.closest<HTMLElement>('button, [role="button"]')
+    if (
+      !newChatNavigationArmed &&
+      navigationControl &&
+      isNewChatNavigationTarget(navigationControl)
+    ) {
+      armNewChatNavigationState('new_chat_control')
+    }
+
     const buttonElement =
       element?.closest<HTMLElement>('button, [role="button"]')
     if (!buttonElement) return
@@ -1134,14 +1688,9 @@ export async function startGuard(): Promise<void> {
       return
     }
     if (buttonElement.getAttribute('aria-disabled') === 'true') return
-    const semantic =
-      `${buttonElement.getAttribute('data-testid') ?? ''} ${buttonElement.getAttribute('aria-label') ?? ''}`
-    if (
-      /send-button|send message|发送|发送消息/i.test(semantic)
-    ) {
-      if (captureTurnStart(buttonElement)) markNewChatSend()
-    }
+    captureTurnStart(buttonElement)
   }
+
   const onKeyDown = (event: KeyboardEvent): void => {
     if (
       event.key !== 'Enter' ||
@@ -1150,9 +1699,66 @@ export async function startGuard(): Promise<void> {
     ) {
       return
     }
-    if (captureTurnStart(event.target)) markNewChatSend()
+    captureTurnStart(event.target)
   }
-  const onInput = (): void => scheduleRun?.()
+
+  const armNewChatFromComposerActivity = (
+    target: EventTarget | null
+  ): void => {
+    if (!isPromptSendTarget(target)) return
+
+    const snapshot = readPageSnapshot(
+      document,
+      location.href,
+      'none'
+    )
+    const composerHasText = Boolean(
+      (snapshot.composerText ?? '').trim()
+    )
+    const conversationKey = latestConversationKey
+    const hasPersistedLedger = Boolean(
+      conversationKey &&
+        latestState.ledgers[conversationKey]
+    )
+
+    if (
+      !shouldArmNewChatFromComposerActivity({
+        messageCount: snapshot.messages.length,
+        composerHasText,
+        hasPersistedLedger
+      })
+    ) {
+      return
+    }
+
+    const now = Date.now()
+    conversationSession = markNewChatStarted(
+      conversationSession,
+      now
+    )
+    rememberNewChatStartSessionEvidence(now)
+    if (!pendingTurnIntent) {
+      pendingTurnIntent = {
+        generationId: latestState.settings.generationId,
+        ledgerRevision: 0,
+        load: 0,
+        accepted: false,
+        capturedAt: now
+      }
+    }
+    runtimeDiagnostics.record('new_chat_composer_armed', {
+      routeKind: diagnosticRouteKind(location.href),
+      conversationIdPresent: Boolean(
+        resolveConversationId(snapshot)
+      ),
+      messageCount: snapshot.messages.length
+    })
+  }
+
+  const onInput = (event: Event): void => {
+    armNewChatFromComposerActivity(event.target)
+    scheduleRun?.()
+  }
 
   function startMonitoring(): void {
     if (monitoringStarted) return
@@ -1162,12 +1768,17 @@ export async function startGuard(): Promise<void> {
     }
 
     monitoringStarted = true
+    runtimeDiagnostics.record('monitoring_started', {
+      routeKind: diagnosticRouteKind(location.href)
+    })
+    persistRuntimeDiagnostics('monitoring_started')
     scheduleRun = createCoalescedAsyncRunner(processPage)
 
     document.addEventListener('submit', onSubmit, true)
     document.addEventListener('click', onClick, true)
     document.addEventListener('keydown', onKeyDown, true)
     document.addEventListener('input', onInput, true)
+    window.addEventListener('popstate', onPopState)
     chrome.storage.onChanged.addListener(onStorageChanged)
 
     const mutationRunner = createDebouncedRunner(
@@ -1184,13 +1795,25 @@ export async function startGuard(): Promise<void> {
     window.addEventListener(
       'beforeunload',
       () => {
+        runtimeDiagnostics.record('beforeunload', {
+          routeKind: diagnosticRouteKind(location.href),
+          latestConversationKeyPresent: Boolean(
+            latestConversationKey
+          ),
+          sessionActive: Boolean(
+            conversationSession.activeConversationId
+          )
+        })
+        persistRuntimeDiagnostics('beforeunload')
         activeCalibrationScan = undefined
+        activeMeasurementScan = undefined
         observer.disconnect()
         mutationRunner.cancel()
         document.removeEventListener('submit', onSubmit, true)
         document.removeEventListener('click', onClick, true)
         document.removeEventListener('keydown', onKeyDown, true)
         document.removeEventListener('input', onInput, true)
+        window.removeEventListener('popstate', onPopState)
         chrome.storage.onChanged.removeListener(onStorageChanged)
         ui.destroy()
       },
@@ -1372,58 +1995,67 @@ export function canStartMonitoring(settings: {
   })
 }
 
-export function resolveCoverageLifecycle(input: {
-  isRoot: boolean
-  hasConversationId: boolean
-  messageCount: number
-  hasUserMessage: boolean
-  blankStartArmed: boolean
-  pendingBlankStart: boolean
-  persistedComplete: boolean
-}): {
-  blankStartArmed: boolean
-  pendingBlankStart: boolean
-  coverageEvidence:
-    | 'observed_from_start'
-    | 'persisted_complete'
-    | 'none'
-} {
-  let blankStartArmed = input.blankStartArmed
-  let pendingBlankStart = input.pendingBlankStart
-
-  if (
-    input.isRoot &&
-    !input.hasConversationId &&
-    input.messageCount === 0
-  ) {
-    blankStartArmed = true
-  } else if (
-    blankStartArmed &&
-    input.isRoot &&
-    !input.hasConversationId &&
-    input.hasUserMessage
-  ) {
-    pendingBlankStart = true
-  } else if (!pendingBlankStart && input.messageCount > 0) {
-    blankStartArmed = false
-  }
-
-  return {
-    blankStartArmed,
-    pendingBlankStart,
-    coverageEvidence: pendingBlankStart
-      ? 'observed_from_start'
-      : input.persistedComplete
-        ? 'persisted_complete'
-        : 'none'
+function diagnosticRouteKind(url: string): string {
+  try {
+    const parsed = new URL(url, 'https://chatgpt.com')
+    if (parseConversationIdFromUrl(parsed.href)) {
+      return 'conversation'
+    }
+    if (parsed.pathname === '/' || parsed.pathname === '/chat') {
+      return 'root'
+    }
+    if (/^\/g\/[^/]+\/?$/.test(parsed.pathname)) {
+      return 'g_root'
+    }
+    if (parsed.pathname.startsWith('/g/')) return 'g_other'
+    if (parsed.pathname.startsWith('/workspace')) return 'workspace'
+    return 'other'
+  } catch {
+    return 'invalid'
   }
 }
 
-function isRootChatUrl(url: string): boolean {
-  const parsed = new URL(url)
-  return (
-    parsed.hostname === 'chatgpt.com' &&
-    (parsed.pathname === '/' || parsed.pathname === '/chat')
+function diagnosticErrorCode(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+      .replace(/[^a-zA-Z0-9_:.-]+/g, '_')
+      .slice(0, 96)
+  }
+  return 'unknown_error'
+}
+
+function isBlankConversationRoute(url: string): boolean {
+  try {
+    const parsed = new URL(url, location.href)
+    if (parsed.hostname !== 'chatgpt.com') return false
+    if (parsed.pathname === '/' || parsed.pathname === '/chat') {
+      return true
+    }
+    return /^\/g\/[^/]+\/?$/.test(parsed.pathname)
+  } catch {
+    return false
+  }
+}
+
+function isConversationNavigationHref(url: string): boolean {
+  try {
+    const parsed = new URL(url, location.href)
+    if (parsed.hostname !== 'chatgpt.com') return false
+    return Boolean(
+      parseConversationIdFromUrl(parsed.href) ||
+      isBlankConversationRoute(parsed.href)
+    )
+  } catch {
+    return false
+  }
+}
+
+function isNewChatNavigationTarget(
+  element: HTMLElement
+): boolean {
+  const semantic = `${element.getAttribute('data-testid') ?? ''} ${element.getAttribute('aria-label') ?? ''} ${element.getAttribute('title') ?? ''} ${element.textContent ?? ''}`
+  return /new[-_ ]?chat|new conversation|新建聊天|新聊天|新的聊天|新建对话|新建對話|新增聊天|新增對話|開始新聊天|开始新聊天/i.test(
+    semantic
   )
 }
 
@@ -1431,27 +2063,77 @@ function isPromptSendTarget(target: EventTarget | null): boolean {
   const element =
     target instanceof Element ? target : null
   if (!element) return false
+  const composer = findComposerElement(document)
+  if (!composer) return false
   if (
-    element.matches(
-      '#prompt-textarea, [data-testid="prompt-textarea"]'
-    )
-  ) {
-    return true
-  }
-  if (
-    element.closest(
-      '#prompt-textarea, [data-testid="prompt-textarea"]'
-    )
+    element === composer ||
+    composer.contains(element) ||
+    element.contains(composer)
   ) {
     return true
   }
   const form = element.closest('form')
-  if (!form) return false
-  return (
-    form.querySelector(
-      '#prompt-textarea, [data-testid="prompt-textarea"]'
-    ) !== null
-  )
+  if (form && form.contains(composer)) return true
+
+  let composerContainer = composer.parentElement
+  for (let depth = 0; depth < 4 && composerContainer; depth += 1) {
+    if (
+      composerContainer !== document.body &&
+      composerContainer !== document.documentElement &&
+      composerContainer.contains(element)
+    ) {
+      return true
+    }
+    composerContainer = composerContainer.parentElement
+  }
+  return false
+}
+
+function rememberNewChatStartSessionEvidence(capturedAt: number): void {
+  try {
+    window.sessionStorage.setItem(
+      NEW_CHAT_START_SESSION_KEY,
+      String(Math.max(0, Math.floor(capturedAt)))
+    )
+  } catch {
+    // Best-effort bridge across same-tab document navigation.
+  }
+}
+
+function readNewChatStartSessionEvidence(
+  now: number
+): number | undefined {
+  try {
+    const value = window.sessionStorage.getItem(
+      NEW_CHAT_START_SESSION_KEY
+    )
+    if (!value) return undefined
+    const capturedAt = Number(value)
+    const age = now - capturedAt
+    if (
+      !Number.isFinite(capturedAt) ||
+      age < 0 ||
+      age > NEW_CHAT_START_EVIDENCE_TTL_MS
+    ) {
+      window.sessionStorage.removeItem(
+        NEW_CHAT_START_SESSION_KEY
+      )
+      return undefined
+    }
+    return capturedAt
+  } catch {
+    return undefined
+  }
+}
+
+function clearNewChatStartSessionEvidence(): void {
+  try {
+    window.sessionStorage.removeItem(
+      NEW_CHAT_START_SESSION_KEY
+    )
+  } catch {
+    // Best effort only.
+  }
 }
 
 function uniqueUncertaintySources(

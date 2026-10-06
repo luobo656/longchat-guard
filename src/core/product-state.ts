@@ -32,7 +32,6 @@ export function deriveMeasurementState(input: {
 
 export type EnvironmentComparison =
   | 'match'
-  | 'model_unverified'
   | 'unknown'
   | 'mismatch'
 
@@ -47,9 +46,7 @@ export function compareEnvironmentSignatures(
   if (calibrated.measurementSchemaVersion !== current.measurementSchemaVersion) {
     return 'mismatch'
   }
-  if (!calibrated.modelHint) return 'model_unverified'
-  if (!current.modelHint) return 'unknown'
-  return calibrated.modelHint === current.modelHint ? 'match' : 'mismatch'
+  return 'match'
 }
 
 export function environmentSignaturesMatch(
@@ -92,9 +89,6 @@ export function deriveCalibrationState(input: {
   )
   if (environmentComparison === 'mismatch') return 'stale'
   if (environmentComparison === 'unknown') return 'environment_unknown'
-  if (environmentComparison === 'model_unverified') {
-    return 'calibrated_conservative'
-  }
   return summary.failureReference.quality === 'conservative'
     ? 'calibrated_conservative'
     : 'calibrated'
@@ -102,6 +96,22 @@ export function deriveCalibrationState(input: {
 
 export function calibrationIsUsable(state: CalibrationState): boolean {
   return state === 'calibrated' || state === 'calibrated_conservative'
+}
+
+export function calibrationNeedsFreshGeneration(input: {
+  generation?: CalibrationGeneration | undefined
+  currentEnvironment?: EnvironmentSignature | undefined
+}): boolean {
+  if (!input.generation) return false
+  if (
+    deriveCalibrationState({
+      generation: input.generation,
+      currentEnvironment: input.currentEnvironment
+    }) !== 'stale'
+  ) {
+    return false
+  }
+  return Boolean(summarizeGeneration(input.generation).failureReference)
 }
 
 export function measurementIsUsable(state: MeasurementState): boolean {

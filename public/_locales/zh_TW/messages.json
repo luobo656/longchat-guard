@@ -1,100 +1,263 @@
 {
-  "extensionName": { "message": "LongChat Guard · 長對話預警" },
-  "extensionDescription": { "message": "ChatGPT 長對話風險提醒與本機趨勢監測；不顯示官方額度，不上傳聊天原文。" },
-  "actionTitle": { "message": "LongChat Guard" },
-
-  "riskNormal": { "message": "正常" },
-  "riskLong": { "message": "偏長" },
-  "riskOrganize": { "message": "接近風險" },
-  "riskHigh": { "message": "高風險" },
-
-  "labelStatus": { "message": "狀態" },
-  "labelRisk": { "message": "風險" },
-  "labelLowRisk": { "message": "低風險" },
-  "labelHighRisk": { "message": "高風險" },
-  "riskAdviceLong": { "message": "對話已經偏長，可考慮整理重要內容。" },
-  "riskAdviceOrganize": { "message": "建議盡快準備續接到新對話。" },
-  "riskAdviceHigh": { "message": "建議現在續接到新對話。" },
-  "riskAdviceHighConservative": { "message": "根據保守的本機參考，此對話已進入高風險，建議現在續接到新對話。" },
-  "statusUncalibrated": { "message": "未校準" },
-  "statusCalibrating": { "message": "正在校準" },
-  "statusUnknown": { "message": "暫時無法判斷" },
-  "statusEnvironmentUnknown": { "message": "正在確認環境" },
-  "statusEnvironmentUnverified": { "message": "模型環境未確認" },
-  "statusStale": { "message": "基準可能失效" },
-  "statusUncalibratedHelp": { "message": "目前對話長度已識別。要取得提前預警，請用一個你確認曾達到對話長度上限的歷史對話完成一次校準。" },
-  "statusCalibratingHelp": { "message": "正在讀取完整歷史，請保持目前對話頁面開啟，直到校準完成。" },
-  "statusMeasurementUncertainHelp": { "message": "目前頁面暫時無法可靠測量，LongChat Guard 不會用不完整資訊猜測風險。" },
-  "statusEnvironmentUnknownHelp": { "message": "目前模型或環境資訊暫時無法可靠讀取。LongChat Guard 會保持風險未知；如果之後能確認仍是原校準環境，會自動恢復校準狀態，無需重新校準。" },
-  "statusEnvironmentUnverifiedHelp": { "message": "目前模型無法可靠確認。進度條表示相對本機歷史參考的位置，不代表 ChatGPT 官方對話額度。" },
-  "statusStaleHelp": { "message": "已確認目前可觀測環境與原校準環境不同。重新校準前不會輸出確定性的風險結論。" },
-  "statusConservativeCalibration": { "message": "基準已建立。校準時模型資訊或其他上下文無法精確讀取，後續提醒會更保守。" },
-  "statusGrowthLearning": { "message": "基準已建立，正在學習整輪對話的典型增長。在樣本足夠前，僅在經驗失敗參考處提醒。" },
-
-  "actionCopyContinuation": { "message": "複製續接提示詞" },
-  "actionCalibrateThisChat": { "message": "用此對話校準" },
-  "actionCalibrateThisChatHelp": { "message": "僅用於你確認曾達到對話長度上限的歷史對話。" },
-  "actionCalibrating": { "message": "正在校準…" },
-  "actionMeasureCurrentChat": { "message": "完整讀取目前對話" },
-  "actionMeasureCurrentChatHelp": { "message": "用於確定這個舊對話的目前風險，不會修改提醒基準。" },
-  "actionMeasuringCurrentChat": { "message": "正在讀取完整對話…" },
-  "measurementNoConversation": { "message": "請先開啟需要判斷的對話，然後重試。" },
-  "measurementScanIncomplete": { "message": "未能完整讀取目前對話，因此沒有更新此對話的風險判斷。請保持頁面開啟後重試。" },
-  "measurementParserFailed": { "message": "部分訊息角色無法可靠識別，因此暫時不能確定此對話的目前風險。" },
-  "measurementScanSuccess": { "message": "目前對話已完整讀取，現在可以結合既有提醒基準判斷此對話風險。" },
-  "measurementConversationChanged": { "message": "讀取過程中對話發生變化，因此沒有更新結果。請保持目前對話開啟後重試。" },
-  "measurementGenerationChanged": { "message": "讀取過程中提醒基準發生變化，因此沒有更新結果。請重試。" },
-  "measurementSampleUnusable": { "message": "這個對話暫時無法被可靠測量，因此不能確定目前風險。" },
-  "measurementScanFailed": { "message": "未能完整讀取目前對話，因此沒有更新此對話的風險判斷。" },
-  "menuMore": { "message": "更多" },
-  "actionDismiss": { "message": "關閉" },
-  "actionRecalibrate": { "message": "重新校準提醒基準" },
-  "actionMute": { "message": "本對話不提醒" },
-  "actionRestore": { "message": "恢復提醒" },
-
-  "passiveLimitQuestion": { "message": "偵測到可能的對話長度上限" },
-  "passiveLimitHelp": { "message": "只有當你確認這次確實是對話長度上限時，才用此對話作為校準樣本。" },
-  "passiveLimitYes": { "message": "用此對話校準" },
-  "passiveLimitNo": { "message": "忽略" },
-
-  "consentTitle": { "message": "啟用本機長對話預警" },
-  "consentLocalRead": { "message": "僅在本機讀取目前 ChatGPT 頁面內容，用於長對話趨勢判斷。" },
-  "consentNoUpload": { "message": "不上傳聊天內容。" },
-  "consentNoRawPersist": { "message": "不儲存聊天原文。" },
-  "consentDeleteLocal": { "message": "可透過解除安裝擴充功能或清除擴充功能資料刪除本機資料。" },
-  "consentAccept": { "message": "同意並開始" },
-  "consentDecline": { "message": "暫不啟用" },
-
-  "pillAria": { "message": "開啟 LongChat Guard" },
-  "pillConsentRequired": { "message": "需要同意" },
-  "pillDisabled": { "message": "未啟用" },
-
-  "continuationPrompt": { "message": "請把目前對話整理成一份可直接帶到新 ChatGPT 對話的「續接包」，讓我不必重新分析就能繼續執行。不要只是重述聊天紀錄，也不要編造未確認內容。請依照以下結構輸出：1）目前目標：最終要完成什麼，以及現在處於哪個準確階段；2）已完成工作：已經完成、已驗證、無需重複的事項；3）已確認決定：已定下的方案、取捨、版本與原因；4）重要限制：必須遵守的要求、使用者偏好、隱私/安全要求、相容性限制，以及明確不能做的事；5）關鍵工作狀態：相關檔案、路徑、儲存庫/分支/提交、程式碼/設定、資料、平台或帳號狀態、版本號、URL、命令、關鍵數值與必須維持一致的介面文案；6）尚未解決的問題：剩餘問題、已知缺陷、失敗嘗試與失敗原因；7）下一步：依優先順序列出具體動作，並明確新對話第一步應該做什麼；8）風險與容易踩坑的地方：可能造成重複工作、資料遺失、錯誤發布、回滾或功能退化的事項；9）必要原文：只有在必須逐字保留時才收錄命令、錯誤訊息、文案、介面名稱、檔名、ID 等。請明確區分「已確認事實 / 推斷 / 待驗證」，不確定內容必須標記。保留準確名稱、版本號、路徑、提交雜湊、URL 與重要數值；刪除寒暄與無關過程，但不要遺漏會改變下一步行動的上下文。如果涉及程式碼或檔案，請明確哪些已修改、哪些已測試、哪些已提交/推送/發布，以及哪些仍未提交或待審核。最後附上一段簡短的「繼續執行指令」，要求新對話先讀完整份續接包，維持已確認的決定與限制，並直接從下一步繼續，不要從頭重新分析。" },
-
-  "toastContinuationCopied": { "message": "續接提示詞已複製" },
-  "toastCopyFailed": { "message": "複製失敗，請再試一次" },
-  "toastActionFailed": { "message": "操作失敗，請稍後再試" },
-  "toastRecalibrationStarted": { "message": "舊參考已作為過期先驗保留。重新校準前不會依賴它輸出確定風險。" },
-  "toastRemindersRestored": { "message": "已恢復本對話提醒" },
-  "toastConversationMuted": { "message": "本對話提醒已靜音" },
-  "toastFailureLearned": { "message": "已儲存這次長度上限事件的校準證據" },
-  "toastFailureIgnored": { "message": "已忽略這次事件" },
-  "toastMonitoringEnabled": { "message": "已啟用本機長對話預警" },
-  "toastMonitoringDeferred": { "message": "暫不啟用" },
-  "calibrationNoConversation": { "message": "請先開啟一個你確認曾達到對話長度上限的歷史對話，再執行校準。" },
-  "calibrationParserFailed": { "message": "訊息角色無法可靠識別，本次校準未儲存。" },
-  "calibrationConservativeSuccess": { "message": "基準已建立。此對話包含無法精確計量的上下文，後續提醒會更保守。" },
-  "calibrationSuccess": { "message": "校準完成，本機經驗失敗參考已建立。" },
-  "calibrationConversationChanged": { "message": "掃描期間對話發生變化，本次未寫入校準。請保持此對話頁面開啟後重試。" },
-  "calibrationGenerationChanged": { "message": "掃描期間提醒基準發生變化，本次未寫入校準，請重試。" },
-  "calibrationSampleUnusable": { "message": "這個對話無法被可靠測量，因此沒有作為校準樣本儲存。" },
-  "toastScanFailed": { "message": "校準未完成，沒有寫入失敗參考。" },
-
-  "scanNoScroll": { "message": "找不到對話捲動區域，請重新整理後再試" },
-  "scanNoMessages": { "message": "暫時沒有讀取到對話訊息，請等待頁面載入完成後再試" },
-  "scanHeadLoading": { "message": "更早的歷史訊息仍未載入穩定，本次校準未儲存。請保持頁面開啟後重試。" },
-  "scanTailChanging": { "message": "對話末端仍在變化，本次校準未儲存。" },
-  "scanAlignmentFailed": { "message": "部分歷史訊息未能連續讀取，已停止校準，不會用不完整資訊猜測。" },
-  "scanLimitReached": { "message": "這個對話很長，未能確認完整歷史，本次校準未儲存。" },
-  "scanIncomplete": { "message": "尚未確認完整歷史，本次校準未儲存。" }
+  "extensionName": {
+    "message": "LongChat Guard · 長對話預警"
+  },
+  "extensionDescription": {
+    "message": "ChatGPT 長對話風險提醒與續接輔助；本機處理，不顯示官方額度，不上傳聊天原文。"
+  },
+  "actionTitle": {
+    "message": "LongChat Guard"
+  },
+  "riskNormal": {
+    "message": "風險較低"
+  },
+  "riskLong": {
+    "message": "偏長"
+  },
+  "riskOrganize": {
+    "message": "接近風險"
+  },
+  "riskHigh": {
+    "message": "高風險"
+  },
+  "labelStatus": {
+    "message": "狀態"
+  },
+  "labelRisk": {
+    "message": "風險"
+  },
+  "labelLowRisk": {
+    "message": "低風險"
+  },
+  "labelHighRisk": {
+    "message": "高風險"
+  },
+  "riskAdviceNormal": {
+    "message": "目前對話處於較低風險區。"
+  },
+  "riskAdviceLong": {
+    "message": "對話已偏長，建議整理重要內容。"
+  },
+  "riskAdviceOrganize": {
+    "message": "已接近風險區，建議準備續接新對話。"
+  },
+  "riskAdviceHigh": {
+    "message": "已進入高風險區，建議盡快續接新對話。"
+  },
+  "riskAdviceHighConservative": {
+    "message": "已進入高風險區。由於參考更保守，建議盡快續接新對話。"
+  },
+  "statusUncalibrated": {
+    "message": "未校準"
+  },
+  "statusCalibrating": {
+    "message": "正在校準"
+  },
+  "statusUnknown": {
+    "message": "暫無法判斷"
+  },
+  "statusEnvironmentUnknown": {
+    "message": "暫無法判斷"
+  },
+  "statusStale": {
+    "message": "需要重新校準"
+  },
+  "statusUncalibratedHelp": {
+    "message": "要啟用風險提醒，請用一個已達到長度上限的歷史對話完成校準。"
+  },
+  "statusCalibratingHelp": {
+    "message": "正在完整讀取對話，請保持此頁面開啟。"
+  },
+  "statusMeasurementUncertainHelp": {
+    "message": "目前對話尚未完成可靠讀取。可從「···」中重新完整讀取。"
+  },
+  "statusEnvironmentUnknownHelp": {
+    "message": "目前測量暫不可用，恢復後會自動繼續判斷。"
+  },
+  "statusStaleHelp": {
+    "message": "測量方式已更新，請重新校準後繼續使用風險提醒。"
+  },
+  "statusConservativeCalibration": {
+    "message": "基準已建立。此對話含無法精確計量的內容，提醒會更保守。"
+  },
+  "statusGrowthLearning": {
+    "message": "基準已建立，正在學習對話增長。樣本充足前，僅在達到歷史參考時提醒。"
+  },
+  "actionCopyContinuation": {
+    "message": "複製續接提示詞"
+  },
+  "actionCalibrateThisChat": {
+    "message": "用此對話校準"
+  },
+  "actionCalibrateThisChatHelp": {
+    "message": "僅用於你確認已達到對話長度上限的歷史對話。"
+  },
+  "actionCalibrating": {
+    "message": "正在校準…"
+  },
+  "actionMeasureCurrentChat": {
+    "message": "完整讀取目前對話"
+  },
+  "actionMeasuringCurrentChat": {
+    "message": "正在完整讀取…"
+  },
+  "measurementNoConversation": {
+    "message": "請先開啟一個對話。"
+  },
+  "measurementScanIncomplete": {
+    "message": "未能完整讀取，風險狀態未更新。請保持頁面開啟後重試。"
+  },
+  "measurementParserFailed": {
+    "message": "部分訊息無法可靠識別，風險狀態未更新。"
+  },
+  "measurementScanSuccess": {
+    "message": "完整讀取完成，風險狀態已更新。"
+  },
+  "measurementConversationChanged": {
+    "message": "讀取期間對話發生變化，結果未儲存。請重試。"
+  },
+  "measurementGenerationChanged": {
+    "message": "讀取期間提醒基準發生變化，請重試。"
+  },
+  "measurementSampleUnusable": {
+    "message": "目前對話暫無法可靠讀取，風險狀態未更新。"
+  },
+  "measurementScanFailed": {
+    "message": "完整讀取失敗，風險狀態未更新。"
+  },
+  "menuMore": {
+    "message": "更多"
+  },
+  "actionDismiss": {
+    "message": "關閉"
+  },
+  "actionRecalibrate": {
+    "message": "重新校準提醒基準"
+  },
+  "actionMute": {
+    "message": "本對話不提醒"
+  },
+  "actionRestore": {
+    "message": "恢復提醒"
+  },
+  "passiveLimitQuestion": {
+    "message": "偵測到可能的對話長度上限"
+  },
+  "passiveLimitHelp": {
+    "message": "只有當你確認這次確實是對話長度上限時，才用此對話作為校準樣本。"
+  },
+  "passiveLimitYes": {
+    "message": "用此對話校準"
+  },
+  "passiveLimitNo": {
+    "message": "忽略"
+  },
+  "consentTitle": {
+    "message": "啟用本機長對話預警"
+  },
+  "consentLocalRead": {
+    "message": "僅在本機讀取目前 ChatGPT 頁面內容，用於長對話趨勢判斷。"
+  },
+  "consentNoUpload": {
+    "message": "不上傳聊天內容。"
+  },
+  "consentNoRawPersist": {
+    "message": "不儲存聊天原文。"
+  },
+  "consentDeleteLocal": {
+    "message": "可透過解除安裝擴充功能或清除擴充功能資料刪除本機資料。"
+  },
+  "consentAccept": {
+    "message": "同意並開始"
+  },
+  "consentDecline": {
+    "message": "暫不啟用"
+  },
+  "pillAria": {
+    "message": "開啟 LongChat Guard"
+  },
+  "pillConsentRequired": {
+    "message": "需要同意"
+  },
+  "pillDisabled": {
+    "message": "未啟用"
+  },
+  "continuationPrompt": {
+    "message": "請為目前對話產生一份可直接複製到新對話使用的「續接上下文」。\n\n你的任務不是總結聊天紀錄，也不是產生另一個需要再次執行的提示詞，而是直接利用你當前已經掌握的全部對話上下文，以及你實際可見且與當前任務有關的專案上下文，自主完成判斷、篩選、去重、校正和整理，輸出最終可供另一個 GPT 接管工作的內容。\n\n假設接手的新 GPT 看不到目前對話中的任何其他訊息，只能看到你這一次輸出。\n\n你的目標是讓它僅憑這份內容，就能盡可能準確地恢復當前工作的真實狀態，從正確的位置繼續，而不需要使用者重新解釋背景，不重復已經完成的工作，不重新嘗試已經排除的方案，也不誤把歷史狀態當成當前狀態。\n\n## 核心原則\n\n優先遷移「當前有效的工作狀態」，而不是重述「這個對話曾經聊過什麼」。\n\n資訊的重要性由它是否會影響後續理解、判斷、決策或執行決定，而不是由它在原對話中出現的次數或篇幅決定。\n\n當歷史內容與后來的結論發生衝突時，以最新、證據更充分、已經確認的有效狀態為準。\n\n不要為了完整而保留已經失效的資訊，也不要為了簡短而刪除後續繼續工作真正需要的資訊。\n\n## 你需要自主判斷並保留的內容\n\n根據目前對話實際情況選擇必要內容，包括但不限於：\n\n- 當前真正的目標、任務以及要解決的問題；\n- 理解當前工作所必需的專案背景和上下文；\n- 使用者已經明確確認的需求、邊界、原則、偏好、品質標準和不可違反的約束；\n- 已經完成的重要工作以及當前真實狀態；\n- 已經確認的重要結論、決策和方案；\n- 理解這些結論所必需的原因、證據或關鍵背景；\n- 已經驗證為錯誤、無效、廢棄或不應再次嘗試的方向；\n- 當前仍未解決的問題、阻塞點、風險和待驗證事項；\n- 當前工作具體進行到了什麼位置；\n- 下一步應當直接繼續什麼；\n- 如果後續工作依賴具體技術狀態，應保留必要的文件、目錄、程式碼位置、版本、分支、架構、接口、資料結構、設定、測試結果、執行環境、工具狀態或其他實現資訊；\n- 容易因為切換對話而丟失、但會影響後續判斷的重要細節；\n- 使用者明確要求後續繼續遵守的工作方法、決策方式和行為要求。\n\n以上不是必須逐項輸出的固定模板。請根據當前任務自行決定結構和資訊密度。\n\n## 狀態準確性\n\n必須明確區分：\n\n- 已確認的事實；\n- 已確認的決策；\n- 當前仍然成立的推測或判斷；\n- 尚待驗證的事項。\n\n不要把推測、可能性或曾經的懷疑寫成已經確認的事實。\n\n如果某個早期判斷后來已經被證據否定，應以最新結論為準。只有當「這個錯誤方向為什麼不能再走」對後續工作仍然重要時，才保留必要說明。\n\n如果同一事項在對話中經歷過多次修改，只保留當前有效版本，並在確有必要時補充導致當前狀態的關鍵原因。\n\n如果你不能確認某項資訊，不要自行補全、猜測或編造；應保留其不確定性，或者在對續接沒有價值時省略。\n\n## 壓縮規則\n\n主動刪除：\n\n- 寒暄和社交性內容；\n- 重復表達；\n- 已被後續狀態覆蓋的中間版本；\n- 不影響後續工作的討論過程；\n- 已解決且不會影響後續工作的臨時問題；\n- 與當前目標無關的枝節；\n- 純粹為了重述聊天順序而存在的資訊。\n\n但以下內容即使篇幅較長，也不應僅為了壓縮而刪除：\n\n- 會改變後續決策的限制條件；\n- 使用者已經明確否決的做法；\n- 重要的失敗經驗及其確定原因；\n- 當前實現或工作的真實狀態；\n- 尚未驗證的關鍵風險；\n- 新對話如果不知道就很可能重復犯錯的資訊。\n\n## 自包含要求\n\n最終內容必須能夠脫離原對話獨立理解。\n\n不要使用只有原對話才能理解的模糊指代，例如：\n\n「上面那個」\n「剛才的問題」\n「之前的程式碼」\n「第二個方案」\n「你前面說的那個」\n\n如果這些內容對續接重要，請將它們改寫成明確的資訊。\n\n不要假設新 GPT 知道目前對話發生過什麼。\n\n## 面向接管，而不是面向回顧\n\n如果當前屬於軟體開發、除錯、研究、設計、寫作、規劃或其他持續性工作，應優先保存：\n\n當前狀態、有效結論、約束條件、未完成事項和下一步行動。\n\n不要寫成按時間順序回顧聊天過程的會議紀要。\n\n新 GPT 閱讀完后，應該能夠明確回答：\n\n- 現在正在做什麼；\n- 最終目標是什麼；\n- 當前為什麼采用這個方向；\n- 已經完成了什麼；\n- 當前真實狀態是什麼；\n- 哪些事情已經確認；\n- 哪些結論不要重新推翻；\n- 哪些錯誤方向不要重新嘗試；\n- 哪些內容仍然不確定；\n- 還剩什麼沒有完成；\n- 下一步應該直接從哪里繼續。\n\n如果當前存在一個明確的下一步，請在最終內容末尾明確寫出，並使其具體到接手者可以直接繼續執行。\n\n## 輸出要求\n\n直接輸出最終續接上下文。\n\n不要產生二級提示詞。\n不要讓我再次把某個提示詞交給你執行。\n不要回答當前業務任務本身。\n不要解釋你如何進行了整理。\n不要評價這份整理。\n不要添加使用教程。\n不要要求使用者補充你在當前上下文中已經知道的資訊。\n不要為了形式整齊而機械套用固定欄目。\n不要包含對續接無實際價值的內容。\n\n輸出長度由當前任務復雜程度決定：簡單對話應簡潔，復雜專案可以詳細，但所有保留下來的內容都應服務於新對話的準確接管。\n\n現在直接產生最終的續接上下文。"
+  },
+  "toastContinuationCopied": {
+    "message": "續接提示詞已複製"
+  },
+  "toastCopyFailed": {
+    "message": "複製失敗，請再試一次"
+  },
+  "toastActionFailed": {
+    "message": "操作失敗，請稍後再試"
+  },
+  "toastRecalibrationStarted": {
+    "message": "已進入重新校準模式，請用達到長度上限的歷史對話建立新基準。"
+  },
+  "toastRemindersRestored": {
+    "message": "已恢復本對話提醒"
+  },
+  "toastConversationMuted": {
+    "message": "已關閉本對話提醒"
+  },
+  "toastFailureLearned": {
+    "message": "已記錄本次長度上限事件"
+  },
+  "toastFailureIgnored": {
+    "message": "已忽略這次事件"
+  },
+  "toastMonitoringEnabled": {
+    "message": "已啟用本機長對話預警"
+  },
+  "toastMonitoringDeferred": {
+    "message": "暫不啟用"
+  },
+  "calibrationNoConversation": {
+    "message": "請先開啟一個你確認已達到長度上限的歷史對話。"
+  },
+  "calibrationParserFailed": {
+    "message": "部分訊息無法可靠識別，校準未儲存。"
+  },
+  "calibrationConservativeSuccess": {
+    "message": "校準完成。此對話含無法精確計量的內容，提醒會更保守。"
+  },
+  "calibrationSuccess": {
+    "message": "校準完成，提醒基準已建立。"
+  },
+  "calibrationConversationChanged": {
+    "message": "校準期間對話發生變化，結果未儲存。請重試。"
+  },
+  "calibrationGenerationChanged": {
+    "message": "校準期間提醒基準發生變化，請重試。"
+  },
+  "calibrationSampleUnusable": {
+    "message": "目前對話無法可靠讀取，未作為校準樣本儲存。"
+  },
+  "toastScanFailed": {
+    "message": "校準未完成，提醒基準未更新。"
+  },
+  "scanNoScroll": {
+    "message": "無法定位對話區域，請重新整理後重試。"
+  },
+  "scanNoMessages": {
+    "message": "尚未讀取到對話內容，請等待頁面載入後重試。"
+  },
+  "scanHeadLoading": {
+    "message": "歷史內容仍在載入，請保持頁面開啟後重試。"
+  },
+  "scanTailChanging": {
+    "message": "對話仍在更新，請等待完成後重試。"
+  },
+  "scanAlignmentFailed": {
+    "message": "部分歷史內容未能連續讀取，校準已停止。"
+  },
+  "scanLimitReached": {
+    "message": "未能確認完整歷史，校準未儲存。"
+  },
+  "scanIncomplete": {
+    "message": "未能確認完整歷史，校準未儲存。"
+  }
 }

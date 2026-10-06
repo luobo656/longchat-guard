@@ -1,100 +1,263 @@
 {
-  "extensionName": { "message": "LongChat Guard" },
-  "extensionDescription": { "message": "Privacy-first local warnings for long ChatGPT conversations on Chrome and Edge." },
-  "actionTitle": { "message": "LongChat Guard" },
-
-  "riskNormal": { "message": "Normal" },
-  "riskLong": { "message": "Long" },
-  "riskOrganize": { "message": "Near risk" },
-  "riskHigh": { "message": "High risk" },
-
-  "labelStatus": { "message": "Status" },
-  "labelRisk": { "message": "Risk" },
-  "labelLowRisk": { "message": "Low risk" },
-  "labelHighRisk": { "message": "High risk" },
-  "riskAdviceLong": { "message": "This chat is getting long. Consider organizing important context." },
-  "riskAdviceOrganize": { "message": "Prepare to continue in a new chat soon." },
-  "riskAdviceHigh": { "message": "Continue in a new chat now." },
-  "riskAdviceHighConservative": { "message": "High risk based on a conservative local reference. Continue in a new chat now." },
-  "statusUncalibrated": { "message": "Not calibrated" },
-  "statusCalibrating": { "message": "Calibrating" },
-  "statusUnknown": { "message": "Unable to assess" },
-  "statusEnvironmentUnknown": { "message": "Confirming environment" },
-  "statusEnvironmentUnverified": { "message": "Model environment unconfirmed" },
-  "statusStale": { "message": "Reference may be outdated" },
-  "statusUncalibratedHelp": { "message": "Current chat length is recognized. To enable advance warnings, calibrate once with a historical chat you know reached the conversation-length limit." },
-  "statusCalibratingHelp": { "message": "Reading the full chat. Keep this conversation open until calibration finishes." },
-  "statusMeasurementUncertainHelp": { "message": "This page cannot be measured reliably right now, so LongChat Guard will not guess." },
-  "statusEnvironmentUnknownHelp": { "message": "The current model or environment is not observable yet. LongChat Guard will keep risk unknown and automatically restore the calibration if the same environment becomes verifiable." },
-  "statusEnvironmentUnverifiedHelp": { "message": "The current model cannot be reliably confirmed. The bar shows position against your local historical reference, not an official ChatGPT limit." },
-  "statusStaleHelp": { "message": "The current observable environment is confirmed to differ from the calibration environment. Calibrate again before relying on risk levels." },
-  "statusConservativeCalibration": { "message": "Reference established. Model information or other context could not be measured precisely during calibration, so alerts are intentionally more conservative." },
-  "statusGrowthLearning": { "message": "Reference established. LongChat Guard is still learning typical whole-turn growth; until then it only warns at the empirical failure reference." },
-
-  "actionCopyContinuation": { "message": "Copy continuation prompt" },
-  "actionCalibrateThisChat": { "message": "Calibrate with this chat" },
-  "actionCalibrateThisChatHelp": { "message": "Only use a historical chat you know reached the conversation-length limit." },
-  "actionCalibrating": { "message": "Calibrating…" },
-  "actionMeasureCurrentChat": { "message": "Read full current chat" },
-  "actionMeasureCurrentChatHelp": { "message": "Use this to determine the current risk of an older chat. This does not change your alert reference." },
-  "actionMeasuringCurrentChat": { "message": "Reading full chat…" },
-  "measurementNoConversation": { "message": "Open the chat you want to measure, then try again." },
-  "measurementScanIncomplete": { "message": "The full chat could not be read, so this chat's risk was not updated. Keep the page open and try again." },
-  "measurementParserFailed": { "message": "This chat could not be measured reliably because some message roles could not be read." },
-  "measurementScanSuccess": { "message": "Full chat read complete. LongChat Guard can now assess this chat using your existing alert reference." },
-  "measurementConversationChanged": { "message": "The chat changed while it was being read. Nothing was updated; keep this chat open and try again." },
-  "measurementGenerationChanged": { "message": "The alert reference changed while this chat was being read. Nothing was updated; try again." },
-  "measurementSampleUnusable": { "message": "This chat could not be measured reliably enough to determine its current risk." },
-  "measurementScanFailed": { "message": "The full chat could not be read, so this chat's risk was not updated." },
-  "menuMore": { "message": "More" },
-  "actionDismiss": { "message": "Dismiss" },
-  "actionRecalibrate": { "message": "Recalibrate alert reference" },
-  "actionMute": { "message": "Mute this chat" },
-  "actionRestore": { "message": "Restore alerts" },
-
-  "passiveLimitQuestion": { "message": "Possible conversation-length limit detected" },
-  "passiveLimitHelp": { "message": "Use this chat as a calibration sample only if you know this was the conversation-length limit." },
-  "passiveLimitYes": { "message": "Use this chat to calibrate" },
-  "passiveLimitNo": { "message": "Ignore" },
-
-  "consentTitle": { "message": "Enable local long-chat alerts" },
-  "consentLocalRead": { "message": "Reads visible ChatGPT content locally to estimate long-chat risk." },
-  "consentNoUpload": { "message": "Does not upload chat content." },
-  "consentNoRawPersist": { "message": "Does not save raw chat text." },
-  "consentDeleteLocal": { "message": "Uninstall or clear extension data to remove local data." },
-  "consentAccept": { "message": "Agree and start" },
-  "consentDecline": { "message": "Not now" },
-
-  "pillAria": { "message": "Open LongChat Guard" },
-  "pillConsentRequired": { "message": "Consent required" },
-  "pillDisabled": { "message": "Disabled" },
-
-  "continuationPrompt": { "message": "Create a continuation package for a new ChatGPT chat so work can resume without re-analysis. Do not merely retell the conversation and do not invent missing facts. Structure the output as: 1) Current goal and exact stage; 2) Completed work that should not be repeated; 3) Confirmed decisions, tradeoffs, and reasons; 4) Important constraints, user preferences, privacy/safety requirements, compatibility limits, and things not to do; 5) Key working state, including relevant files, paths, repositories/branches/commits, code/configuration, data, platform/account status, versions, URLs, commands, and exact UI copy when they matter; 6) Unresolved issues, known defects, failed attempts, and why they failed; 7) Next actions in priority order, beginning with the first concrete action for the new chat; 8) Risks and pitfalls that could cause duplicated work, data loss, incorrect publishing, rollback, or regressions; 9) Essential verbatim material only when exact wording matters, such as commands, errors, copy, API names, filenames, or IDs. Clearly separate confirmed facts from inference and items that still need verification. Preserve exact names, versions, paths, commit hashes, URLs, and important values. Remove greetings and irrelevant process details, but do not omit context that would change the next action. If code or files are involved, state what was changed, what was tested, what was committed/pushed/published, and what remains uncommitted or pending. Finish with a short 'Continue execution' instruction that tells the new chat to read the package first, preserve the confirmed decisions and constraints, and continue from the listed next action instead of starting over." },
-
-  "toastContinuationCopied": { "message": "Continuation prompt copied" },
-  "toastCopyFailed": { "message": "Copy failed. Please try again." },
-  "toastActionFailed": { "message": "Action failed. Please try again." },
-  "toastRecalibrationStarted": { "message": "Previous reference kept as an outdated prior. Calibrate again before relying on risk levels." },
-  "toastRemindersRestored": { "message": "Alerts restored for this chat" },
-  "toastConversationMuted": { "message": "Alerts muted for this chat" },
-  "toastFailureLearned": { "message": "Calibration evidence saved from this limit event." },
-  "toastFailureIgnored": { "message": "This event was ignored." },
-  "toastMonitoringEnabled": { "message": "Local long-chat alerts enabled" },
-  "toastMonitoringDeferred": { "message": "Not enabled" },
-  "calibrationNoConversation": { "message": "Open the historical chat you know reached the conversation-length limit, then try again." },
-  "calibrationParserFailed": { "message": "Calibration was not saved because message roles could not be read reliably." },
-  "calibrationConservativeSuccess": { "message": "Reference established. This chat includes context that cannot be measured precisely, so alerts will be more conservative." },
-  "calibrationSuccess": { "message": "Calibration complete. The local failure reference is established." },
-  "calibrationConversationChanged": { "message": "The conversation changed while it was being scanned. Nothing was calibrated; keep this chat open and try again." },
-  "calibrationGenerationChanged": { "message": "The alert reference changed while scanning. Nothing was calibrated; try again." },
-  "calibrationSampleUnusable": { "message": "This chat could not be measured reliably enough to use as a calibration sample." },
-  "toastScanFailed": { "message": "Calibration did not finish. No failure reference was saved." },
-
-  "scanNoScroll": { "message": "Conversation scroll area was not found. Refresh and try again." },
-  "scanNoMessages": { "message": "No conversation messages are available yet. Wait for the page to finish loading." },
-  "scanHeadLoading": { "message": "Older history did not finish stabilizing, so calibration was not saved. Keep the page open and try again." },
-  "scanTailChanging": { "message": "The end of the conversation is still changing. Calibration was not saved." },
-  "scanAlignmentFailed": { "message": "Part of the history could not be read continuously, so calibration was stopped instead of guessing." },
-  "scanLimitReached": { "message": "This chat is very long and the full history could not be confirmed. Calibration was not saved." },
-  "scanIncomplete": { "message": "Complete history was not confirmed, so calibration was not saved." }
+  "extensionName": {
+    "message": "LongChat Guard"
+  },
+  "extensionDescription": {
+    "message": "Local ChatGPT long-conversation risk warnings and handoff help; no official quota, no chat upload."
+  },
+  "actionTitle": {
+    "message": "LongChat Guard"
+  },
+  "riskNormal": {
+    "message": "Lower risk"
+  },
+  "riskLong": {
+    "message": "Long"
+  },
+  "riskOrganize": {
+    "message": "Near risk"
+  },
+  "riskHigh": {
+    "message": "High risk"
+  },
+  "labelStatus": {
+    "message": "Status"
+  },
+  "labelRisk": {
+    "message": "Risk"
+  },
+  "labelLowRisk": {
+    "message": "Low risk"
+  },
+  "labelHighRisk": {
+    "message": "High risk"
+  },
+  "riskAdviceNormal": {
+    "message": "This chat is in the lower-risk range."
+  },
+  "riskAdviceLong": {
+    "message": "This chat is getting long. Consider organizing important context."
+  },
+  "riskAdviceOrganize": {
+    "message": "This chat is nearing the risk range. Prepare to continue in a new chat."
+  },
+  "riskAdviceHigh": {
+    "message": "This chat is in the high-risk range. Continue in a new chat soon."
+  },
+  "riskAdviceHighConservative": {
+    "message": "This chat is in the high-risk range. The reference is conservative, so continue in a new chat soon."
+  },
+  "statusUncalibrated": {
+    "message": "Not calibrated"
+  },
+  "statusCalibrating": {
+    "message": "Calibrating"
+  },
+  "statusUnknown": {
+    "message": "Unable to assess"
+  },
+  "statusEnvironmentUnknown": {
+    "message": "Unable to assess"
+  },
+  "statusStale": {
+    "message": "Recalibration needed"
+  },
+  "statusUncalibratedHelp": {
+    "message": "To enable risk alerts, calibrate with a historical chat that reached the conversation-length limit."
+  },
+  "statusCalibratingHelp": {
+    "message": "Reading the full chat. Keep this page open."
+  },
+  "statusMeasurementUncertainHelp": {
+    "message": "This chat has not been read reliably yet. Use “More” to run a full read."
+  },
+  "statusEnvironmentUnknownHelp": {
+    "message": "Measurement is temporarily unavailable. Risk assessment will resume automatically."
+  },
+  "statusStaleHelp": {
+    "message": "The measurement method has changed. Recalibrate to resume risk alerts."
+  },
+  "statusConservativeCalibration": {
+    "message": "Reference established. This chat includes content that cannot be measured precisely, so alerts will be more conservative."
+  },
+  "statusGrowthLearning": {
+    "message": "Reference established. Learning chat growth; until enough samples are available, alerts trigger only at the historical reference."
+  },
+  "actionCopyContinuation": {
+    "message": "Copy continuation prompt"
+  },
+  "actionCalibrateThisChat": {
+    "message": "Calibrate with this chat"
+  },
+  "actionCalibrateThisChatHelp": {
+    "message": "Only use a historical chat you know reached the conversation-length limit."
+  },
+  "actionCalibrating": {
+    "message": "Calibrating…"
+  },
+  "actionMeasureCurrentChat": {
+    "message": "Read full current chat"
+  },
+  "actionMeasuringCurrentChat": {
+    "message": "Reading full chat…"
+  },
+  "measurementNoConversation": {
+    "message": "Open a chat first."
+  },
+  "measurementScanIncomplete": {
+    "message": "Full read incomplete. Risk status was not updated. Keep the page open and try again."
+  },
+  "measurementParserFailed": {
+    "message": "Some messages could not be read reliably. Risk status was not updated."
+  },
+  "measurementScanSuccess": {
+    "message": "Full read complete. Risk status updated."
+  },
+  "measurementConversationChanged": {
+    "message": "The chat changed during the read. Nothing was saved. Try again."
+  },
+  "measurementGenerationChanged": {
+    "message": "The alert reference changed during the read. Try again."
+  },
+  "measurementSampleUnusable": {
+    "message": "This chat cannot be read reliably right now. Risk status was not updated."
+  },
+  "measurementScanFailed": {
+    "message": "Full read failed. Risk status was not updated."
+  },
+  "menuMore": {
+    "message": "More"
+  },
+  "actionDismiss": {
+    "message": "Dismiss"
+  },
+  "actionRecalibrate": {
+    "message": "Recalibrate alert reference"
+  },
+  "actionMute": {
+    "message": "Mute this chat"
+  },
+  "actionRestore": {
+    "message": "Restore alerts"
+  },
+  "passiveLimitQuestion": {
+    "message": "Possible conversation-length limit detected"
+  },
+  "passiveLimitHelp": {
+    "message": "Use this chat as a calibration sample only if you know this was the conversation-length limit."
+  },
+  "passiveLimitYes": {
+    "message": "Use this chat to calibrate"
+  },
+  "passiveLimitNo": {
+    "message": "Ignore"
+  },
+  "consentTitle": {
+    "message": "Enable local long-chat alerts"
+  },
+  "consentLocalRead": {
+    "message": "Reads visible ChatGPT content locally to estimate long-chat risk."
+  },
+  "consentNoUpload": {
+    "message": "Does not upload chat content."
+  },
+  "consentNoRawPersist": {
+    "message": "Does not save raw chat text."
+  },
+  "consentDeleteLocal": {
+    "message": "Uninstall or clear extension data to remove local data."
+  },
+  "consentAccept": {
+    "message": "Agree and start"
+  },
+  "consentDecline": {
+    "message": "Not now"
+  },
+  "pillAria": {
+    "message": "Open LongChat Guard"
+  },
+  "pillConsentRequired": {
+    "message": "Consent required"
+  },
+  "pillDisabled": {
+    "message": "Disabled"
+  },
+  "continuationPrompt": {
+    "message": "Generate a continuation context for the current conversation that can be copied directly into a new chat.\n\nYour task is not to summarize the chat history, and not to generate another prompt that the user must execute again. Instead, directly use all conversation context you currently know, together with any project context you can actually see that is relevant to the current task, to independently judge, select, deduplicate, correct, and organize the information into the final material another GPT can use to take over the work.\n\nAssume the GPT taking over cannot see any other message from the current conversation and will see only this output.\n\nYour goal is to let it recover the real current state of the work as accurately as possible from this material alone and continue from the correct point, without requiring the user to re-explain the background, repeating work that is already finished, retrying approaches that have already been ruled out, or mistaking historical state for current state.\n\n## Core principles\n\nPrioritize transferring the current valid working state, rather than retelling what this conversation once discussed.\n\nJudge information by whether it will affect later understanding, judgment, decisions, or execution, not by how often or how extensively it appeared in the original conversation.\n\nWhen historical content conflicts with later conclusions, prefer the latest valid state that is better supported by evidence and has been confirmed.\n\nDo not keep obsolete information merely for completeness, and do not remove information genuinely needed to continue the work merely for brevity.\n\n## Information you should independently decide to preserve\n\nSelect what is necessary for the actual conversation, including but not limited to:\n\n- the real current goal, task, and problem to solve;\n- project background and context necessary to understand the current work;\n- requirements, boundaries, principles, preferences, quality standards, and non-negotiable constraints explicitly confirmed by the user;\n- important work already completed and its actual current state;\n- important conclusions, decisions, and approaches that have been confirmed;\n- reasons, evidence, or key background necessary to understand those conclusions;\n- directions already shown to be wrong, ineffective, abandoned, or not worth retrying;\n- unresolved problems, blockers, risks, and items still requiring verification;\n- the exact point the work has reached;\n- what should be continued next;\n- when later work depends on concrete technical state, the necessary files, directories, code locations, versions, branches, architecture, interfaces, data structures, configuration, test results, runtime environment, tool state, or other implementation details;\n- important details that are easy to lose when switching chats but would affect later judgment;\n- working methods, decision rules, and behavioral requirements the user has explicitly required future work to continue following.\n\nThe above is not a fixed template that must be output item by item. Decide the structure and information density according to the actual task.\n\n## State accuracy\n\nClearly distinguish:\n\n- confirmed facts;\n- confirmed decisions;\n- hypotheses or judgments that are still currently valid;\n- items that still require verification.\n\nDo not present a hypothesis, possibility, or former suspicion as a confirmed fact.\n\nIf an early judgment was later disproved by evidence, use the latest conclusion. Preserve an explanation of why that wrong direction should not be revisited only when it still matters for future work.\n\nIf the same item went through multiple revisions during the conversation, keep only the currently valid version, adding the key reason for the current state only when necessary.\n\nIf you cannot confirm something, do not fill gaps, guess, or fabricate. Preserve its uncertainty, or omit it when it has no value for continuation.\n\n## Compression rules\n\nActively remove:\n\n- greetings and social content;\n- repeated statements;\n- intermediate versions superseded by later state;\n- discussion process that does not affect future work;\n- temporary issues already resolved that will not affect future work;\n- side details unrelated to the current goal;\n- information included only to retell the chronological order of the chat.\n\nHowever, do not remove the following merely to make the output shorter, even if they take more space:\n\n- constraints that would change future decisions;\n- approaches the user has explicitly rejected;\n- important failed attempts and their confirmed causes;\n- the real current implementation or working state;\n- important risks that are still unverified;\n- information whose absence would likely cause the new chat to repeat a mistake.\n\n## Self-contained requirement\n\nThe final material must be understandable independently of the original conversation.\n\nDo not use vague references that only make sense in the original conversation, such as:\n\n“the thing above”\n“the issue just now”\n“the previous code”\n“the second option”\n“that thing you mentioned earlier”\n\nIf such information matters for continuation, rewrite it explicitly.\n\nDo not assume the new GPT knows anything that happened in the current conversation.\n\n## Optimize for takeover, not review\n\nIf the current work is software development, debugging, research, design, writing, planning, or another ongoing task, prioritize preserving:\n\nthe current state, valid conclusions, constraints, unfinished work, and next actions.\n\nDo not write a chronological meeting-minutes-style review of the conversation.\n\nAfter reading the result, the new GPT should be able to clearly answer:\n\n- what is being worked on now;\n- what the final goal is;\n- why the current direction is being used;\n- what has already been completed;\n- what the real current state is;\n- what has already been confirmed;\n- which conclusions should not be reopened without new evidence;\n- which failed directions should not be retried;\n- what remains uncertain;\n- what work is still unfinished;\n- where to continue next.\n\nIf there is a clear next step, put it at the end of the final material and make it specific enough that the new GPT can immediately continue executing it.\n\n## Output requirements\n\nOutput the final continuation context directly.\n\nDo not generate a second-level prompt.\nDo not ask me to give another prompt back to you for execution.\nDo not answer the current business task itself.\nDo not explain how you performed the organization.\nDo not evaluate the quality of the result.\nDo not add usage instructions.\nDo not ask the user to provide information you already know from the current context.\nDo not mechanically force the result into fixed sections merely for formatting.\nDo not include content with no practical value for continuation.\n\nLet the task complexity determine the output length: simple conversations should be concise, complex projects may be detailed, but every retained detail should serve accurate takeover in the new chat.\n\nNow directly generate the final continuation context."
+  },
+  "toastContinuationCopied": {
+    "message": "Continuation prompt copied"
+  },
+  "toastCopyFailed": {
+    "message": "Copy failed. Please try again."
+  },
+  "toastActionFailed": {
+    "message": "Action failed. Please try again."
+  },
+  "toastRecalibrationStarted": {
+    "message": "Recalibration started. Use a historical limit-hit chat to establish a new reference."
+  },
+  "toastRemindersRestored": {
+    "message": "Alerts restored for this chat"
+  },
+  "toastConversationMuted": {
+    "message": "Alerts turned off for this chat"
+  },
+  "toastFailureLearned": {
+    "message": "This limit event was recorded."
+  },
+  "toastFailureIgnored": {
+    "message": "This event was ignored."
+  },
+  "toastMonitoringEnabled": {
+    "message": "Local long-chat alerts enabled"
+  },
+  "toastMonitoringDeferred": {
+    "message": "Not enabled"
+  },
+  "calibrationNoConversation": {
+    "message": "Open a historical chat you know reached the conversation-length limit."
+  },
+  "calibrationParserFailed": {
+    "message": "Some messages could not be read reliably. Calibration was not saved."
+  },
+  "calibrationConservativeSuccess": {
+    "message": "Calibration complete. This chat includes content that cannot be measured precisely, so alerts will be more conservative."
+  },
+  "calibrationSuccess": {
+    "message": "Calibration complete. Alert reference established."
+  },
+  "calibrationConversationChanged": {
+    "message": "The chat changed during calibration. Nothing was saved. Try again."
+  },
+  "calibrationGenerationChanged": {
+    "message": "The alert reference changed during calibration. Try again."
+  },
+  "calibrationSampleUnusable": {
+    "message": "This chat cannot be read reliably and was not saved as a calibration sample."
+  },
+  "toastScanFailed": {
+    "message": "Calibration did not finish. The alert reference was not updated."
+  },
+  "scanNoScroll": {
+    "message": "Conversation area not found. Refresh and try again."
+  },
+  "scanNoMessages": {
+    "message": "No chat content is available yet. Wait for the page to load and try again."
+  },
+  "scanHeadLoading": {
+    "message": "Older history is still loading. Keep the page open and try again."
+  },
+  "scanTailChanging": {
+    "message": "The chat is still updating. Wait for it to finish and try again."
+  },
+  "scanAlignmentFailed": {
+    "message": "Part of the history could not be read continuously. Calibration stopped."
+  },
+  "scanLimitReached": {
+    "message": "Full history could not be confirmed. Calibration was not saved."
+  },
+  "scanIncomplete": {
+    "message": "Full history could not be confirmed. Calibration was not saved."
+  }
 }

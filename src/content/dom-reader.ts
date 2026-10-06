@@ -34,9 +34,17 @@ export function readConversationHints(doc: Document, url: string): string[] {
     if (canonicalId) hints.push(canonicalId)
   }
 
-  for (const element of doc.querySelectorAll<HTMLElement>('[data-conversation-id]')) {
-    const value = element.getAttribute('data-conversation-id')?.trim()
-    if (value) hints.push(value)
+  for (const root of messageRootElements(doc)) {
+    let current: HTMLElement | null = root
+    for (
+      let depth = 0;
+      current && depth < 12;
+      depth += 1, current = current.parentElement
+    ) {
+      const value =
+        current.getAttribute('data-conversation-id')?.trim()
+      if (value) hints.push(value)
+    }
   }
 
   return Array.from(new Set(hints))
@@ -44,7 +52,6 @@ export function readConversationHints(doc: Document, url: string): string[] {
 
 export function readMessages(doc: Document): PageMessageSnapshot[] {
   const groupedRendererMessages = readTurnKeyMessages(doc)
-  if (groupedRendererMessages.length > 0) return groupedRendererMessages
 
   const primary = Array.from(doc.querySelectorAll<HTMLElement>('[data-message-author-role]'))
   const candidates =
@@ -77,7 +84,19 @@ export function readMessages(doc: Document): PageMessageSnapshot[] {
     messages.push(messageSnapshot)
   })
 
-  return messages
+  if (groupedRendererMessages.length === 0) return messages
+  if (messages.length === 0) return groupedRendererMessages
+  return messageRepresentationScore(messages) > messageRepresentationScore(groupedRendererMessages)
+    ? messages
+    : groupedRendererMessages
+}
+
+function messageRepresentationScore(messages: PageMessageSnapshot[]): number {
+  const userCount = messages.filter((message) => message.role === 'user').length
+  const assistantCount = messages.filter((message) => message.role === 'assistant').length
+  const knownCount = userCount + assistantCount
+  const pairedTurns = Math.min(userCount, assistantCount)
+  return pairedTurns * 1000 + knownCount * 10 + messages.length
 }
 
 function readTurnKeyMessages(doc: Document): PageMessageSnapshot[] {
@@ -85,17 +104,19 @@ function readTurnKeyMessages(doc: Document): PageMessageSnapshot[] {
   if (groups.length === 0) return []
 
   const messages: PageMessageSnapshot[] = []
-  for (const group of groups) {
+  for (const [groupIndex, group] of groups.entries()) {
     const key = group.getAttribute('data-turn-key')?.trim()
     if (!key) continue
 
-    const user = group.querySelector<HTMLElement>('[data-user-message-bubble]')
+    const user = group.querySelector<HTMLElement>(
+      '[data-user-message-bubble], [data-message-author-role="user"], [data-turn="user"]'
+    )
     const userText = user ? readText(user) : ''
     if (user && userText) {
       messages.push(messageSnapshotFromRoots(
         'user',
         userText,
-        messages.length,
+        groupIndex * 2,
         `turn-key:${key}:user`,
         [user]
       ))
@@ -135,7 +156,7 @@ function readTurnKeyMessages(doc: Document): PageMessageSnapshot[] {
       messages.push(messageSnapshotFromRoots(
         'assistant',
         assistantText,
-        messages.length,
+        groupIndex * 2 + 1,
         `turn-key:${key}:assistant`,
         roots
       ))
@@ -176,21 +197,42 @@ function messageSnapshotFromRoots(
 }
 
 export function readComposerText(doc: Document): string {
+  const prompt = findComposerElement(doc)
+  return prompt ? readEditableText(prompt) : ''
+}
+
+export function findComposerElement(doc: Document): HTMLElement | undefined {
   const selectors = [
     '#prompt-textarea',
     '[data-testid="prompt-textarea"]',
+    '[data-testid="chat-input"][contenteditable="true"]',
+    '[data-testid="chat-input"] [contenteditable="true"]',
+    'div.ProseMirror[contenteditable="true"]',
+    'div.ProseMirror[contenteditable="plaintext-only"]',
+    '[contenteditable="true"][role="textbox"]',
+    '[contenteditable="plaintext-only"][role="textbox"]',
     '[aria-label*="Message ChatGPT" i]',
-    '[aria-label*="Ask ChatGPT" i]'
+    '[aria-label*="Ask ChatGPT" i]',
+    '[aria-label*="询问 ChatGPT" i]',
+    '[aria-label*="詢問 ChatGPT" i]',
+    '[placeholder*="询问 ChatGPT" i]',
+    '[placeholder*="詢問 ChatGPT" i]'
   ]
   const prompt = doc.querySelector<HTMLElement>(selectors.join(', '))
-  if (prompt) return readEditableText(prompt)
+  if (prompt) return prompt
 
-  const generic = Array.from(doc.querySelectorAll<HTMLElement>('textarea, [contenteditable="true"], [role="textbox"]'))
+  const generic = Array.from(doc.querySelectorAll<HTMLElement>('textarea, [contenteditable="true"], [contenteditable="plaintext-only"], [role="textbox"]'))
     .find((element) => {
+      if (
+        element.matches('div.ProseMirror[contenteditable="true"], div.ProseMirror[contenteditable="plaintext-only"]') ||
+        element.closest?.('[data-testid="chat-input"], form')
+      ) {
+        return true
+      }
       const label = `${element.id} ${element.getAttribute('aria-label') ?? ''} ${element.getAttribute('placeholder') ?? ''}`
-      return /prompt|message chatgpt|ask chatgpt|send a message/i.test(label)
+      return /prompt|message chatgpt|ask chatgpt|send a message|询问 chatgpt|詢問 chatgpt|向 chatgpt 提问|向 chatgpt 提問|发送消息|傳送訊息/i.test(label)
     })
-  return generic ? readEditableText(generic) : ''
+  return generic
 }
 
 export function readVisibleErrors(doc: Document): string[] {

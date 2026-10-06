@@ -41,7 +41,10 @@ export interface PageAdapterResult {
 
 export function analyzePageSnapshot(snapshot: PageAdapterSnapshot): PageAdapterResult {
   const supported = isSupportedUrl(snapshot.url)
-  const conversationKey = deriveConversationKey(snapshot)
+  const conversationId = resolveConversationId(snapshot)
+  const conversationKey = conversationId
+    ? `chatgpt:${conversationId}`
+    : undefined
   const messages = snapshot.messages
     .filter((message) => message.text.trim().length > 0)
     .sort((a, b) => a.ordinalHint - b.ordinalHint)
@@ -87,16 +90,17 @@ export function analyzePageSnapshot(snapshot: PageAdapterSnapshot): PageAdapterR
   return result
 }
 
-function deriveConversationKey(snapshot: PageAdapterSnapshot): string | undefined {
-  const url = new URL(snapshot.url)
-  const conversationPath = url.pathname.match(/(?:^|\/)c\/([^/?#]+)/)
-  if (conversationPath?.[1]) return `chatgpt:${conversationPath[1]}`
+export function resolveConversationId(
+  snapshot: Pick<PageAdapterSnapshot, 'url' | 'conversationIdHints'>
+): string | undefined {
+  const urlId = parseConversationIdFromUrl(snapshot.url)
+  if (urlId) return urlId
 
   for (const hint of snapshot.conversationIdHints) {
     const normalized = hint.trim()
     const hintPath = parseConversationIdFromUrl(normalized)
-    if (hintPath) return `chatgpt:${hintPath}`
-    if (/^[a-zA-Z0-9_-]{8,}$/.test(normalized)) return `chatgpt:${normalized}`
+    if (hintPath) return hintPath
+    if (/^[a-zA-Z0-9_-]{8,}$/.test(normalized)) return normalized
   }
 
   return undefined

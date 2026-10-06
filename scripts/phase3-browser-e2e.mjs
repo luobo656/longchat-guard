@@ -711,6 +711,33 @@ async function run() {
   assert(calibratedFacts.latestLoad === calibratedFacts.R, 'calibration page load is not equal to empirical reference', calibratedFacts)
   log('EXPLICIT_CALIBRATION_PASS', { ui:afterScanUi.status, facts:calibratedFacts, scrollEvents:afterScanScrolls-beforeScanScrolls })
 
+  if (process.env.LONGCHAT_RS01_ONLY === '1') {
+    await navigate(page, base + '/g/g-fixture/c/project-empty')
+    var rs01GrowthBefore = stateFacts(await getState()).growthCount
+    await sleep(600)
+    var rs01Prompt = 'rs01 project composer birth evidence prompt'
+    await evaluate(page, "(() => { const el=document.querySelector('#composer-input'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set; setter.call(el," + JSON.stringify(rs01Prompt) + "); el.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:" + JSON.stringify(rs01Prompt) + "})); return true })()")
+    await sleep(300)
+    await evaluate(page, "window.__phase3.sendWithoutClick(); true")
+    var rs01Ui = await waitEval(page, uiExpr(), function(value){ return value && /Lower risk|风险较低|風險較低/.test(value.status) }, 12000)
+    var rs01State = await retry(async function(){
+      var state = await getState()
+      var current = restartStateFacts(state, 'project-empty')
+      return current &&
+        current.measurementState === 'complete' &&
+        stateFacts(state).growthCount === rs01GrowthBefore + 1
+        ? state
+        : null
+    }, 12000, 250)
+    var rs01Facts = restartStateFacts(rs01State, 'project-empty')
+    assert(!rs01Ui.trackHidden, 'RS-01 project new chat did not render calibrated risk track', rs01Ui)
+    assert(rs01Facts.measurementState === 'complete', 'RS-01 project new chat was not tracked from first composer activity', rs01Facts)
+    assert(stateFacts(rs01State).growthCount === rs01GrowthBefore + 1, 'RS-01 project new chat lost or duplicated first-turn growth', {before:rs01GrowthBefore,after:stateFacts(rs01State).growthCount})
+    log('PROJECT_NEW_CHAT_COMPOSER_ARM_PASS', { ui:rs01Ui.status, measurement:rs01Facts.measurementState, growthDelta:stateFacts(rs01State).growthCount-rs01GrowthBefore })
+    log('RS01_BROWSER_E2E_PASS')
+    return
+  }
+
   var muteUi = await ui(page)
   if (muteUi.panelHidden) await clickShadow(page, '[data-role="pill"]')
   assert(await nativeClickShadow(page, '[data-role="menu-trigger"]'), 'mute menu trigger was not natively clickable')
@@ -764,12 +791,14 @@ async function run() {
 
   var beforeHistoricalRecovery = stateFacts(await getState())
   await navigate(page, base + '/c/old-history')
-  var oldHistoryUi = await waitEval(page, uiExpr(), function(value){ return value && /Unable to assess|暂时无法判断|暫時無法判斷/.test(value.status) }, 10000)
+  var oldHistoryUi = await waitEval(page, uiExpr(), function(value){ return value && /Unable to assess|暂无法判断|暫無法判斷/.test(value.status) }, 10000)
   assert(oldHistoryUi.trackHidden && oldHistoryUi.scaleHidden, 'unmeasured historical chat rendered a full risk track', oldHistoryUi)
   await clickShadow(page, '[data-role="pill"]')
   oldHistoryUi = await ui(page)
   assert(oldHistoryUi.measureHidden === false, 'historical chat measurement-recovery action missing', oldHistoryUi)
   assert(oldHistoryUi.calibrateHidden, 'ordinary historical chat incorrectly exposed failure-reference calibration', oldHistoryUi)
+  assert(await nativeClickShadow(page, '[data-role="menu-trigger"]'), 'historical chat overflow menu was not natively clickable')
+  await assertOverflowMenuVisible(page, 'historical-measurement-recovery')
   var beforeHistoricalScrolls = await evaluate(page, 'window.__phase3.scrollEvents')
   assert(await nativeClickShadow(page, '[data-action="measure-current"]'), 'historical chat measurement-recovery action was not clickable')
   var recoveredHistoricalState = await retry(async function(){
@@ -781,70 +810,29 @@ async function run() {
   var afterHistoricalRecovery = stateFacts(recoveredHistoricalState)
   var recoveredHistoricalKey = anonymousConversationKey(recoveredHistoricalState, 'old-history')
   var recoveredHistoricalLedger = recoveredHistoricalState.ledgers[recoveredHistoricalKey]
-  var recoveredHistoricalUi = await waitEval(page, uiExpr(), function(value){ return value && /Normal|正常/.test(value.status) }, 15000)
+  var recoveredHistoricalUi = await waitEval(page, uiExpr(), function(value){ return value && /Lower risk|风险较低|風險較低/.test(value.status) }, 15000)
   var afterHistoricalScrolls = await evaluate(page, 'window.__phase3.scrollEvents')
   assert(afterHistoricalRecovery.R === beforeHistoricalRecovery.R, 'historical measurement recovery changed empirical failure reference', {beforeHistoricalRecovery:beforeHistoricalRecovery,afterHistoricalRecovery:afterHistoricalRecovery})
   assert(afterHistoricalRecovery.sampleCount === beforeHistoricalRecovery.sampleCount, 'historical measurement recovery changed calibration samples', {beforeHistoricalRecovery:beforeHistoricalRecovery,afterHistoricalRecovery:afterHistoricalRecovery})
   assert(afterHistoricalRecovery.growthCount === beforeHistoricalRecovery.growthCount, 'historical measurement recovery changed growth samples', {beforeHistoricalRecovery:beforeHistoricalRecovery,afterHistoricalRecovery:afterHistoricalRecovery})
   assert(recoveredHistoricalLedger.currentEstimatedLoad < afterHistoricalRecovery.R, 'old-history fixture was not below the calibrated failure reference', {load:recoveredHistoricalLedger.currentEstimatedLoad,R:afterHistoricalRecovery.R})
   assert(afterHistoricalScrolls > beforeHistoricalScrolls, 'historical measurement recovery did not perform a full-history scan')
-  assert(recoveredHistoricalUi.measureHidden, 'historical measurement-recovery action remained visible after successful recovery', recoveredHistoricalUi)
+  assert(recoveredHistoricalUi.measureHidden === false, 'full-read-current-chat action must remain available after successful recovery', recoveredHistoricalUi)
   log('HISTORICAL_CHAT_MEASUREMENT_RECOVERY_PASS', { ui:recoveredHistoricalUi.status, load:recoveredHistoricalLedger.currentEstimatedLoad, R:afterHistoricalRecovery.R, scrollEvents:afterHistoricalScrolls-beforeHistoricalScrolls })
 
+  var beforeModelHintRemoval = stateFacts(await getState())
   await navigate(page, base + '/c/limit-known')
   await waitEval(page, uiExpr(), function(value){ return value && /High risk|高风险|高風險/.test(value.status) }, 10000)
-
   await evaluate(page, "document.querySelector('[data-testid=\"model-switcher-dropdown-button\"]')?.remove(); true")
-  var missingModelUi = await waitEval(page, uiExpr(), function(value){ return value && /Confirming environment|正在确认环境|正在確認環境/.test(value.status) }, 10000)
-  assert(missingModelUi.trackHidden && missingModelUi.scaleHidden, 'missing model hint still treated the environment as calibrated', missingModelUi)
-  assert(missingModelUi.calibrateHidden, 'transient environment unknown incorrectly asks the user to recalibrate', missingModelUi)
-  var missingModelFacts = stateFacts(await getState())
-  assert(missingModelFacts.R === calibratedFacts.R, 'missing model hint mutated the empirical failure reference', missingModelFacts)
+  var missingModelUi = await waitEval(page, uiExpr(), function(value){ return value && /High risk|高风险|高風險/.test(value.status) }, 10000)
+  var afterModelHintRemoval = stateFacts(await getState())
+  assert(!missingModelUi.trackHidden && !missingModelUi.scaleHidden, 'missing model hint changed calibrated risk-track availability', missingModelUi)
+  assert(afterModelHintRemoval.generationId === beforeModelHintRemoval.generationId, 'model hint removal changed generation', {beforeModelHintRemoval:beforeModelHintRemoval,afterModelHintRemoval:afterModelHintRemoval})
+  assert(afterModelHintRemoval.R === beforeModelHintRemoval.R, 'model hint removal changed empirical failure reference', {beforeModelHintRemoval:beforeModelHintRemoval,afterModelHintRemoval:afterModelHintRemoval})
   await evaluate(page, "(() => { const b=document.createElement('button'); b.setAttribute('data-testid','model-switcher-dropdown-button'); b.textContent='GPT Fixture'; document.querySelector('main')?.prepend(b); return true })()")
   var restoredModelUi = await waitEval(page, uiExpr(), function(value){ return value && /High risk|高风险|高風險/.test(value.status) }, 10000)
-  assert(!restoredModelUi.trackHidden, 'restored model hint did not restore current calibration use', restoredModelUi)
-  log('MODEL_HINT_FAIL_CLOSED_PASS', { missing:missingModelUi.status, restored:restoredModelUi.status })
-
-  var stateBeforeUnverifiedFixture = await getState()
-  await navigate(page, base + '/c/limit-known')
-  await waitEval(page, uiExpr(), function(value){ return value && /High risk|高风险|高風險/.test(value.status) }, 10000)
-  await evaluate(page, "document.querySelector('[data-testid=\"model-switcher-dropdown-button\"]')?.remove(); true")
-  await waitEval(page, uiExpr(), function(value){ return value && /Confirming environment|正在确认环境|正在確認環境/.test(value.status) }, 10000)
-  await clickShadow(page, '[data-role="pill"]')
-  assert(await nativeClickShadow(page, '[data-role="menu-trigger"]'), 'model-unverified menu trigger was not natively clickable')
-  await assertOverflowMenuVisible(page, 'model-unverified')
-  assert(await nativeClickShadow(page, '[data-action="relearn"]'), 'model-unverified fixture could not natively click relearn')
-
-  await waitEval(page, uiExpr(), function(value){ return value && /Reference may be outdated|基准可能失效|基準可能失效/.test(value.status) }, 10000)
-  assert(await clickShadow(page, '[data-action="calibrate"]'), 'model-unverified fixture calibration action missing')
-  var unverifiedCalibrationState = await retry(async function(){
-    var state = await getState()
-    var generation = activeGeneration(state)
-    var failure = generation.samples.find(function(sample){ return sample.empiricalFailureLoad != null })
-    return failure && failure.environmentSignature && !failure.environmentSignature.modelHint ? state : null
-  }, 60000, 500)
-  var unverifiedGeneration = activeGeneration(unverifiedCalibrationState)
-  var unverifiedFailure = unverifiedGeneration.samples.find(function(sample){ return sample.empiricalFailureLoad != null })
-  assert(unverifiedFailure && !unverifiedFailure.environmentSignature.modelHint, 'fixture calibration unexpectedly captured a model hint', unverifiedFailure)
-  var unverifiedHighUi = await waitEval(page, uiExpr(), function(value){ return value && /High risk|高风险|高風險/.test(value.status) }, 15000)
-  assert(!unverifiedHighUi.trackHidden && !unverifiedHighUi.scaleHidden, 'model-unverified high warning did not restore the segmented local-reference track', unverifiedHighUi)
-  assert(unverifiedHighUi.totalSegments === 16 && unverifiedHighUi.activeSegments === 16, 'model-unverified high warning did not fill all sixteen reference segments', unverifiedHighUi)
-
-  await navigate(page, base + '/')
-  var unverifiedPrompt = 'model unverified low-load fixture'
-  await evaluate(page, "(() => { const el=document.querySelector('#prompt-textarea'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set; setter.call(el," + JSON.stringify(unverifiedPrompt) + "); el.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:" + JSON.stringify(unverifiedPrompt) + "})); document.querySelector('#send').click(); return true })()")
-  await waitEval(page, 'location.pathname', function(value){ return value === '/c/new-chat' }, 5000)
-  var unverifiedLowUi = await waitEval(page, uiExpr(), function(value){ return value && /Model environment unconfirmed|模型环境未确认|模型環境未確認/.test(value.status) }, 15000)
-  assert(!/Normal|正常/.test(unverifiedLowUi.status), 'model-unverified low load was incorrectly certified Normal', unverifiedLowUi)
-  assert(!unverifiedLowUi.trackHidden && !unverifiedLowUi.scaleHidden, 'model-unverified low load did not render the segmented local-reference track', unverifiedLowUi)
-  assert(unverifiedLowUi.totalSegments === 16 && unverifiedLowUi.activeSegments > 0 && unverifiedLowUi.activeSegments < 16, 'model-unverified low load did not show an intermediate reference position', unverifiedLowUi)
-  assert(unverifiedLowUi.calibrateHidden, 'model-unverified low load incorrectly asks the user to recalibrate', unverifiedLowUi)
-  log('MODEL_UNVERIFIED_REFERENCE_TRACK_PASS', { low:unverifiedLowUi.status, lowSegments:unverifiedLowUi.activeSegments, high:unverifiedHighUi.status, highSegments:unverifiedHighUi.activeSegments })
-
-  await setStateForFixture(stateBeforeUnverifiedFixture)
-  await navigate(page, base + '/c/limit-known')
-  var restoredFixtureUi = await waitEval(page, uiExpr(), function(value){ return value && /High risk|高风险|高風險/.test(value.status) }, 15000)
-  assert(!restoredFixtureUi.trackHidden, 'fixture state restore did not recover verified calibration before remaining E2E scenarios', restoredFixtureUi)
+  assert(!restoredModelUi.trackHidden, 'restoring model hint changed calibrated risk-track availability', restoredModelUi)
+  log('MODEL_HINT_DIAGNOSTIC_ONLY_PASS', { missing:missingModelUi.status, restored:restoredModelUi.status })
 
   await navigate(page, base + '/c/sequence-live')
   await retry(async function(){
@@ -866,7 +854,7 @@ async function run() {
   await navigate(page, base + '/')
   var growthBefore = stateFacts(await getState()).growthCount
   var promptText = 'phase3 ordinary new chat prompt'
-  await evaluate(page, "(() => { const el=document.querySelector('#prompt-textarea'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set; setter.call(el," + JSON.stringify(promptText) + "); el.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:" + JSON.stringify(promptText) + "})); return el.value; })()")
+  await evaluate(page, "(() => { const el=document.querySelector('#composer-input'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set; setter.call(el," + JSON.stringify(promptText) + "); el.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:" + JSON.stringify(promptText) + "})); return el.value; })()")
   await sleep(300)
   await evaluate(page, "document.querySelector('#send').click(); true")
   await waitEval(page, 'location.pathname', function(value){ return value === '/c/new-chat' }, 5000)
@@ -881,9 +869,32 @@ async function run() {
   assert(lastGrowth && lastGrowth.delta === lastGrowth.afterLoad-lastGrowth.beforeLoad && lastGrowth.delta > 0, 'turn-growth sample is not a valid before/after delta', lastGrowth)
   log('NEW_CHAT_SEND_PASS', { growth:lastGrowth, facts:growthAfter })
 
+  await navigate(page, base + '/g/g-fixture/c/project-empty')
+  var projectComposerGrowthBefore = stateFacts(await getState()).growthCount
+  await sleep(600)
+  var projectComposerPrompt = 'phase3 project composer birth evidence prompt'
+  await evaluate(page, "(() => { const el=document.querySelector('#composer-input'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set; setter.call(el," + JSON.stringify(projectComposerPrompt) + "); el.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:" + JSON.stringify(projectComposerPrompt) + "})); return true })()")
+  await sleep(300)
+  await evaluate(page, "window.__phase3.sendWithoutClick(); true")
+  var projectComposerUi = await waitEval(page, uiExpr(), function(value){ return value && /Lower risk|风险较低|風險較低/.test(value.status) }, 12000)
+  var projectComposerState = await retry(async function(){
+    var state = await getState()
+    var current = restartStateFacts(state, 'project-empty')
+    return current &&
+      current.measurementState === 'complete' &&
+      stateFacts(state).growthCount === projectComposerGrowthBefore + 1
+      ? state
+      : null
+  }, 12000, 250)
+  var projectComposerFacts = restartStateFacts(projectComposerState, 'project-empty')
+  assert(!projectComposerUi.trackHidden, 'project composer birth evidence did not render calibrated track', projectComposerUi)
+  assert(projectComposerFacts.measurementState === 'complete', 'project composer birth evidence did not establish complete measurement', projectComposerFacts)
+  assert(stateFacts(projectComposerState).growthCount === projectComposerGrowthBefore + 1, 'project composer birth evidence lost or duplicated first-turn growth', {before:projectComposerGrowthBefore,after:stateFacts(projectComposerState).growthCount})
+  log('PROJECT_NEW_CHAT_COMPOSER_ARM_PASS', { ui:projectComposerUi.status, measurement:projectComposerFacts.measurementState, growthDelta:stateFacts(projectComposerState).growthCount-projectComposerGrowthBefore })
+
   var marker = 'PHASE3_DRAFT_SECRET_' + Date.now() + '_'
   var draft = marker + 'x'.repeat(Math.max(50000, calibratedFacts.R * 8))
-  await evaluate(page, "(() => { const el=document.querySelector('#prompt-textarea'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set; setter.call(el," + JSON.stringify(draft) + "); el.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'x'})); return el.value.length; })()")
+  await evaluate(page, "(() => { const el=document.querySelector('#composer-input'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set; setter.call(el," + JSON.stringify(draft) + "); el.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'x'})); return el.value.length; })()")
   var draftUi = await waitEval(page, uiExpr(), function(value){ return value && /High risk|高风险|高風險/.test(value.status) }, 10000)
   var storageAfterDraft = JSON.stringify(await getState())
   assert(storageAfterDraft.indexOf(marker) < 0, 'raw Composer draft persisted to storage')
@@ -944,7 +955,7 @@ async function run() {
   await browser.send('Target.activateTarget', { targetId:created.targetId })
 
   await navigate(page, base + '/c/parser-broken')
-  var parserUi = await waitEval(page, uiExpr(), function(value){ return value && /Unable to assess|暂时无法判断|暫時無法判斷/.test(value.status) }, 10000)
+  var parserUi = await waitEval(page, uiExpr(), function(value){ return value && /Unable to assess|暂无法判断|暫無法判斷/.test(value.status) }, 10000)
   assert(parserUi.trackHidden && parserUi.scaleHidden, 'parser failure still rendered full risk track', parserUi)
   log('PARSER_FAIL_CLOSED_PASS', parserUi.status)
 
@@ -964,12 +975,12 @@ async function run() {
   assert(relearnFacts.R === null, 'relearn kept current usable R', relearnFacts)
   assert(relearnFacts.growthCount === 0, 'relearn carried current whole-turn G into new generation', relearnFacts)
   assert(relearnFacts.warmPrior && relearnFacts.warmPrior.failureReference && relearnFacts.warmPrior.failureReference.load === calibratedFacts.R, 'relearn did not keep old R only as stale prior', relearnFacts)
-  var staleUi = await waitEval(page, uiExpr(), function(value){ return value && /Reference may be outdated|基准可能失效|基準可能失效/.test(value.status) }, 10000)
+  var staleUi = await waitEval(page, uiExpr(), function(value){ return value && /Recalibration needed|需要重新校准|需要重新校準/.test(value.status) }, 10000)
   assert(staleUi.trackHidden && staleUi.scaleHidden, 'stale relearn generation rendered full risk track', staleUi)
   log('RELEARN_PASS', { ui:staleUi.status, facts:relearnFacts })
 
   await navigate(page, base + '/c/limit-attachment')
-  await waitEval(page, uiExpr(), function(value){ return value && /Reference may be outdated|基准可能失效|基準可能失效/.test(value.status) }, 10000)
+  await waitEval(page, uiExpr(), function(value){ return value && /Recalibration needed|需要重新校准|需要重新校準/.test(value.status) }, 10000)
   await clickShadow(page, '[data-role="pill"]')
   assert(await clickShadow(page, '[data-action="calibrate"]'), 'conservative calibration action missing')
   var conservativeState = await retry(async function(){

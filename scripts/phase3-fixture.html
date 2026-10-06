@@ -10,7 +10,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#fafafa}
 [data-user-message-bubble]{font-weight:600}
 [data-markdown-text-style="assistant-message"]{margin-top:8px}
 #composer{padding:12px;display:flex;gap:8px}
-#prompt-textarea{width:80%;height:80px}
+#composer-input{width:80%;height:80px}
 </style>
 </head>
 <body>
@@ -18,17 +18,17 @@ body{margin:0;font-family:system-ui,sans-serif;background:#fafafa}
 <button data-testid="model-switcher-dropdown-button">GPT Fixture</button>
 <div id="timeline" data-app-action-timeline-scroll></div>
 <form id="composer" onsubmit="return false">
-<textarea id="prompt-textarea" data-testid="prompt-textarea" aria-label="Message ChatGPT"></textarea>
-<button type="button" id="send" data-testid="send-button" aria-label="Send message">Send</button>
+<textarea id="composer-input" placeholder="询问 ChatGPT"></textarea>
+<button type="button" id="send" aria-label="发送提示词">Send</button>
 </form>
 </main>
 <script>
 (function(){
   var timeline=document.getElementById('timeline');
-  var prompt=document.getElementById('prompt-textarea');
+  var prompt=document.getElementById('composer-input');
   var send=document.getElementById('send');
   var seq=0;
-  window.__phase3={scrollEvents:0,sends:0,externalMutations:0};
+  window.__phase3={scrollEvents:0,sends:0,externalMutations:0,rendererTransitionMode:false,postSettleParserLossMode:false,transientWeakTurnMode:false};
   timeline.addEventListener('scroll',function(){window.__phase3.scrollEvents+=1});
 
   function addTurn(id,userText,assistantText,opts){
@@ -44,7 +44,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#fafafa}
       turn.appendChild(unknown);
     } else {
       var user=document.createElement('div');
-      user.setAttribute('data-user-message-bubble','');
+      user.setAttribute('data-message-author-role','user');
       user.setAttribute('data-message-id',id+'-u');
       user.textContent=userText;
       if(opts.attachment){
@@ -106,17 +106,39 @@ body{margin:0;font-family:system-ui,sans-serif;background:#fafafa}
     }
   } else if(p==='/c/shared'){
     addTurn('shared-0','Shared conversation user content','Shared conversation assistant content');
-  } else if(p!=='/'){
+  } else if(p==='/g/g-fixture/c/project-empty'){
+    // Project chats can load with a preassigned conversation route before
+    // the first user message exists. Keep this surface intentionally empty.
+  } else if(p!=='/' && p!=='/g/g-fixture'){
     addTurn('first-0','Short user message','Short assistant answer');
   }
 
-  send.addEventListener('click',function(){
+  if(sessionStorage.getItem('phase3-parser-loss-on-load')==='1'){
+    sessionStorage.removeItem('phase3-parser-loss-on-load');
+    timeline.querySelectorAll('[data-turn-key]').forEach(function(node){
+      node.removeAttribute('data-turn-key');
+    });
+    timeline.querySelectorAll('[data-message-author-role]').forEach(function(node){
+      node.removeAttribute('data-message-author-role');
+    });
+    timeline.querySelectorAll('[data-markdown-text-style]').forEach(function(node){
+      node.removeAttribute('data-markdown-text-style');
+    });
+  }
+
+  function performSend(){
     var text=prompt.value.trim();
     if(!text)return;
     window.__phase3.sends+=1;
     var id='sent-'+Date.now();
-    if(location.pathname==='/')history.pushState({},'','/c/new-chat');
-    var turn=addTurn(id,text,'');
+    if(location.pathname==='/' || location.pathname==='/g/g-fixture'){
+      var nextId=window.__phase3.nextConversationId||'new-chat';
+      window.__phase3.nextConversationId='';
+      var prefix=location.pathname==='/g/g-fixture'?'/g/g-fixture':'';
+      history.pushState({},'',prefix+'/c/'+nextId);
+    }
+    var transientWeakTurn=window.__phase3.transientWeakTurnMode===true;
+    var turn=addTurn(id,text,'',transientWeakTurn?{unknownRole:true}:undefined);
     prompt.value='';
     prompt.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'deleteContentBackward'}));
     var stop=document.createElement('button');
@@ -133,8 +155,44 @@ body{margin:0;font-family:system-ui,sans-serif;background:#fafafa}
       turn.appendChild(assistant);
       stop.remove();
       timeline.scrollTop=timeline.scrollHeight;
+      if(window.__phase3.rendererTransitionMode){
+        setTimeout(function(){
+          var user=turn.querySelector('[data-message-author-role="user"]');
+          if(user){
+            timeline.insertBefore(user,turn);
+          }
+          window.__phase3.rendererTransitionMode=false;
+          timeline.scrollTop=timeline.scrollHeight;
+        },700);
+      }
+      if(window.__phase3.postSettleParserLossMode){
+        setTimeout(function(){
+          turn.removeAttribute('data-turn-key');
+          turn.querySelectorAll('[data-message-author-role]').forEach(function(node){
+            node.removeAttribute('data-message-author-role');
+          });
+          turn.querySelectorAll('[data-markdown-text-style]').forEach(function(node){
+            node.removeAttribute('data-markdown-text-style');
+          });
+          window.__phase3.postSettleParserLossMode=false;
+          timeline.scrollTop=timeline.scrollHeight;
+        },900);
+      }
+      if(transientWeakTurn){
+        setTimeout(function(){
+          var weakUser=turn.querySelector('[data-message-author-role="mystery"]');
+          if(weakUser){
+            weakUser.setAttribute('data-message-author-role','user');
+            weakUser.setAttribute('data-user-message-bubble','');
+          }
+          window.__phase3.transientWeakTurnMode=false;
+          timeline.scrollTop=timeline.scrollHeight;
+        },1800);
+      }
     },500);
-  });
+  }
+  window.__phase3.sendWithoutClick=performSend;
+  send.addEventListener('click',performSend);
   setTimeout(function(){timeline.scrollTop=timeline.scrollHeight},0);
 })();
 </script>

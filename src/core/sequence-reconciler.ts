@@ -85,10 +85,14 @@ function matchObservedWindow(
   const used = new Set<string>()
   const records: MessageRecord[] = []
   let searchStart = 0
+  const ordinalRoleBridgeAllowed = canBridgeByOrdinalRole(activeRecords, observed)
   for (const [index, item] of observed.entries()) {
     const match =
       matchByStableHint(activeRecords, item, used) ??
-      matchByOrderedContent(activeRecords, item, used, searchStart)
+      matchByOrderedContent(activeRecords, item, used, searchStart) ??
+      (ordinalRoleBridgeAllowed
+        ? matchByOrdinalRole(activeRecords, item, used)
+        : undefined)
     if (match) {
       used.add(match.fingerprint)
       searchStart = Math.max(searchStart, activeRecords.findIndex((record) => record.fingerprint === match.fingerprint) + 1)
@@ -134,6 +138,53 @@ function matchByOrderedContent(
   return records.slice(searchStart).find((record) => {
     return (
       record.contentFingerprint === observed.contentFingerprint &&
+      record.role === observed.role &&
+      !used.has(record.fingerprint)
+    )
+  })
+}
+
+function canBridgeByOrdinalRole(
+  records: MessageRecord[],
+  observed: ObservedMessageRecord[]
+): boolean {
+  if (records.length === 0 || records.length !== observed.length) return false
+  const aligned = records.every((record, index) => {
+    const item = observed[index]
+    return (
+      item !== undefined &&
+      record.ordinalHint !== undefined &&
+      item.ordinalHint !== undefined &&
+      record.ordinalHint === item.ordinalHint &&
+      record.role === item.role
+    )
+  })
+  if (!aligned) return false
+  return records.some((record, index) => {
+    const item = observed[index]
+    return Boolean(
+      item &&
+      (
+        record.contentFingerprint === item.contentFingerprint ||
+        (
+          record.stableHintHash &&
+          item.stableHintHash &&
+          record.stableHintHash === item.stableHintHash
+        )
+      )
+    )
+  })
+}
+
+function matchByOrdinalRole(
+  records: MessageRecord[],
+  observed: ObservedMessageRecord,
+  used: Set<string>
+): MessageRecord | undefined {
+  if (observed.ordinalHint === undefined) return undefined
+  return records.find((record) => {
+    return (
+      record.ordinalHint === observed.ordinalHint &&
       record.role === observed.role &&
       !used.has(record.fingerprint)
     )

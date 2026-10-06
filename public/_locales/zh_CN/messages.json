@@ -1,100 +1,263 @@
 {
-  "extensionName": { "message": "LongChat Guard · 长会话预警" },
-  "extensionDescription": { "message": "ChatGPT 长会话风险提醒与本地趋势监测；不显示官方额度，不上传聊天正文。" },
-  "actionTitle": { "message": "LongChat Guard" },
-
-  "riskNormal": { "message": "正常" },
-  "riskLong": { "message": "偏长" },
-  "riskOrganize": { "message": "接近风险" },
-  "riskHigh": { "message": "高风险" },
-
-  "labelStatus": { "message": "状态" },
-  "labelRisk": { "message": "风险" },
-  "labelLowRisk": { "message": "低风险" },
-  "labelHighRisk": { "message": "高风险" },
-  "riskAdviceLong": { "message": "会话已经偏长，可考虑整理重要内容。" },
-  "riskAdviceOrganize": { "message": "建议尽快准备续接到新会话。" },
-  "riskAdviceHigh": { "message": "建议现在续接到新会话。" },
-  "riskAdviceHighConservative": { "message": "根据保守的本地参考，此会话已进入高风险，建议现在续接到新会话。" },
-  "statusUncalibrated": { "message": "未校准" },
-  "statusCalibrating": { "message": "正在校准" },
-  "statusUnknown": { "message": "暂时无法判断" },
-  "statusEnvironmentUnknown": { "message": "正在确认环境" },
-  "statusEnvironmentUnverified": { "message": "模型环境未确认" },
-  "statusStale": { "message": "基准可能失效" },
-  "statusUncalibratedHelp": { "message": "当前会话长度已识别。要获得提前预警，请用一个你确认曾达到会话长度上限的历史会话完成一次校准。" },
-  "statusCalibratingHelp": { "message": "正在读取完整历史，请保持当前会话页面打开，直到校准完成。" },
-  "statusMeasurementUncertainHelp": { "message": "当前页面暂时无法可靠测量，LongChat Guard 不会用不完整信息猜测风险。" },
-  "statusEnvironmentUnknownHelp": { "message": "当前模型或环境信息暂时无法可靠读取。LongChat Guard 会保持风险未知；如果随后能确认仍是原校准环境，会自动恢复校准状态，无需重新校准。" },
-  "statusEnvironmentUnverifiedHelp": { "message": "当前模型无法可靠确认。进度条表示相对本地历史参考的位置，不代表 ChatGPT 官方会话额度。" },
-  "statusStaleHelp": { "message": "已确认当前可观测环境与原校准环境不同。重新校准前不会输出确定性的风险结论。" },
-  "statusConservativeCalibration": { "message": "基准已建立。校准时模型信息或其他上下文无法精确读取，后续提醒会更保守。" },
-  "statusGrowthLearning": { "message": "基准已建立，正在学习整轮会话的典型增长。在样本足够前，仅在经验失败参考处提醒。" },
-
-  "actionCopyContinuation": { "message": "复制续接提示词" },
-  "actionCalibrateThisChat": { "message": "用此会话校准" },
-  "actionCalibrateThisChatHelp": { "message": "仅用于你确认曾达到会话长度上限的历史会话。" },
-  "actionCalibrating": { "message": "正在校准…" },
-  "actionMeasureCurrentChat": { "message": "完整读取当前会话" },
-  "actionMeasureCurrentChatHelp": { "message": "用于确定这个旧会话的当前风险，不会修改提醒基准。" },
-  "actionMeasuringCurrentChat": { "message": "正在读取完整会话…" },
-  "measurementNoConversation": { "message": "请先打开需要判断的会话，然后重试。" },
-  "measurementScanIncomplete": { "message": "未能完整读取当前会话，因此没有更新此会话的风险判断。请保持页面打开后重试。" },
-  "measurementParserFailed": { "message": "部分消息角色无法可靠识别，因此暂时不能确定此会话的当前风险。" },
-  "measurementScanSuccess": { "message": "当前会话已完整读取，现在可以结合已有提醒基准判断此会话风险。" },
-  "measurementConversationChanged": { "message": "读取过程中会话发生了变化，因此没有更新结果。请保持当前会话打开后重试。" },
-  "measurementGenerationChanged": { "message": "读取过程中提醒基准发生了变化，因此没有更新结果。请重试。" },
-  "measurementSampleUnusable": { "message": "这个会话暂时无法被可靠测量，因此不能确定当前风险。" },
-  "measurementScanFailed": { "message": "未能完整读取当前会话，因此没有更新此会话的风险判断。" },
-  "menuMore": { "message": "更多" },
-  "actionDismiss": { "message": "关闭" },
-  "actionRecalibrate": { "message": "重新校准提醒基准" },
-  "actionMute": { "message": "本会话不提醒" },
-  "actionRestore": { "message": "恢复提醒" },
-
-  "passiveLimitQuestion": { "message": "检测到可能的会话长度上限" },
-  "passiveLimitHelp": { "message": "只有当你确认这次确实是会话长度上限时，才用此会话作为校准样本。" },
-  "passiveLimitYes": { "message": "用此会话校准" },
-  "passiveLimitNo": { "message": "忽略" },
-
-  "consentTitle": { "message": "启用本地长会话预警" },
-  "consentLocalRead": { "message": "仅在本机读取当前 ChatGPT 页面内容用于长会话趋势判断。" },
-  "consentNoUpload": { "message": "不上传聊天内容。" },
-  "consentNoRawPersist": { "message": "不保存聊天正文。" },
-  "consentDeleteLocal": { "message": "可通过卸载扩展或清除扩展数据删除本地数据。" },
-  "consentAccept": { "message": "同意并开始" },
-  "consentDecline": { "message": "暂不开启" },
-
-  "pillAria": { "message": "打开 LongChat Guard" },
-  "pillConsentRequired": { "message": "需要同意" },
-  "pillDisabled": { "message": "未启用" },
-
-  "continuationPrompt": { "message": "请把当前对话整理成一份可直接带到新 ChatGPT 会话的“续接包”，让我无需重新分析就能继续执行。不要简单复述聊天记录，也不要编造未确认内容。请按以下结构输出：1）当前目标：最终要完成什么，以及现在处于哪个准确阶段；2）已完成工作：已经做完、已经验证、无需重复的事项；3）已确认决定：已经定下的方案、取舍、版本和原因；4）重要约束：必须遵守的要求、用户偏好、隐私/安全要求、兼容性限制，以及明确不能做的事；5）关键工作状态：相关文件、路径、仓库/分支/提交、代码/配置、数据、平台或账号状态、版本号、URL、命令、关键数值和必须保持一致的界面文案；6）未解决问题：剩余问题、已知缺陷、失败尝试及失败原因；7）下一步：按优先级列出具体动作，并明确新会话第一步应该做什么；8）风险与易踩坑：可能导致重复劳动、数据丢失、错误发布、回滚或功能退化的事项；9）必要原文：只有在必须逐字保留时才收录命令、错误信息、文案、接口名、文件名、ID 等。请明确区分“已确认事实 / 推断 / 待验证”，不确定的内容必须标记。保留准确名称、版本号、路径、提交哈希、URL 和重要数值；删除寒暄与无关过程，但不要遗漏会改变下一步行动的上下文。如果涉及代码或文件，请明确哪些已经修改、哪些已经测试、哪些已经提交/推送/发布，以及哪些仍未提交或待审核。最后附上一段简短的“继续执行指令”，要求新会话先读完本续接包，保持已确认的决定和约束，并直接从下一步继续，不要从头重新分析。" },
-
-  "toastContinuationCopied": { "message": "续接提示词已复制" },
-  "toastCopyFailed": { "message": "复制失败，请手动重试" },
-  "toastActionFailed": { "message": "操作失败，请稍后重试" },
-  "toastRecalibrationStarted": { "message": "旧参考已作为过期先验保留。重新校准前不会依赖它输出确定风险。" },
-  "toastRemindersRestored": { "message": "已恢复本会话提醒" },
-  "toastConversationMuted": { "message": "本会话已静音" },
-  "toastFailureLearned": { "message": "已保存这次长度上限事件的校准证据" },
-  "toastFailureIgnored": { "message": "已忽略这次事件" },
-  "toastMonitoringEnabled": { "message": "已启用本地长会话预警" },
-  "toastMonitoringDeferred": { "message": "暂不开启" },
-  "calibrationNoConversation": { "message": "请先打开一个你确认曾达到会话长度上限的历史会话，再执行校准。" },
-  "calibrationParserFailed": { "message": "消息角色无法可靠识别，本次校准未保存。" },
-  "calibrationConservativeSuccess": { "message": "基准已建立。此会话包含无法精确计量的上下文，后续提醒会更保守。" },
-  "calibrationSuccess": { "message": "校准完成，本地经验失败参考已建立。" },
-  "calibrationConversationChanged": { "message": "扫描期间会话发生变化，本次未写入校准。请保持此会话页面打开后重试。" },
-  "calibrationGenerationChanged": { "message": "扫描期间提醒基准发生变化，本次未写入校准，请重试。" },
-  "calibrationSampleUnusable": { "message": "这个会话无法被可靠测量，因此没有作为校准样本保存。" },
-  "toastScanFailed": { "message": "校准未完成，没有写入失败参考。" },
-
-  "scanNoScroll": { "message": "没有找到会话滚动区域，请刷新页面后再试" },
-  "scanNoMessages": { "message": "暂时没有读取到会话消息，请等待页面加载完成后再试" },
-  "scanHeadLoading": { "message": "更早的历史消息仍未加载稳定，本次校准未保存。请保持页面打开后重试。" },
-  "scanTailChanging": { "message": "会话末尾仍在变化，本次校准未保存。" },
-  "scanAlignmentFailed": { "message": "部分历史消息没有连续读到，已停止校准，不会用不完整信息猜测。" },
-  "scanLimitReached": { "message": "会话很长，未能确认完整历史，本次校准未保存。" },
-  "scanIncomplete": { "message": "未确认完整历史，本次校准未保存。" }
+  "extensionName": {
+    "message": "LongChat Guard · 长会话预警"
+  },
+  "extensionDescription": {
+    "message": "ChatGPT 长会话风险提醒与续接辅助；本地处理，不显示官方额度，不上传聊天正文。"
+  },
+  "actionTitle": {
+    "message": "LongChat Guard"
+  },
+  "riskNormal": {
+    "message": "风险较低"
+  },
+  "riskLong": {
+    "message": "偏长"
+  },
+  "riskOrganize": {
+    "message": "接近风险"
+  },
+  "riskHigh": {
+    "message": "高风险"
+  },
+  "labelStatus": {
+    "message": "状态"
+  },
+  "labelRisk": {
+    "message": "风险"
+  },
+  "labelLowRisk": {
+    "message": "低风险"
+  },
+  "labelHighRisk": {
+    "message": "高风险"
+  },
+  "riskAdviceNormal": {
+    "message": "当前会话处于较低风险区。"
+  },
+  "riskAdviceLong": {
+    "message": "会话已偏长，建议整理重要内容。"
+  },
+  "riskAdviceOrganize": {
+    "message": "已接近风险区，建议准备续接新会话。"
+  },
+  "riskAdviceHigh": {
+    "message": "已进入高风险区，建议尽快续接新会话。"
+  },
+  "riskAdviceHighConservative": {
+    "message": "已进入高风险区。由于参考更保守，建议尽快续接新会话。"
+  },
+  "statusUncalibrated": {
+    "message": "未校准"
+  },
+  "statusCalibrating": {
+    "message": "正在校准"
+  },
+  "statusUnknown": {
+    "message": "暂无法判断"
+  },
+  "statusEnvironmentUnknown": {
+    "message": "暂无法判断"
+  },
+  "statusStale": {
+    "message": "需要重新校准"
+  },
+  "statusUncalibratedHelp": {
+    "message": "要启用风险提醒，请用一个已达到长度上限的历史会话完成校准。"
+  },
+  "statusCalibratingHelp": {
+    "message": "正在完整读取会话，请保持此页面打开。"
+  },
+  "statusMeasurementUncertainHelp": {
+    "message": "当前会话尚未完成可靠读取。可从“···”中重新完整读取。"
+  },
+  "statusEnvironmentUnknownHelp": {
+    "message": "当前测量暂不可用，恢复后会自动继续判断。"
+  },
+  "statusStaleHelp": {
+    "message": "测量方式已更新，请重新校准后继续使用风险提醒。"
+  },
+  "statusConservativeCalibration": {
+    "message": "基准已建立。该会话含无法精确计量的内容，提醒会更保守。"
+  },
+  "statusGrowthLearning": {
+    "message": "基准已建立，正在学习会话增长。样本充足前，仅在达到历史参考时提醒。"
+  },
+  "actionCopyContinuation": {
+    "message": "复制续接提示词"
+  },
+  "actionCalibrateThisChat": {
+    "message": "用此会话校准"
+  },
+  "actionCalibrateThisChatHelp": {
+    "message": "仅用于你确认已达到会话长度上限的历史会话。"
+  },
+  "actionCalibrating": {
+    "message": "正在校准…"
+  },
+  "actionMeasureCurrentChat": {
+    "message": "完整读取当前会话"
+  },
+  "actionMeasuringCurrentChat": {
+    "message": "正在完整读取…"
+  },
+  "measurementNoConversation": {
+    "message": "请先打开一个会话。"
+  },
+  "measurementScanIncomplete": {
+    "message": "未能完整读取，风险状态未更新。请保持页面打开后重试。"
+  },
+  "measurementParserFailed": {
+    "message": "部分消息无法可靠识别，风险状态未更新。"
+  },
+  "measurementScanSuccess": {
+    "message": "完整读取完成，风险状态已更新。"
+  },
+  "measurementConversationChanged": {
+    "message": "读取期间会话发生变化，结果未保存。请重试。"
+  },
+  "measurementGenerationChanged": {
+    "message": "读取期间提醒基准发生变化，请重试。"
+  },
+  "measurementSampleUnusable": {
+    "message": "当前会话暂无法可靠读取，风险状态未更新。"
+  },
+  "measurementScanFailed": {
+    "message": "完整读取失败，风险状态未更新。"
+  },
+  "menuMore": {
+    "message": "更多"
+  },
+  "actionDismiss": {
+    "message": "关闭"
+  },
+  "actionRecalibrate": {
+    "message": "重新校准提醒基准"
+  },
+  "actionMute": {
+    "message": "本会话不提醒"
+  },
+  "actionRestore": {
+    "message": "恢复提醒"
+  },
+  "passiveLimitQuestion": {
+    "message": "检测到可能的会话长度上限"
+  },
+  "passiveLimitHelp": {
+    "message": "只有当你确认这次确实是会话长度上限时，才用此会话作为校准样本。"
+  },
+  "passiveLimitYes": {
+    "message": "用此会话校准"
+  },
+  "passiveLimitNo": {
+    "message": "忽略"
+  },
+  "consentTitle": {
+    "message": "启用本地长会话预警"
+  },
+  "consentLocalRead": {
+    "message": "仅在本机读取当前 ChatGPT 页面内容用于长会话趋势判断。"
+  },
+  "consentNoUpload": {
+    "message": "不上传聊天内容。"
+  },
+  "consentNoRawPersist": {
+    "message": "不保存聊天正文。"
+  },
+  "consentDeleteLocal": {
+    "message": "可通过卸载扩展或清除扩展数据删除本地数据。"
+  },
+  "consentAccept": {
+    "message": "同意并开始"
+  },
+  "consentDecline": {
+    "message": "暂不开启"
+  },
+  "pillAria": {
+    "message": "打开 LongChat Guard"
+  },
+  "pillConsentRequired": {
+    "message": "需要同意"
+  },
+  "pillDisabled": {
+    "message": "未启用"
+  },
+  "continuationPrompt": {
+    "message": "请为当前会话生成一份可直接复制到新会话使用的“续接上下文”。\n\n你的任务不是总结聊天记录，也不是生成另一个需要再次执行的提示词，而是直接利用你当前已经掌握的全部会话上下文，以及你实际可见且与当前任务有关的项目上下文，自主完成判断、筛选、去重、校正和整理，输出最终可供另一个 GPT 接管工作的内容。\n\n假设接手的新 GPT 看不到当前会话中的任何其他消息，只能看到你这一次输出。\n\n你的目标是让它仅凭这份内容，就能尽可能准确地恢复当前工作的真实状态，从正确的位置继续，而不需要用户重新解释背景，不重复已经完成的工作，不重新尝试已经排除的方案，也不误把历史状态当成当前状态。\n\n## 核心原则\n\n优先迁移“当前有效的工作状态”，而不是复述“这个会话曾经聊过什么”。\n\n信息的重要性由它是否会影响后续理解、判断、决策或执行决定，而不是由它在原会话中出现的次数或篇幅决定。\n\n当历史内容与后来的结论发生冲突时，以最新、证据更充分、已经确认的有效状态为准。\n\n不要为了完整而保留已经失效的信息，也不要为了简短而删除后续继续工作真正需要的信息。\n\n## 你需要自主判断并保留的内容\n\n根据当前会话实际情况选择必要内容，包括但不限于：\n\n- 当前真正的目标、任务以及要解决的问题；\n- 理解当前工作所必需的项目背景和上下文；\n- 用户已经明确确认的需求、边界、原则、偏好、质量标准和不可违反的约束；\n- 已经完成的重要工作以及当前真实状态；\n- 已经确认的重要结论、决策和方案；\n- 理解这些结论所必需的原因、证据或关键背景；\n- 已经验证为错误、无效、废弃或不应再次尝试的方向；\n- 当前仍未解决的问题、阻塞点、风险和待验证事项；\n- 当前工作具体进行到了什么位置；\n- 下一步应当直接继续什么；\n- 如果后续工作依赖具体技术状态，应保留必要的文件、目录、代码位置、版本、分支、架构、接口、数据结构、配置、测试结果、运行环境、工具状态或其他实现信息；\n- 容易因为切换会话而丢失、但会影响后续判断的重要细节；\n- 用户明确要求后续继续遵守的工作方法、决策方式和行为要求。\n\n以上不是必须逐项输出的固定模板。请根据当前任务自行决定结构和信息密度。\n\n## 状态准确性\n\n必须明确区分：\n\n- 已确认的事实；\n- 已确认的决策；\n- 当前仍然成立的推测或判断；\n- 尚待验证的事项。\n\n不要把推测、可能性或曾经的怀疑写成已经确认的事实。\n\n如果某个早期判断后来已经被证据否定，应以最新结论为准。只有当“这个错误方向为什么不能再走”对后续工作仍然重要时，才保留必要说明。\n\n如果同一事项在会话中经历过多次修改，只保留当前有效版本，并在确有必要时补充导致当前状态的关键原因。\n\n如果你不能确认某项信息，不要自行补全、猜测或编造；应保留其不确定性，或者在对续接没有价值时省略。\n\n## 压缩规则\n\n主动删除：\n\n- 寒暄和社交性内容；\n- 重复表达；\n- 已被后续状态覆盖的中间版本；\n- 不影响后续工作的讨论过程；\n- 已解决且不会影响后续工作的临时问题；\n- 与当前目标无关的枝节；\n- 纯粹为了复述聊天顺序而存在的信息。\n\n但以下内容即使篇幅较长，也不应仅为了压缩而删除：\n\n- 会改变后续决策的限制条件；\n- 用户已经明确否决的做法；\n- 重要的失败经验及其确定原因；\n- 当前实现或工作的真实状态；\n- 尚未验证的关键风险；\n- 新会话如果不知道就很可能重复犯错的信息。\n\n## 自包含要求\n\n最终内容必须能够脱离原会话独立理解。\n\n不要使用只有原会话才能理解的模糊指代，例如：\n\n“上面那个”\n“刚才的问题”\n“之前的代码”\n“第二个方案”\n“你前面说的那个”\n\n如果这些内容对续接重要，请将它们改写成明确的信息。\n\n不要假设新 GPT 知道当前会话发生过什么。\n\n## 面向接管，而不是面向回顾\n\n如果当前属于软件开发、调试、研究、设计、写作、规划或其他持续性工作，应优先保存：\n\n当前状态、有效结论、约束条件、未完成事项和下一步行动。\n\n不要写成按时间顺序回顾聊天过程的会议纪要。\n\n新 GPT 阅读完后，应该能够明确回答：\n\n- 现在正在做什么；\n- 最终目标是什么；\n- 当前为什么采用这个方向；\n- 已经完成了什么；\n- 当前真实状态是什么；\n- 哪些事情已经确认；\n- 哪些结论不要重新推翻；\n- 哪些错误方向不要重新尝试；\n- 哪些内容仍然不确定；\n- 还剩什么没有完成；\n- 下一步应该直接从哪里继续。\n\n如果当前存在一个明确的下一步，请在最终内容末尾明确写出，并使其具体到接手者可以直接继续执行。\n\n## 输出要求\n\n直接输出最终续接上下文。\n\n不要生成二级提示词。\n不要让我再次把某个提示词交给你执行。\n不要回答当前业务任务本身。\n不要解释你如何进行了整理。\n不要评价这份整理。\n不要添加使用教程。\n不要要求用户补充你在当前上下文中已经知道的信息。\n不要为了形式整齐而机械套用固定栏目。\n不要包含对续接无实际价值的内容。\n\n输出长度由当前任务复杂程度决定：简单会话应简洁，复杂项目可以详细，但所有保留下来的内容都应服务于新会话的准确接管。\n\n现在直接生成最终的续接上下文。"
+  },
+  "toastContinuationCopied": {
+    "message": "续接提示词已复制"
+  },
+  "toastCopyFailed": {
+    "message": "复制失败，请手动重试"
+  },
+  "toastActionFailed": {
+    "message": "操作失败，请稍后重试"
+  },
+  "toastRecalibrationStarted": {
+    "message": "已进入重新校准模式，请用达到长度上限的历史会话建立新基准。"
+  },
+  "toastRemindersRestored": {
+    "message": "已恢复本会话提醒"
+  },
+  "toastConversationMuted": {
+    "message": "已关闭本会话提醒"
+  },
+  "toastFailureLearned": {
+    "message": "已记录本次长度上限事件"
+  },
+  "toastFailureIgnored": {
+    "message": "已忽略这次事件"
+  },
+  "toastMonitoringEnabled": {
+    "message": "已启用本地长会话预警"
+  },
+  "toastMonitoringDeferred": {
+    "message": "暂不开启"
+  },
+  "calibrationNoConversation": {
+    "message": "请先打开一个你确认已达到长度上限的历史会话。"
+  },
+  "calibrationParserFailed": {
+    "message": "部分消息无法可靠识别，校准未保存。"
+  },
+  "calibrationConservativeSuccess": {
+    "message": "校准完成。该会话含无法精确计量的内容，提醒会更保守。"
+  },
+  "calibrationSuccess": {
+    "message": "校准完成，提醒基准已建立。"
+  },
+  "calibrationConversationChanged": {
+    "message": "校准期间会话发生变化，结果未保存。请重试。"
+  },
+  "calibrationGenerationChanged": {
+    "message": "校准期间提醒基准发生变化，请重试。"
+  },
+  "calibrationSampleUnusable": {
+    "message": "当前会话无法可靠读取，未作为校准样本保存。"
+  },
+  "toastScanFailed": {
+    "message": "校准未完成，提醒基准未更新。"
+  },
+  "scanNoScroll": {
+    "message": "无法定位会话区域，请刷新后重试。"
+  },
+  "scanNoMessages": {
+    "message": "尚未读取到会话内容，请等待页面加载后重试。"
+  },
+  "scanHeadLoading": {
+    "message": "历史内容仍在加载，请保持页面打开后重试。"
+  },
+  "scanTailChanging": {
+    "message": "会话仍在更新，请等待完成后重试。"
+  },
+  "scanAlignmentFailed": {
+    "message": "部分历史内容未能连续读取，校准已停止。"
+  },
+  "scanLimitReached": {
+    "message": "未能确认完整历史，校准未保存。"
+  },
+  "scanIncomplete": {
+    "message": "未能确认完整历史，校准未保存。"
+  }
 }
