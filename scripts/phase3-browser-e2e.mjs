@@ -27,6 +27,8 @@ const certPath = path.join(tmp, 'cert.pem')
 const keyPath = path.join(tmp, 'key.pem')
 const httpsPort = 19443
 const debugPort = 19333
+const screenshotDir = process.env.LONGCHAT_SCREENSHOT_DIR || ''
+const screenshotLocale = process.env.LONGCHAT_LOCALE || 'en-US'
 let edgeProcess
 let server
 let browser
@@ -112,6 +114,8 @@ function launchEdge(url, loadUnpacked) {
     '--no-first-run',
     '--no-default-browser-check',
     '--disable-features=msEdgeFirstRunExperience',
+    '--lang=' + screenshotLocale,
+    '--window-size=1280,800',
     '--host-resolver-rules=MAP chatgpt.com 127.0.0.1',
     '--new-window',
     url || 'about:blank'
@@ -341,6 +345,89 @@ async function waitEval(cdp, expression, predicate, timeoutMs) {
 
 async function waitForRoot(page) {
   await waitEval(page, "!!document.querySelector('#conversation-guard-root')", Boolean, 20000)
+}
+
+async function prepareStoreCanvas(page) {
+  if (!screenshotDir) return
+  var locale = screenshotLocale.toLowerCase()
+  var copy = locale.startsWith('zh-tw')
+    ? {
+        model:'GPT-5.6',
+        title:'LongChat Guard 商店展示',
+        user:'我們正在整理一個長期專案。請保持目前已確認的決策、限制與下一步一致。',
+        assistant:'了解。我會依照目前有效狀態繼續工作，並在需要換新對話時保留關鍵上下文。',
+        placeholder:'詢問 ChatGPT',
+        sidebar:['新對話','專案','搜尋對話','LongChat Guard 展示']
+      }
+    : locale.startsWith('zh-cn') || locale === 'zh'
+      ? {
+          model:'GPT-5.6',
+          title:'LongChat Guard 商店展示',
+          user:'我们正在整理一个长期项目。请保持当前已确认的决策、约束和下一步一致。',
+          assistant:'了解。我会按照当前有效状态继续工作，并在需要换新会话时保留关键上下文。',
+          placeholder:'询问 ChatGPT',
+          sidebar:['新对话','项目','搜索对话','LongChat Guard 展示']
+        }
+      : {
+          model:'GPT-5.6',
+          title:'LongChat Guard store demo',
+          user:'We are continuing a long-running project. Keep the confirmed decisions, constraints, and next action consistent.',
+          assistant:'Understood. I will continue from the current valid state and preserve the key working context when a fresh chat is needed.',
+          placeholder:'Message ChatGPT',
+          sidebar:['New chat','Projects','Search chats','LongChat Guard demo']
+        }
+  var css = [
+    'html,body{width:100%;height:100%;margin:0;background:#fff;color:#202123;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:hidden}',
+    '#store-sidebar{position:fixed;inset:0 auto 0 0;width:226px;background:#f7f7f8;border-right:1px solid #ececf1;box-sizing:border-box;padding:16px 12px;z-index:1}',
+    '#store-sidebar .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;padding:8px 10px 18px}',
+    '#store-sidebar .brand-dot{width:26px;height:26px;border-radius:8px;background:#111827;color:#fff;display:grid;place-items:center;font-size:12px}',
+    '#store-sidebar .item{padding:10px 12px;margin:2px 0;border-radius:9px;font-size:14px}',
+    '#store-sidebar .item.active{background:#e9e9eb;font-weight:600}',
+    '#store-topbar{position:fixed;left:226px;right:0;top:0;height:58px;border-bottom:1px solid #efefef;background:rgba(255,255,255,.96);display:flex;align-items:center;justify-content:space-between;padding:0 26px;box-sizing:border-box;z-index:1}',
+    '#store-topbar .model{font-weight:650;font-size:16px}',
+    '#store-topbar .demo{font-size:12px;color:#6b7280}',
+    'main{position:absolute;left:226px;right:0;top:58px;bottom:0;display:flex;flex-direction:column;background:#fff}',
+    'main>[data-testid="model-switcher-dropdown-button"]{display:none!important}',
+    '#timeline{flex:1;height:auto!important;overflow:hidden!important;border:0!important;padding:56px max(52px,calc((100% - 760px)/2)) 24px!important;box-sizing:border-box;background:#fff}',
+    '#timeline [data-turn-key]{min-height:0!important;border:0!important;padding:0!important;margin:0 0 30px!important}',
+    '#timeline [data-message-author-role="user"]{display:block;max-width:620px;margin:0 0 18px auto;padding:12px 16px;background:#f1f1f1;border-radius:18px;font-size:15px;line-height:1.55;font-weight:500!important}',
+    '#timeline [data-message-author-role="assistant"]{max-width:680px;margin:0 auto;font-size:15px;line-height:1.65;color:#27272a}',
+    '#composer{width:min(760px,calc(100% - 84px));margin:0 auto 28px!important;padding:10px 12px!important;display:flex!important;gap:10px!important;border:1px solid #dedede;border-radius:24px;box-shadow:0 2px 14px rgba(0,0,0,.06);background:#fff}',
+    '#composer-input{width:100%!important;height:42px!important;min-height:42px!important;border:0;outline:0;resize:none;padding:9px 10px;box-sizing:border-box;font:15px/1.5 inherit;background:transparent}',
+    '#send{width:42px;height:42px;border:0;border-radius:50%;background:#111827;color:#fff;font-size:0;position:relative;align-self:flex-end}',
+    '#send:after{content:"↑";font-size:21px;position:absolute;inset:0;display:grid;place-items:center}'
+  ].join('')
+  var expression = "(() => {" +
+    "const copy=" + JSON.stringify(copy) + ";" +
+    "const css=" + JSON.stringify(css) + ";" +
+    "let style=document.getElementById('store-demo-style');" +
+    "if(!style){style=document.createElement('style');style.id='store-demo-style';document.head.appendChild(style)}" +
+    "style.textContent=css;" +
+    "let sidebar=document.getElementById('store-sidebar');" +
+    "if(!sidebar){sidebar=document.createElement('aside');sidebar.id='store-sidebar';document.body.appendChild(sidebar)}" +
+    "sidebar.innerHTML='<div class=\"brand\"><span class=\"brand-dot\">AI</span><span>ChatGPT</span></div>'+copy.sidebar.map((x,i)=>'<div class=\"item '+(i===3?'active':'')+'\">'+x+'</div>').join('');" +
+    "let top=document.getElementById('store-topbar');" +
+    "if(!top){top=document.createElement('div');top.id='store-topbar';document.body.appendChild(top)}" +
+    "top.innerHTML='<span class=\"model\">'+copy.model+'</span><span class=\"demo\">'+copy.title+'</span>';" +
+    "const turns=[...document.querySelectorAll('#timeline [data-turn-key]')];" +
+    "const last=turns[turns.length-1];" +
+    "if(last){const u=last.querySelector('[data-message-author-role=\"user\"]');if(u)u.textContent=copy.user;const a=last.querySelector('[data-message-author-role=\"assistant\"]');if(a)a.textContent=copy.assistant;turns.slice(0,-1).forEach(x=>x.style.display='none')}" +
+    "const input=document.querySelector('#composer-input');if(input){input.value='';input.placeholder=copy.placeholder}" +
+    "return true" +
+    "})()"
+  await evaluate(page, expression)
+  await sleep(250)
+}
+
+async function captureStoreScreenshot(page, name) {
+  if (!screenshotDir) return
+  fs.mkdirSync(screenshotDir, { recursive:true })
+  await page.send('Emulation.setDeviceMetricsOverride', { width:1280, height:800, deviceScaleFactor:1, mobile:false, screenWidth:1280, screenHeight:800 })
+  await sleep(250)
+  var shot = await page.send('Page.captureScreenshot', { format:'jpeg', quality:92, fromSurface:true, captureBeyondViewport:false })
+  var file = path.join(screenshotDir, name + '.jpg')
+  fs.writeFileSync(file, Buffer.from(shot.data, 'base64'))
+  log('STORE_SCREENSHOT', { file:file, locale:screenshotLocale })
 }
 
 async function createPage(url) {
@@ -712,6 +799,8 @@ async function run() {
   log('EXPLICIT_CALIBRATION_PASS', { ui:afterScanUi.status, facts:calibratedFacts, scrollEvents:afterScanScrolls-beforeScanScrolls })
 
   if (process.env.LONGCHAT_RS01_ONLY === '1') {
+    await prepareStoreCanvas(page)
+    await captureStoreScreenshot(page, '00-high-risk')
     await navigate(page, base + '/g/g-fixture/c/project-empty')
     var rs01GrowthBefore = stateFacts(await getState()).growthCount
     await sleep(600)
@@ -734,6 +823,14 @@ async function run() {
     assert(rs01Facts.measurementState === 'complete', 'RS-01 project new chat was not tracked from first composer activity', rs01Facts)
     assert(stateFacts(rs01State).growthCount === rs01GrowthBefore + 1, 'RS-01 project new chat lost or duplicated first-turn growth', {before:rs01GrowthBefore,after:stateFacts(rs01State).growthCount})
     log('PROJECT_NEW_CHAT_COMPOSER_ARM_PASS', { ui:rs01Ui.status, measurement:rs01Facts.measurementState, growthDelta:stateFacts(rs01State).growthCount-rs01GrowthBefore })
+    await prepareStoreCanvas(page)
+    var screenshotUi = await ui(page)
+    if (screenshotUi.panelHidden) await clickShadow(page, '[data-role="pill"]')
+    await sleep(200)
+    await captureStoreScreenshot(page, '01-primary')
+    assert(await nativeClickShadow(page, '[data-role="menu-trigger"]'), 'RS-01 screenshot menu trigger was not natively clickable')
+    await assertOverflowMenuVisible(page, 'rs01-screenshot')
+    await captureStoreScreenshot(page, '02-overflow-menu')
     log('RS01_BROWSER_E2E_PASS')
     return
   }
