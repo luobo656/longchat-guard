@@ -29,7 +29,7 @@ Low volume means these positions are directional, not statistically stable.
 2. Inspect the home page, methodology page, conversation-too-long page, and long-conversation-extension page in all three languages.
 3. Watch for non-brand impressions before optimizing around clicks.
 4. Compare impression growth by page and language.
-5. Track whether the Chrome Web Store result refreshes from the old 1.0 copy to the current 2.0.2 copy.
+5. Track whether the Chrome Web Store and Edge Add-ons results refresh to the 2.1.0 three-language copy after review.
 6. Look for accurate brand/entity descriptions in public search and AI retrieval results.
 7. Do not create dozens of near-duplicate pages just to raise URL count.
 

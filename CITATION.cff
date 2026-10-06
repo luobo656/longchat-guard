@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use or reference LongChat Guard, please cite this repository."
 title: "LongChat Guard"
 type: software
-version: 2.0.2
-date-released: 2026-10-01
+version: 2.1.0
+date-released: 2026-10-06
 authors:
   - name: "LongChat Guard contributors"
 repository-code: "https://github.com/luobo656/longchat-guard"
@@ -24,7 +24,7 @@ keywords:
   - Manifest V3
 abstract: >-
   LongChat Guard is an open-source, local-first Chrome and Microsoft Edge browser
-  extension for ChatGPT long-conversation warnings. It learns empirical browser-side
-  safe/failure boundaries and typical assistant-reply growth, provides simple risk
+  extension for ChatGPT long-conversation warnings. It compares current browser-local
+  load with a user-confirmed historical failure reference, learns whole-turn growth, provides simple risk
   states and continuation workflows, and does not claim access to OpenAI's official
   token quota or exact context-window limit.

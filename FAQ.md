@@ -2,11 +2,11 @@
 
 ## What is LongChat Guard?
 
-LongChat Guard is an open-source Chrome and Microsoft Edge browser extension for **ChatGPT long-conversation warnings**. It learns local empirical risk from confirmed safe conversations, confirmed conversation-length failures, and typical assistant-reply growth, then warns when the current chat is approaching a learned risk area.
+LongChat Guard is an open-source Chrome and Microsoft Edge browser extension for **ChatGPT long-conversation warnings**. It compares the current locally measurable chat load with a user-confirmed historical conversation-length failure reference, learns reliable whole-turn growth, and warns when the current chat approaches that local risk area.
 
 ## LongChat Guard 是什么？
 
-LongChat Guard 是一个开源的 Chrome / Edge 浏览器扩展，用于 **ChatGPT 长会话预警、长对话风险提醒和续接**。它根据本机已确认安全/失败的会话和典型回复增长学习风险区域，帮助用户在长对话变得难以继续之前及时整理或开启新会话。
+LongChat Guard 是一个开源的 Chrome / Edge 浏览器扩展，用于 **ChatGPT 长会话预警、长对话风险提醒和续接**。它把当前本地可测会话负载与用户亲自确认曾达到长度上限的历史会话参考进行比较，并学习可靠的整轮增长，帮助用户在长对话变得难以继续之前及时整理或开启新会话。
 
 ## What is the official product name?
 
@@ -30,7 +30,7 @@ It monitors **conversation-length and context-risk trends locally**. It can be u
 
 ## How does LongChat Guard decide that a chat is risky?
 
-It does not use an official OpenAI quota. Version 2.x learns three local signals: a confirmed safe boundary, a robust confirmed conversation-length failure boundary, and the user's typical assistant-reply growth. The current chat is compared with those local signals to produce simple states such as Normal, Long, Near risk, and High risk.
+It does not use an official OpenAI quota. The core local signals are current measurable load (L), a user-confirmed empirical failure reference (R), and reliable whole-turn growth reserve (G). The current chat, including an unsent Composer draft, is compared with those local signals to produce Lower risk, Long, Near risk, and High risk. A readable model label is diagnostic metadata only and does not determine risk or calibration validity.
 
 ## Does LongChat Guard upload my ChatGPT conversations?
 

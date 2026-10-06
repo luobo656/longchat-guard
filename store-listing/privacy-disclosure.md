@@ -39,14 +39,14 @@ The locally salted conversation identifier is pseudonymous rather than a claim o
 
 ## Sharing
 
-No chat content is uploaded, sold, shared, used for advertising, or made available for human review by the developer. Local processing is limited to LongChat Guard's single purpose: local long-conversation risk warnings.
+No chat content is uploaded, sold, shared, used for advertising, or made available for human review by the developer. Local processing is limited to LongChat Guard's single purpose: local long-conversation risk warnings and user-initiated handoff assistance.
 
 ## Permissions
 
 - `storage`
 - host permission for `https://chatgpt.com/*`
 
-No new permission is required by the Unreleased calibration/risk refactor.
+No new permission is required by LongChat Guard 2.1.0.
 
 ## User Control and Deletion
 

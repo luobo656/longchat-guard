@@ -2,7 +2,7 @@
 
 ## Single Purpose
 
-LongChat Guard provides local long-conversation risk warnings on `https://chatgpt.com/*`.
+LongChat Guard provides local long-conversation risk warnings and user-controlled handoff assistance on `https://chatgpt.com/*`.
 
 On first use, before reading conversation content, the extension presents an in-product privacy disclosure. Monitoring begins only after the user affirmatively chooses “Agree and start / 同意并开始 / 同意並開始”. Choosing “Not now / 暂不开启 / 暫不啟用” leaves monitoring disabled.
 
@@ -29,11 +29,13 @@ Stored identifiers are install-salted SHA-256 **pseudonymous** conversation iden
 
 LongChat Guard does not display token counts, percentages, K values, remaining quota, or an official OpenAI context limit.
 
-Risk becomes determinate only after the current chat is measured reliably and the user has a usable local empirical failure reference. Without that reference the UI says “Not calibrated / 未校准 / 未校準” rather than “Normal”, and the full green-to-red risk track is hidden.
+Risk becomes determinate only after the current chat is measured reliably and the user has a usable local empirical failure reference. Without that reference the UI says “Not calibrated / 未校准 / 未校準” rather than “Lower risk / 风险较低 / 風險較低”, and the full green-to-red risk track is hidden. Any readable model label is retained only as optional diagnostic metadata and does not determine risk or calibration validity.
 
 A user can establish the local empirical reference by opening a historical chat they personally know reached the conversation-length limit and clicking “Calibrate with this chat / 用此会话校准 / 用此對話校準” once. The extension scans the full history once and either stores a strong/conservative local reference or reports that the sample could not be measured reliably.
 
-Whole-turn growth is learned from reliable before/after conversation-load deltas. It is not an OpenAI-provided quota or official limit.
+The overflow menu always exposes “Read full current chat / 完整读取当前会话 / 完整讀取目前對話”. This user-initiated measurement action updates only the current conversation ledger/load; it does not create or modify the empirical failure reference, calibration samples, generation, or growth samples.
+
+Whole-turn growth is learned from reliable before/after conversation-load deltas. It is not an OpenAI-provided quota or official limit. The continuation action only copies a local meta-prompt: after the user pastes it into the current ChatGPT conversation, the current GPT generates a self-contained handoff from the conversation/project context it can actually see; the extension does not auto-transfer or upload conversation content.
 
 ## Localization / Brand
 

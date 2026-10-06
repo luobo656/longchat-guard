@@ -6,10 +6,8 @@
 2. Panel open above the pill showing:
    - Compact risk card with the green-to-red gradient track and white position marker
    - Short risk state and learning status
-   - Continuation prompt button
-   - Scan-current-chat button only when the local failure boundary has not been learned yet
-   - Relearn button
-   - Per-conversation mute button
+   - Continuation prompt button (copies the meta-prompt used to ask the current GPT for a self-contained handoff)
+   - Overflow menu with the always-available full-read-current-chat action, relearn action, and per-conversation mute action
 3. The same panel in Simplified Chinese or Traditional Chinese, with the canonical `LongChat Guard` brand unchanged.
 4. Browser extension details page showing minimal permissions.
 5. Icon crop at 128 px.

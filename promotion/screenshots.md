@@ -1,4 +1,4 @@
-# Screenshot status — LongChat Guard 2.0.2 refactor
+# Screenshot status — LongChat Guard 2.1.0 release
 
 The three screenshots captured on 2026-10-01 predate the frozen product-state refactor. They are historical references only and must not be used as canonical screenshots for the current store listing or launch materials, because they show UI states and calibration actions that no longer represent the current extension.
 

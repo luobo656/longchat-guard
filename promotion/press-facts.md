@@ -3,7 +3,7 @@
 ## Identity
 
 **Name:** LongChat Guard  
-**Version:** 2.0.2  
+**Version:** 2.1.0
 **Type:** open-source Chrome / Microsoft Edge browser extension  
 **Target:** chatgpt.com  
 **License:** MIT  
@@ -13,16 +13,16 @@
 
 ## One-sentence description
 
-LongChat Guard is a local-first Chrome/Edge extension for ChatGPT long conversations that learns empirical risk from confirmed safe chats, confirmed conversation-length failures, and typical assistant-reply growth, then gives simple warnings and a continuation workflow.
+LongChat Guard is a local-first Chrome/Edge extension for ChatGPT long conversations that compares current local load with a user-confirmed historical length-limit reference, learns reliable whole-turn growth, then gives simple warnings and a continuation workflow.
 
 ## What it does
 
 - warns when a long ChatGPT working thread approaches a locally learned risk region;
-- displays Normal / Long / Near risk / High risk rather than an official-looking quota percentage;
-- learns a safe boundary from complete healthy successful conversations;
-- learns a robust failure boundary only from user-confirmed conversation-length-limit failures;
-- learns a dynamic growth buffer from recent assistant replies;
-- offers a continuation prompt for carrying working state into a fresh chat;
+- displays Lower risk / Long / Near risk / High risk rather than an official-looking quota percentage;
+- establishes an empirical failure reference only from a user-confirmed historical conversation-length-limit chat that can be read reliably;
+- learns a whole-turn growth reserve from reliable before/after conversation-load changes;
+- treats any readable model label as optional diagnostics only, not as a risk or calibration input;
+- offers a continuation meta-prompt that makes the current GPT generate a self-contained handoff context from the actual conversation/project state;
 - can relearn when multiple independent observations conflict with an older environment.
 
 ## What it does not do

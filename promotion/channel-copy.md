@@ -14,7 +14,7 @@ I built LongChat Guard, an open-source Chrome/Edge extension for a narrow proble
 
 I deliberately did not make an “official remaining token %” meter. The browser extension doesn't have an authoritative OpenAI quota to expose.
 
-Version 2.0.2 learns four local signals instead: current load, a confirmed safe boundary, a robust user-confirmed conversation-length failure boundary, and typical assistant-reply growth. The UI reduces that to Normal / Long / Near risk / High risk.
+LongChat Guard uses three core local signals instead: current load L, a user-confirmed empirical failure reference R, and reliable whole-turn growth G. The UI reduces that to Lower risk / Long / Near risk / High risk.
 
 A cold install doesn't start half full; incomplete history or low confidence doesn't inflate risk. Raw chat text isn't persisted or sent to a LongChat Guard backend.
 
@@ -38,7 +38,7 @@ I use long ChatGPT threads for coding/planning, and the annoying moment isn't us
 
 I built an open-source Chrome/Edge extension called LongChat Guard.
 
-It doesn't claim to know OpenAI's official remaining quota. It learns from locally observed safe conversations, user-confirmed length-limit failures and typical reply growth, then shows a coarse Normal / Long / Near risk / High risk signal.
+It doesn't claim to know OpenAI's official remaining quota. It compares current local load with a user-confirmed historical length-limit reference and learns whole-turn growth, then shows a coarse Lower risk / Long / Near risk / High risk signal.
 
 It also creates a continuation prompt focused on goal + decisions + constraints + current file/code state + unresolved issues + next steps, instead of copying the whole transcript.
 
@@ -60,7 +60,7 @@ Know when a long ChatGPT thread is worth handing off.
 
 **Description**
 
-LongChat Guard is an open-source, local-first Chrome and Edge extension for long ChatGPT conversations. It learns risk from confirmed safe chats, user-confirmed conversation-length failures, and typical assistant-reply growth, then shows a simple risk state and helps carry the important working context into a fresh conversation.
+LongChat Guard is an open-source, local-first Chrome and Edge extension for long ChatGPT conversations. It compares current local load with a user-confirmed historical length-limit reference, learns reliable whole-turn growth, then shows a simple risk state and helps carry the important working context into a fresh conversation.
 
 No OpenAI API key. No developer-operated chat-analysis backend. No claim of an official token quota.
 
@@ -88,15 +88,11 @@ I'd appreciate feedback on whether the warning/handoff workflow feels useful in 
 
 所以做了 LongChat Guard。
 
-2.0.2 这版把风险判断重做了，不再用固定“魔法阈值”拼一个百分比。现在只学习本机真实证据：
+2.1.0 继续坚持“不伪造官方额度”：风险判断只依赖浏览器本地可验证的状态，包括当前可测会话负载、用户亲自确认达到长度上限的历史参考，以及可靠整轮对话的增长。
 
-- 已经安全完成的长会话；
-- 用户确认的会话长度上限失败；
-- 最近 Assistant 单轮回复的典型增长。
+界面只给风险较低 / 偏长 / 接近风险 / 高风险。没有可用历史参考、历史读取不完整或测量不可靠时，会明确显示未知/未校准，而不是硬算成低风险。
 
-界面只给正常 / 偏长 / 接近风险 / 高风险。刚安装、历史不完整、置信度不足不会被硬算成风险。
-
-另一个重点是续接：不是复制全部聊天记录，而是整理目标、决定、约束、文件/代码状态、未解决问题和下一步。
+另一个重点是续接：插件复制的是一条元提示词，让当前 GPT 根据本会话和实际可见的项目上下文，自主生成一份自包含的续接内容；用户再把生成结果复制到新会话。这样保留的是最新目标、已确认决定、约束、已排除方案、技术状态、未解决问题和下一步，而不是机械搬运全部聊天记录。
 
 本地处理，不需要 OpenAI API Key，聊天原文不上传到 LongChat Guard 分析服务器。
 
@@ -117,7 +113,7 @@ https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkl
 
 Long ChatGPT threads are useful — until you realize too late that the working state should have been handed off.
 
-I built LongChat Guard 2.0.2: local evidence, coarse risk states, no fake “official quota”, and a structured continuation workflow.
+I built LongChat Guard 2.1.0: local empirical risk warnings, no fake “official quota”, and a continuation meta-prompt that lets the current GPT generate a self-contained handoff.
 
 Method: https://luobo656.github.io/longchat-guard/methodology/
 Source: https://github.com/luobo656/longchat-guard
@@ -128,7 +124,7 @@ Source: https://github.com/luobo656/longchat-guard
 
 Long-running AI conversations create a new workflow problem: not just context capacity, but deciding when the working state has become expensive to carry.
 
-LongChat Guard 2.0.2 is an open-source Chrome/Edge extension that uses local empirical evidence—safe completions, confirmed conversation-length failures, and typical reply growth—to provide a simple risk signal and a structured handoff workflow.
+LongChat Guard is an open-source Chrome/Edge extension that uses local empirical evidence—current load, a user-confirmed historical length-limit reference, and whole-turn growth—to provide a simple risk signal and a structured handoff workflow.
 
 The design intentionally avoids presenting a browser-side estimate as an official OpenAI quota.
 

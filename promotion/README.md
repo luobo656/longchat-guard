@@ -1,6 +1,6 @@
-# LongChat Guard 2.0.2 — SEO / GEO / Launch Kit
+# LongChat Guard 2.1.0 — SEO / GEO / Launch Kit
 
-This directory contains the ready-to-publish launch material for LongChat Guard 2.0.2.
+This directory contains the ready-to-publish launch material for LongChat Guard 2.1.0. Historical 2.0.2 reports/releases remain archived as dated records.
 
 ## Canonical identity
 
@@ -19,7 +19,7 @@ LongChat Guard is **not** a chat search, bookmark, export, or page-trimming exte
 
 > Is this long ChatGPT working thread still comfortable to continue, or is it time to organize the working state and hand off to a fresh conversation?
 
-Version 2.0.2 learns browser-local evidence from confirmed safe conversations, confirmed conversation-length failures, and typical assistant-reply growth. It shows simple states rather than pretending to know an official OpenAI quota.
+The current product compares browser-local conversation load with a user-confirmed historical length-limit reference and learns reliable whole-turn growth. It shows simple risk states rather than pretending to know an official OpenAI quota.
 
 ## Launch rules
 
@@ -36,12 +36,12 @@ Version 2.0.2 learns browser-local evidence from confirmed safe conversations, c
 
 ### Day 1 — Entity + search foundation
 Completed in repository:
-- 2.0.2 product identity unified across website, README, AI discovery files, Chrome listing source, and localized pages.
+- 2.1.0 product identity synchronized across website, README, AI discovery files, Chrome/Edge listing sources, and all three locales.
 - English / Simplified Chinese / Traditional Chinese canonical pages.
-- Methodology pages explaining L / S / F / B.
+- Methodology pages explaining current load L, empirical failure reference R, whole-turn growth reserve G, measurement authority, and calibration state.
 - “ChatGPT conversation too long” intent pages.
 - Canonical, hreflang, sitemap, JSON-LD, IndexNow, Google/Bing verification.
-- Three real localized 2.0.2 interface screenshots reviewed as the canonical visual reference for store/community promotion; screenshot captions and alt-text guidance are included in the launch kit.
+- Existing real localized screenshots are retained as visual assets. Do not attach a version number to an older screenshot; refresh store screenshots only if the current 2.1.0 UI is no longer represented accurately.
 
 ### Day 2 — Search-intent coverage + differentiation
 Completed in repository:

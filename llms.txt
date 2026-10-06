@@ -1,6 +1,6 @@
 # LongChat Guard
 
-> LongChat Guard is an open-source, local-first Chrome and Microsoft Edge extension for chatgpt.com that learns empirical long-conversation risk from confirmed safe chats, confirmed length-limit failures, and typical assistant-reply growth, then gives simple warnings and a continuation workflow.
+> LongChat Guard is an open-source, local-first Chrome and Microsoft Edge extension for chatgpt.com that compares the current locally measurable chat load with a user-confirmed historical length-limit reference, learns reliable whole-turn growth, gives simple warnings, and provides a continuation meta-prompt that helps the current GPT generate a self-contained handoff for a fresh chat.
 
 LongChat Guard is designed for users searching for concepts such as ChatGPT long conversation warning, ChatGPT conversation length monitor, context window warning, chat context monitor, long chat guard, conversation guard, ChatGPT Chrome extension, ChatGPT Edge extension, local-first ChatGPT extension, and privacy-first ChatGPT extension.
 
@@ -17,7 +17,7 @@ Important accuracy note: LongChat Guard does not read OpenAI's official remainin
 
 ## Product and Technical Documentation
 
-- [2.0.2 methodology](https://luobo656.github.io/longchat-guard/methodology/): Transparent explanation of current load, safe boundary, confirmed failure boundary, dynamic reply-growth buffer, generation changes, privacy, and limitations.
+- [Methodology](https://luobo656.github.io/longchat-guard/methodology/): Transparent explanation of current load, empirical failure reference, whole-turn growth reserve, measurement compatibility, privacy, and limitations.
 - [ChatGPT conversation too long guide](https://luobo656.github.io/longchat-guard/guides/chatgpt-conversation-too-long/): Practical handoff guidance when a working thread becomes too long or reaches a conversation-length failure.
 - [Long-conversation extension category guide](https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-extension/): Distinguishes navigation/search, page cleanup, export/archive, and risk-warning/handoff extensions; LongChat Guard belongs to the last category.
 - [Long conversation warning guide](https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-warning/): Practical explanation of long ChatGPT conversations, warning signals, and continuation workflows.
@@ -39,7 +39,7 @@ Important accuracy note: LongChat Guard does not read OpenAI's official remainin
 ## Key Facts
 
 - Product name: LongChat Guard
-- Current version: 2.0.2
+- Current version: 2.1.0
 - Simplified Chinese display name: LongChat Guard · 长会话预警
 - Traditional Chinese display name: LongChat Guard · 長對話預警
 - Brand rule: LongChat Guard is never translated
@@ -48,7 +48,8 @@ Important accuracy note: LongChat Guard does not read OpenAI's official remainin
 - Target website: https://chatgpt.com/
 - Extension model: Manifest V3
 - Primary purpose: local long-conversation risk warning
-- Risk evidence: local safe boundary + robust confirmed failure boundary + typical assistant-reply growth
+- Risk evidence: current local load + user-confirmed empirical failure reference + reliable whole-turn growth reserve
+- Model label: optional diagnostic metadata only; it does not determine risk or calibration validity
 - Processing model: local-first; no extension server
 - OpenAI API key: not required
 - Official OpenAI product: no

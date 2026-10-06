@@ -16,7 +16,7 @@ LongChat Guard is an open-source, local-first Chrome/Edge extension for empirica
 
 ![LongChat Guard icon](./public/icons/icon128.png)
 
-## 当前 Unreleased 产品模型
+## 当前 2.1.0 产品模型
 
 LongChat Guard 将“能不能判断”和“风险是什么”分开：
 
@@ -26,20 +26,22 @@ LongChat Guard 将“能不能判断”和“风险是什么”分开：
 
 核心 invariant：
 
-> 没有完整可靠的测量，或没有当前环境可用的经验失败参考，就只能是 `unknown`，绝不能显示“正常”。
+> 没有完整可靠的测量，或没有当前测量口径可用的经验失败参考，就只能是 `unknown`，绝不能显示“风险较低”。
 
 因此完整绿色→黄色→橙色→红色风险轨道只会在 measurement complete 且 strong/conservative calibration 可用时出现。
 
 ## 核心功能
 
-- **信息诚实的风险状态**：未校准时显示“未校准”，parser/sequence 不可靠时显示“暂时无法判断”，旧参考不能证明仍有效时显示“基准可能失效”。
+- **信息诚实的风险状态**：未校准时显示“未校准”，当前会话未完成可靠读取时显示“暂无法判断”，测量方式变化后显示“需要重新校准”。
 - **一次校准**：打开一个你明确知道曾达到 ChatGPT 会话长度上限的历史会话，点击一次“用此会话校准”。该点击本身就是用户确认，不再执行“扫描当前会话 → 再扫描上限会话 → 再 Yes/No”的旧流程。
+- **随时完整读取**：右上角“···”菜单始终提供“完整读取当前会话”。它只刷新当前会话的本地测量，不修改提醒基准 R；是否重读由用户自行决定。
 - **经验失败参考**：完整可靠、无已识别不可测上下文的样本形成 strong reference；含附件/工具等不可精确计量上下文的确定上限样本形成 conservative reference；不完整证据只保留为 provisional，不产生确定性风险。
+- **模型标签仅作诊断**：页面能可靠读取到 model hint 时可以作为本地诊断元数据保留；模型标签缺失或变化不会改变 R 质量、风险等级、generation 或校准有效性。真正影响测量兼容性的是 parser / measurement schema。
 - **发送前预警**：尚未发送的 Composer 草稿进入 projected risk；输入足够长时可以在按发送之前升级风险。
 - **整轮增长学习**：增长缓冲来自 `L_before -> L_after` 的 whole-turn delta，而不是只学习 Assistant 单条回复长度。
 - **多标签页一致性**：ledgerRevision / observationEpoch + background revision guard 阻止旧标签页把新状态写回旧值。
 - **扫描事务**：完整历史校准绑定 scan session、conversation、generation 与 ledger revision；中途变化就 fail closed，不提交半成品。
-- **本地续接**：接近风险或高风险时可复制结构化续接提示词。
+- **本地续接**：可复制续接元指令，让当前 GPT 根据本会话/项目真实状态直接生成自包含的续接上下文，再由用户复制到新会话继续。
 - **三语 UI**：English / 简体中文 / 繁體中文；canonical brand 始终是 **LongChat Guard**。
 
 ## 校准是怎么工作的？
@@ -61,7 +63,7 @@ LongChat Guard 将“能不能判断”和“风险是什么”分开：
 内部主要使用：
 
 - `L`：当前本地可测会话负载。
-- `S`：成功证据，只用于内部一致性/环境漂移检查，不让 UI 进入“正常”。
+- `S`：成功证据，只用于内部一致性/测量漂移检查，不让未校准 UI 进入“风险较低”。
 - `R`：EmpiricalFailureReference，本地经验失败参考，不等于 OpenAI 官方上限。
 - `G`：TurnGrowthReserve，由可靠 whole-turn delta 学习。
 

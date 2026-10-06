@@ -22,7 +22,7 @@ The extension may store:
 - Coverage, parser health, sequence reliability, ledger revision, and observation metadata.
 - Current uncertainty-source categories such as attachment/tool/search context; attachment names, file contents, tool-result text, and file data are not stored.
 - Internal successful-observation evidence, empirical failure-reference metadata, and whole-turn growth samples.
-- Environment metadata limited to measurement/parser schema versions and a model hint only when it can be reliably observed from the page.
+- Environment metadata limited to measurement/parser schema versions and an optional model hint only when it can be reliably observed from the page. The model hint is diagnostic metadata only; it does not determine the risk level or calibration validity.
 - Per-conversation reminder controls.
 - On failed history scans only, the bounded structural diagnostic described above.
 
@@ -52,7 +52,7 @@ The Manifest V3 extension uses:
 - `storage` for local pseudonymous state, calibration evidence, and settings.
 - `https://chatgpt.com/*` so the content script can provide its single user-facing purpose on ChatGPT web pages.
 
-No additional permission is required for the Unreleased calibration/risk refactor.
+No additional permission is required for LongChat Guard 2.1.0.
 
 ## User Control and Deletion
 

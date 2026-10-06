@@ -8,19 +8,19 @@ I could not find a browser-side signal I was comfortable calling an “official 
 
 ## It does not claim an official token limit
 
-LongChat Guard 2.0.2 does not show an exact token counter, a fake remaining percentage, or a universal ChatGPT conversation maximum.
+LongChat Guard 2.1.0 does not show an exact token counter, a fake remaining percentage, or a universal ChatGPT conversation maximum.
 
-Instead it learns from evidence in the user’s own browser:
+Instead it uses evidence in the user’s own browser:
 
-- conversations that completed safely;
-- user-confirmed conversation-length failures;
-- typical growth of recent assistant replies.
+- the current locally measurable conversation load;
+- an empirical failure reference from a historical chat the user personally confirms reached the conversation-length limit;
+- reliable whole-turn growth learned from before/after observations.
 
-Internally I describe these as current load (L), safe boundary (S), failure boundary (F), and dynamic reply-growth buffer (B).
+Internally the core signals are current load (L), the user-confirmed empirical failure reference (R), and a reliable whole-turn growth reserve (G).
 
 When enough evidence exists, the warning asks: **if this conversation grows by another one, two, or three typical reply steps, how close would it be to the failure region this browser has actually observed?**
 
-That produces simple states: Normal, Long, Near risk, and High risk.
+That produces simple states: Lower risk, Long, Near risk, and High risk.
 
 ## Why not use a fixed threshold?
 
@@ -38,16 +38,9 @@ The current design prefers uncertainty over invented confidence:
 
 The warning is only useful if the user knows what to do next.
 
-LongChat Guard includes a continuation prompt designed to preserve a working state rather than copy an entire transcript. The useful handoff is usually:
+LongChat Guard includes a continuation meta-prompt rather than a fixed summary template. Paste it into the current chat and the current GPT is instructed to use the conversation and any visible project context it actually knows to generate a self-contained handoff. It prioritizes the latest objective, confirmed decisions, constraints, rejected paths, file/code/data state, unresolved issues, uncertainty, and the next concrete action.
 
-- current objective;
-- confirmed decisions;
-- important constraints;
-- file/code/data state;
-- unresolved issues;
-- next concrete steps.
-
-That is much easier to verify in a fresh conversation than dumping thousands of lines of old chat.
+The user then copies that generated handoff into a fresh conversation. The extension does not auto-transfer chats or upload conversation content. This is easier to verify than dumping thousands of lines of old history.
 
 ## Privacy model
 
