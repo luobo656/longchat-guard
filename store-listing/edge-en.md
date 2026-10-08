@@ -57,4 +57,4 @@ LongChat Guard is an independent open-source project and is not affiliated with,
 
 ## Search Terms
 
-ChatGPT long conversation; long chat warning; conversation length monitor; context risk warning; ChatGPT handoff; ChatGPT continuation; privacy-first ChatGPT extension; local ChatGPT extension
+ChatGPT long conversation; long chat warning; conversation length monitor; context risk warning; ChatGPT handoff; ChatGPT continuation; privacy ChatGPT extension

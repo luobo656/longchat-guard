@@ -23,7 +23,7 @@ There is no server, fetch/XHR analytics backend, OpenAI API integration, or API 
 
 After consent, visible ChatGPT text and the unsent Composer draft may be processed transiently in the browser for local estimates and empirical risk. Raw conversation text, assistant text, Composer text, attachment/file contents, and tool/search result text are not persisted and are not transmitted.
 
-Stored identifiers are install-salted SHA-256 **pseudonymous** conversation identifiers and pseudonymous message fingerprints. The extension also stores local measurement/calibration metadata, whole-turn growth samples, and reminder controls. Successful history scans leave no diagnostic record; a failed scan may retain one bounded local structural diagnostic for up to 7 days with no conversation URL or raw text.
+Stored identifiers are install-salted SHA-256 **pseudonymous** conversation identifiers and pseudonymous message fingerprints. The extension also stores local measurement/calibration metadata, whole-turn growth samples, and reminder controls. The production extension does not persist or export runtime/history-scan diagnostics.
 
 ## No Official Quota Claims
 

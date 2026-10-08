@@ -10,7 +10,7 @@ Before any conversation text is read, the extension displays an in-product discl
 
 After consent, the content script may read visible conversation text, visible error messages, the unsent Composer draft, and structural DOM metadata transiently for local load estimation, measurement-quality checks, whole-turn growth learning, and empirical risk calculation. Raw text is not persisted.
 
-A successful history-calibration scan leaves no diagnostic record. If a scan fails, the extension may keep one bounded structural diagnostic locally for up to 7 days. It contains a failure reason and limited scrolling/structure metrics, not the conversation URL, raw chat text, or raw message fingerprints.
+Runtime and history-scan diagnostics are not persisted or exported in the production extension. Structural scan information needed for fail-closed decisions exists only transiently during the current scan.
 
 ## Local Storage
 
@@ -24,7 +24,6 @@ Stored locally:
 - Internal successful-observation evidence, empirical failure-reference metadata, and whole-turn growth samples.
 - Observable measurement-environment metadata such as parser/measurement schema versions and, when reliable, a model hint.
 - Per-conversation reminder controls.
-- On scan failure only, the bounded structural diagnostic described above.
 
 Not stored:
 

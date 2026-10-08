@@ -57,4 +57,4 @@ LongChat Guard 是独立开源项目，与 OpenAI 不存在隶属、赞助、认
 
 ## 搜索词
 
-ChatGPT 长会话；长会话预警；会话长度提醒；上下文风险；ChatGPT 续接；长对话续接；本地 ChatGPT 插件；隐私优先 ChatGPT 插件
+ChatGPT 长会话；长会话预警；会话长度提醒；上下文风险提醒；ChatGPT 续接；长对话续接；ChatGPT 插件
