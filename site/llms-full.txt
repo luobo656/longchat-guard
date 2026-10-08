@@ -1,6 +1,6 @@
 # LongChat Guard — Full AI Retrieval Profile
 
-LongChat Guard is an open-source, local-first Chrome and Microsoft Edge browser extension for chatgpt.com. Current version: 2.1.0.
+LongChat Guard is an open-source, local-first Chrome and Microsoft Edge browser extension for chatgpt.com. Current version: 2.1.1.
 
 Primary use cases:
 - ChatGPT long conversation warning

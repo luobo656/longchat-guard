@@ -66,6 +66,7 @@ export class GuardUi {
   private preBusyCalibrationState: CalibrationState | undefined
   private toastTimer: number | undefined
   private latestModel: GuardUiModel | undefined
+  private lastRenderSignature: string | undefined
 
   private readonly onDocumentPointerDown = (event: PointerEvent): void => {
     if (!this.open) return
@@ -180,6 +181,18 @@ export class GuardUi {
 
   update(model: GuardUiModel): void {
     this.latestModel = model
+    const renderSignature = JSON.stringify({
+      model,
+      calibrationBusy: this.calibrationBusy,
+      measurementBusy: this.measurementBusy
+    })
+    if (
+      this.mode === 'monitoring' &&
+      renderSignature === this.lastRenderSignature
+    ) {
+      return
+    }
+    this.lastRenderSignature = renderSignature
     this.mode = 'monitoring'
     this.monitorPanel.hidden = false
     this.consentPanel.hidden = true
@@ -369,6 +382,7 @@ export class GuardUi {
   }
 
   showConsentCard(): void {
+    this.lastRenderSignature = undefined
     this.mode = 'consent'
     this.root.dataset.risk = 'unknown'
     this.statusText.textContent = t('pillConsentRequired', 'Consent required')
@@ -379,6 +393,7 @@ export class GuardUi {
   }
 
   showDisabled(): void {
+    this.lastRenderSignature = undefined
     this.mode = 'disabled'
     this.root.dataset.risk = 'unknown'
     this.statusText.textContent = t('pillDisabled', 'Disabled')

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.1 - 2026-10-08
+
+- Removed the obsolete diagnostic-export persistence infrastructure from the production content script and added one-time cleanup of legacy diagnostic storage keys during extension install/update.
+- Hardened long-session performance without changing the risk model: Composer input now uses a lightweight message-presence check and a debounced draft-risk redraw instead of reparsing the full conversation on every keystroke.
+- Reduced MutationObserver work by ignoring unrelated/sidebar/composer-only DOM churn while still tracking the conversation surface, renderer replacement, visible alerts/toasts, and model-label text changes.
+- Added render-signature deduplication so unchanged GuardUiModel/busy state no longer rewrites the Shadow DOM or all 16 risk segments.
+- Kept permissions, privacy boundaries, calibration semantics, measurement authority, and conversation identity rules unchanged.
+
 ## 2.1.0 - 2026-10-06
 
 - Finalized the continuation meta-prompt so the current GPT directly produces a self-contained handoff context from the real conversation/project state instead of emitting a second prompt or forcing a fixed summary template.

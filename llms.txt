@@ -39,7 +39,7 @@ Important accuracy note: LongChat Guard does not read OpenAI's official remainin
 ## Key Facts
 
 - Product name: LongChat Guard
-- Current version: 2.1.0
+- Current version: 2.1.1
 - Simplified Chinese display name: LongChat Guard · 长会话预警
 - Traditional Chinese display name: LongChat Guard · 長對話預警
 - Brand rule: LongChat Guard is never translated

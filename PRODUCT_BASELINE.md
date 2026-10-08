@@ -1,4 +1,4 @@
-# LongChat Guard 2.1.0 产品基线
+# LongChat Guard 2.1.1 产品基线
 
 ## 1. 产品定位
 

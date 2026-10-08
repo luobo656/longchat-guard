@@ -1,9 +1,14 @@
 import { StorageMutationCoordinator, type BackgroundRequest } from './coordinator'
 
 const coordinator = new StorageMutationCoordinator(chrome.storage.local)
+const OBSOLETE_DIAGNOSTIC_STORAGE_KEYS = [
+  'longChatGuardRuntimeDiagnostics',
+  'longChatGuardLastScanDiagnostics'
+]
 
 chrome.runtime.onInstalled.addListener(() => {
   // State is initialized lazily after the user grants local-content consent.
+  void chrome.storage.local.remove(OBSOLETE_DIAGNOSTIC_STORAGE_KEYS)
 })
 
 chrome.runtime.onMessage.addListener(

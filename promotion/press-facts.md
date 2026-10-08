@@ -3,7 +3,7 @@
 ## Identity
 
 **Name:** LongChat Guard  
-**Version:** 2.1.0
+**Version:** 2.1.1
 **Type:** open-source Chrome / Microsoft Edge browser extension  
 **Target:** chatgpt.com  
 **License:** MIT  

@@ -4,7 +4,7 @@
 
 ## Freeze rules
 
-- Final release target: v2.1.0.
+- Final release target: v2.1.1.
 - Do not change production code while a real-site case is being reproduced.
 - Every code change increments the development version before the next user test.
 - One user test per round. Do not ask the user to rerun the whole matrix.
@@ -27,7 +27,7 @@
 | RS-09 | P1 | Reload/persistence | Reload ChatGPT page, then reload extension | Calibration, mute state and authoritative ledger survive correctly; no language regression; no fake complete state | Page + extension reload E2E PASS; full browser-restart storage bytes persist, unpacked-extension restart automation is partial |
 | RS-10 | P1 | Overflow controls | Open ···; use mute/restore and full read | Menu positioning stable; mute persists; restore works; full read always visible; no layout regression | Required Edge fixture E2E PASS for menu positioning and mute/restore/full-read controls |
 | RS-11 | P2 | Multi-tab | Same conversation in two tabs; interact in one, leave the other stale | Old tab cannot overwrite newer ledger; no UI/storage feedback loop | Required Edge fixture E2E PASS for stale-tab/storage feedback prevention; live-site multi-tab remains optional |
-| RS-12 | P2 | Privacy/release audit | Inspect final dist/storage/permissions after functional closure | No chat body/Composer body/raw conversation ID persisted; permissions remain storage + chatgpt.com; fresh store ZIP only | PASS: final 2.1.0 manifest/privacy/package audit complete; no new permissions; store ZIP audited |
+| RS-12 | P2 | Privacy/release audit | Inspect final dist/storage/permissions after functional closure | No chat body/Composer body/raw conversation ID persisted; permissions remain storage + chatgpt.com; fresh store ZIP only | PASS: final 2.1.1 manifest/privacy/package audit complete; no new permissions; fresh store ZIP audited; no new permissions; store ZIP audited |
 
 ## Evidence format for each user test
 

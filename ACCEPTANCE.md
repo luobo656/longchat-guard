@@ -1,4 +1,4 @@
-# LongChat Guard 2.1.0 发布验收基线
+# LongChat Guard 2.1.1 发布验收基线
 
 ## A. 构建与权限
 
@@ -7,7 +7,7 @@
 - [ ] `npm run build` 通过。
 - [ ] `npm run verify:dist` 通过。
 - [ ] `git diff --check` 通过。
-- [ ] Manifest 仍为 MV3；正式发布版本与 package 一致（2.1.0）。
+- [ ] Manifest 仍为 MV3；正式发布版本与 package 一致（2.1.1）。
 - [ ] permissions 仅包含 `storage`；host permission 仅 `https://chatgpt.com/*`。
 - [ ] 最终发布 ZIP 仅来自 fresh build 的 `dist/`，ZIP 根目录直接包含 `manifest.json`。
 
@@ -38,3 +38,11 @@
 - [ ] Composer draft 被实时估算并进入 risk input。
 - [ ] 超长 draft 能在发送前提高 projected risk。
 - [ ] G 来自 `L_before -> L_after` 的 whole-turn delta。
+
+## E. 性能与正式版运行稳定性
+
+- [ ] Composer 每次输入不得调用完整 `readPageSnapshot()`；新会话出生判定只使用 Composer 文本 + message-root presence。
+- [ ] Composer 草稿风险使用合并调度，连续输入不会逐键触发完整 conversation observation。
+- [ ] MutationObserver 忽略 sidebar / 无关页面 / Composer-only DOM churn；Assistant streaming、conversation renderer replacement、alert/toast 仍能触发后续测量。
+- [ ] 相同 GuardUiModel + busy state 不重复改写 Shadow DOM 或 16 段风险轨道。
+- [ ] 正式版无“复制诊断信息”入口，也不持续写入 runtime/scan diagnostic storage；旧诊断 key 只在 install/update 时一次性清理。

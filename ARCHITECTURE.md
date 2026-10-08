@@ -1,4 +1,4 @@
-# LongChat Guard 2.1.0 架构基线
+# LongChat Guard 2.1.1 架构基线
 
 ## 1. 技术栈与边界
 
@@ -132,6 +132,8 @@ Completion/Failure event 也携带 expectedLedgerRevision，避免旧标签页�
 
 跨标签页的 `chrome.storage.onChanged` 只用于重新读取状态并本地重绘 UI，绝不触发新的 observation 写入。这样既能同步 mute/calibration，又不会形成 storage-change 反馈回路。
 
+2.1.1 将高频 UI 事件与完整测量进一步分层：Composer `input` 只做轻量的新会话出生判定，并以 160ms trailing debounce 用当前 authoritative ledger + 内存草稿重算发送前风险，不再逐键调用完整 `readPageSnapshot()`。MutationObserver 继续覆盖 document root 以承受 renderer replacement，但只对 conversation/main surface、可见 alert/toast 与 model label 等相关 mutation 触发 180ms 合并测量；Composer 自身 DOM churn 由 input 路径单独处理。
+
 ## 8. Migration
 
 Schema 9 及更旧状态升级为 10：
@@ -177,7 +179,7 @@ Assistant streaming / settle 期间，DOM stable hint、renderer grouping 或正
 
 ## 11. UI
 
-`GuardUiModel` 直接携带三维领域状态。
+`GuardUiModel` 直接携带三维领域状态。UI 对完整 model + calibration/measurement busy 状态生成 render signature；签名未变化时直接跳过 Shadow DOM 重写和 16 段轨道遍历，避免 streaming / storage refresh 期间重复绘制。
 
 `shouldRenderRiskTrack()` 在 UI 层再次 hard gate：
 
@@ -194,6 +196,6 @@ Overflow menu 固定包含完整读取当前会话、重新校准提醒基准、
 
 ## 12. 隐私
 
-Raw conversation text、Composer text 和附件内容只在内存瞬时处理。Storage 只保存 pseudonymous key、匿名 fingerprints、本地估算和状态元数据。扫描诊断不含 URL、正文或原始 fingerprint。
+Raw conversation text、Composer text 和附件内容只在内存瞬时处理。Storage 只保存 pseudonymous key、匿名 fingerprints、本地估算和状态元数据。正式版不再持久化运行时/扫描诊断导出数据；history scanner 为 fail-closed 判定保留的结构化阶段信息只存在于当前扫描内存中。升级安装时会一次性清理旧版遗留的诊断 storage key。
 
 Manifest 权限仍为 `storage` + `https://chatgpt.com/*`。

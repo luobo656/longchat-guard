@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   findConversationScrollContainer,
+  hasConversationMessageRoots,
   readComposerText,
   readConversationHints,
   readGenerationState,
@@ -10,6 +11,24 @@ import {
 } from '../src/content/dom-reader'
 
 describe('chatgpt DOM reader', () => {
+  it('checks for conversation message roots without reading message bodies', () => {
+    const populated = fakeDocument([
+      el('main', {}, [
+        el('div', { 'data-turn-key': 'turn-1' }, [], 'message body')
+      ])
+    ])
+    const blank = fakeDocument([
+      el('main', {}, [el('div', { 'data-testid': 'welcome-card' })])
+    ])
+
+    expect(
+      hasConversationMessageRoots(populated as unknown as Document)
+    ).toBe(true)
+    expect(
+      hasConversationMessageRoots(blank as unknown as Document)
+    ).toBe(false)
+  })
+
   it('does not duplicate nested message candidates', () => {
     const doc = fakeDocument([
       el('article', {}, [

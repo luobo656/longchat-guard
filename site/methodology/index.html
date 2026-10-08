@@ -19,7 +19,7 @@
   <meta property="og:url" content="https://luobo656.github.io/longchat-guard/methodology/">
   <meta property="og:image" content="https://luobo656.github.io/longchat-guard/icon128.png">
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"TechArticle","headline":"How LongChat Guard Estimates ChatGPT Long-Conversation Risk","description":"Transparent methodology for LongChat Guard: current local load, a user-confirmed empirical failure reference, whole-turn growth reserve, privacy, and limitations.","datePublished":"2026-10-01","dateModified":"2026-10-06","mainEntityOfPage":"https://luobo656.github.io/longchat-guard/methodology/","author":{"@type":"Person","name":"luobo656","url":"https://github.com/luobo656"},"about":{"@type":"SoftwareApplication","name":"LongChat Guard","softwareVersion":"2.1.0","url":"https://luobo656.github.io/longchat-guard/"}}
+  {"@context":"https://schema.org","@type":"TechArticle","headline":"How LongChat Guard Estimates ChatGPT Long-Conversation Risk","description":"Transparent methodology for LongChat Guard: current local load, a user-confirmed empirical failure reference, whole-turn growth reserve, privacy, and limitations.","datePublished":"2026-10-01","dateModified":"2026-10-08","mainEntityOfPage":"https://luobo656.github.io/longchat-guard/methodology/","author":{"@type":"Person","name":"luobo656","url":"https://github.com/luobo656"},"about":{"@type":"SoftwareApplication","name":"LongChat Guard","softwareVersion":"2.1.1","url":"https://luobo656.github.io/longchat-guard/"}}
   </script>
 </head>
 <body>
@@ -27,7 +27,7 @@
   <main>
     <article class="wrap">
       <section>
-        <span class="eyebrow">LongChat Guard 2.1.0 · Methodology</span>
+        <span class="eyebrow">LongChat Guard 2.1.1 · Methodology</span>
         <h1>How LongChat Guard estimates long-conversation risk without an official quota</h1>
         <p class="lede">LongChat Guard does not know OpenAI's private remaining-conversation allowance. It measures the current chat locally and compares it with a historical chat that you personally confirmed reached the conversation-length limit.</p>
         <div class="answer"><strong>Short answer:</strong> the risk model uses current local load (L), an empirical failure reference (R), and a whole-turn growth reserve (G). The purpose is not to predict an official token limit; it is to show where the current conversation sits relative to a failure point observed in your own local history.</div>

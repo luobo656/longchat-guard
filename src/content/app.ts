@@ -58,6 +58,8 @@ import {
 } from './conversation-session'
 import {
   findComposerElement,
+  hasConversationMessageRoots,
+  readComposerText,
   readPageSnapshot
 } from './dom-reader'
 import {
@@ -71,38 +73,10 @@ import {
   type HistoryScanResult
 } from './history-scanner'
 import { GuardUi, type GuardUiModel } from './ui'
-import {
-  appendRuntimeDiagnosticSnapshot,
-  RuntimeDiagnosticsTrace,
-  type RuntimeDiagnosticValue,
-} from './runtime-diagnostics'
 import { t } from './i18n'
 
 const estimator = new HeuristicTokenEstimator()
-const SCAN_DIAGNOSTICS_KEY = 'longChatGuardLastScanDiagnostics'
-const SCAN_DIAGNOSTICS_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const NEW_CHAT_START_SESSION_KEY = 'longChatGuardRecentBlankStartAt'
-
-export interface StoredScanDiagnostics {
-  version: 4
-  recordedAt: number
-  reason: HistoryScanFailureReason
-  stages: Array<
-    Pick<
-      HistoryScanResult['diagnostics'][number],
-      | 'phase'
-      | 'scrollTop'
-      | 'scrollHeight'
-      | 'clientHeight'
-      | 'logicalTop'
-      | 'scrollMode'
-      | 'pageMessageCount'
-      | 'observedCount'
-      | 'totalMessageCount'
-      | 'reason'
-    >
-  >
-}
 
 interface ActiveCalibrationScan {
   id: string
@@ -121,68 +95,6 @@ interface PendingTurnIntent {
   capturedAt: number
 }
 
-export function buildStoredScanDiagnostics(
-  result: HistoryScanResult,
-  recordedAt: number
-): StoredScanDiagnostics | undefined {
-  if (result.complete || !result.reason) return undefined
-  return {
-    version: 4,
-    recordedAt,
-    reason: result.reason,
-    stages: result.diagnostics.slice(-8).map((stage) => ({
-      phase: stage.phase,
-      scrollTop: stage.scrollTop,
-      scrollHeight: stage.scrollHeight,
-      clientHeight: stage.clientHeight,
-      ...(stage.logicalTop !== undefined
-        ? { logicalTop: stage.logicalTop }
-        : {}),
-      ...(stage.scrollMode ? { scrollMode: stage.scrollMode } : {}),
-      ...(stage.pageMessageCount !== undefined
-        ? { pageMessageCount: stage.pageMessageCount }
-        : {}),
-      ...(stage.observedCount !== undefined
-        ? { observedCount: stage.observedCount }
-        : {}),
-      ...(stage.totalMessageCount !== undefined
-        ? { totalMessageCount: stage.totalMessageCount }
-        : {}),
-      ...(stage.reason ? { reason: stage.reason } : {})
-    }))
-  }
-}
-
-export function shouldDiscardStoredScanDiagnostics(
-  value: unknown,
-  now: number
-): boolean {
-  if (!value || typeof value !== 'object') return true
-  const saved = value as { version?: unknown; recordedAt?: unknown }
-  return (
-    saved.version !== 4 ||
-    typeof saved.recordedAt !== 'number' ||
-    now - saved.recordedAt > SCAN_DIAGNOSTICS_TTL_MS
-  )
-}
-
-async function cleanupExpiredScanDiagnostics(now: number): Promise<void> {
-  try {
-    const stored = await chrome.storage.local.get(SCAN_DIAGNOSTICS_KEY)
-    if (
-      stored[SCAN_DIAGNOSTICS_KEY] &&
-      shouldDiscardStoredScanDiagnostics(
-        stored[SCAN_DIAGNOSTICS_KEY],
-        now
-      )
-    ) {
-      await chrome.storage.local.remove(SCAN_DIAGNOSTICS_KEY)
-    }
-  } catch {
-    // Diagnostics are best-effort and never block monitoring.
-  }
-}
-
 function continuationPrompt(): string {
   return t(
     'continuationPrompt',
@@ -194,44 +106,17 @@ export async function startGuard(): Promise<void> {
   if (location.hostname !== 'chatgpt.com') return
 
   const initialResponse = await sendBackground({ type: 'guard.loadState' })
-  await cleanupExpiredScanDiagnostics(Date.now())
 
   let latestState = initialResponse.state
-  const runtimeDiagnostics = new RuntimeDiagnosticsTrace(
-    chrome.runtime.getManifest().version
-  )
-  const diagnosticsStorage = {
-    get: (key: string) => chrome.storage.local.get(key),
-    set: (items: Record<string, unknown>) =>
-      chrome.storage.local.set(items)
-  }
-  let diagnosticsWriteQueue: Promise<void> = Promise.resolve()
-  let lastUiAssessable = false
-  let unavailablePersisted = false
-
-  const persistRuntimeDiagnostics = (reason: string): void => {
-    const snapshot = runtimeDiagnostics.snapshot(reason)
-    diagnosticsWriteQueue = diagnosticsWriteQueue
-      .then(async () => {
-        await appendRuntimeDiagnosticSnapshot(
-          diagnosticsStorage,
-          snapshot
-        )
-      })
-      .catch(() => undefined)
-  }
-
-  runtimeDiagnostics.record('instance_start', {
-    routeKind: diagnosticRouteKind(location.href),
-    visibility: document.visibilityState,
-    ledgerCount: Object.keys(latestState.ledgers).length
-  })
 
   const fingerprinter = new WebCryptoFingerprinter(latestState.installSalt)
   const persistedConversationKey = (value: string): Promise<string> =>
     anonymizeConversationKey(value, latestState.installSalt)
 
   let scheduleRun: (() => void) | undefined
+  let composerInputRunner:
+    | ReturnType<typeof createDebouncedRunner>
+    | undefined
   let latestConversationKey: string | undefined
   let conversationSession = createConversationSessionState()
   let monitoringStarted = false
@@ -257,104 +142,26 @@ export async function startGuard(): Promise<void> {
       calibrating: historyScanInProgress
     })
 
-  const renderUiModel = (
-    model: GuardUiModel,
-    source: string
-  ): void => {
-    const assessable =
-      model.measurementState === 'complete' &&
-      calibrationIsUsable(model.calibrationState) &&
-      model.riskState !== 'unknown'
-
-    runtimeDiagnostics.record('ui_model', {
-      source,
-      assessable,
-      conversationKeyPresent: Boolean(model.conversationKey),
-      measurementState: model.measurementState,
-      calibrationState: model.calibrationState,
-      environmentConfidence: model.environmentConfidence,
-      riskState: model.riskState,
-      trackAvailable: model.trackAvailable,
-      referencePositionScore: Math.round(
-        model.referencePositionScore * 100
-      ) / 100
-    })
-
+  const renderUiModel = (model: GuardUiModel): void => {
     ui.update(model)
-
-    if (assessable && !lastUiAssessable) {
-      unavailablePersisted = false
-      persistRuntimeDiagnostics('ui_assessable')
-    } else if (
-      !assessable &&
-      (lastUiAssessable || !unavailablePersisted)
-    ) {
-      unavailablePersisted = true
-      persistRuntimeDiagnostics(
-        lastUiAssessable
-          ? 'ui_assessable_to_unassessable'
-          : 'ui_unassessable'
-      )
-    }
-    lastUiAssessable = assessable
   }
 
   const renderUnavailable = (
-    source: string,
-    calibrationState: CalibrationState,
-    extra: Record<string, RuntimeDiagnosticValue> = {}
+    calibrationState: CalibrationState
   ): void => {
-    runtimeDiagnostics.record('ui_unavailable', {
-      source,
-      routeKind: diagnosticRouteKind(location.href),
-      latestConversationKeyPresent: Boolean(latestConversationKey),
-      latestLedgerPresent: Boolean(
-        latestConversationKey &&
-          latestState.ledgers[latestConversationKey]
-      ),
-      sessionActive: Boolean(
-        conversationSession.activeConversationId
-      ),
-      sessionObservedFromStart: Boolean(
-        conversationSession.observedFromStartConversationId
-      ),
-      calibrationState,
-      ...extra
-    })
     ui.showUnavailable(calibrationState)
-    if (lastUiAssessable || !unavailablePersisted) {
-      persistRuntimeDiagnostics(
-        lastUiAssessable
-          ? `drop:${source}`
-          : `unavailable:${source}`
-      )
-    }
-    lastUiAssessable = false
-    unavailablePersisted = true
   }
 
-  const renderCurrentUiFromState = (
-    source = 'state_refresh'
-  ): void => {
+  const renderCurrentUiFromState = (): void => {
     const conversationKey = latestConversationKey
     if (!conversationKey) {
-      renderUnavailable(
-        `${source}:missing_conversation_key`,
-        currentCalibrationState()
-      )
+      renderUnavailable(currentCalibrationState())
       return
     }
     const generation = currentGeneration()
     const ledger = latestState.ledgers[conversationKey]
     if (!generation || !ledger) {
-      renderUnavailable(
-        `${source}:missing_generation_or_ledger`,
-        currentCalibrationState(),
-        {
-          generationPresent: Boolean(generation),
-          ledgerPresent: Boolean(ledger)
-        }
-      )
+      renderUnavailable(currentCalibrationState())
       return
     }
     const measurementState = deriveMeasurementState({
@@ -373,7 +180,7 @@ export async function startGuard(): Promise<void> {
     )
     const summary = summarizeGeneration(generation)
     const composerDraftLoad = estimator.estimate(
-      readPageSnapshot(document, location.href, 'none').composerText ?? ''
+      readComposerText(document)
     )
     const risk = assessRisk({
       currentLoad: ledger.currentEstimatedLoad,
@@ -390,8 +197,7 @@ export async function startGuard(): Promise<void> {
     })
     const control =
       latestState.conversationControls[conversationKey] ?? {}
-    renderUiModel(
-      {
+    renderUiModel({
         conversationKey,
         measurementState,
         calibrationState,
@@ -408,9 +214,7 @@ export async function startGuard(): Promise<void> {
             (item) => item.conversationKey === conversationKey
           ),
         uncertaintySources: ledger.uncertaintySources
-      },
-      source
-    )
+      })
   }
 
   const renderAuthoritativeLedgerIfAvailable = (
@@ -430,14 +234,7 @@ export async function startGuard(): Promise<void> {
       return false
     }
     latestConversationKey = conversationKey
-    runtimeDiagnostics.record('authoritative_fallback', {
-      routeKind: diagnosticRouteKind(location.href),
-      ledgerRevision: ledger.ledgerRevision,
-      coverageState: ledger.coverageState,
-      parserHealth: ledger.parserHealth,
-      sequenceReliability: ledger.sequenceReliability
-    })
-    renderCurrentUiFromState('authoritative_fallback')
+    renderCurrentUiFromState()
     return true
   }
 
@@ -680,46 +477,6 @@ export async function startGuard(): Promise<void> {
             previousSessionLedger
           ))
       )
-      runtimeDiagnostics.record('page_observation', {
-        routeKind: diagnosticRouteKind(location.href),
-        routeConversationIdPresent: Boolean(routeConversationId),
-        observedConversationIdPresent: Boolean(
-          observedConversationId
-        ),
-        resolvedConversationIdPresent: Boolean(
-          resolvedConversationId
-        ),
-        identityChanged,
-        sameConversationEvidence,
-        routeMatchesSession: Boolean(
-          routeConversationId &&
-            conversationSession.activeConversationId &&
-            routeConversationId ===
-              conversationSession.activeConversationId
-        ),
-        observedMatchesSession: Boolean(
-          observedConversationId &&
-            conversationSession.activeConversationId &&
-            observedConversationId ===
-              conversationSession.activeConversationId
-        ),
-        sessionActive: Boolean(
-          conversationSession.activeConversationId
-        ),
-        sessionObservedFromStart: Boolean(
-          conversationSession.observedFromStartConversationId
-        ),
-        blankSurfaceObserved: Boolean(
-          conversationSession.blankSurfaceObserved
-        ),
-        messageCount: preliminarySnapshot.messages.length,
-        userCount: preliminarySnapshot.messages.filter(
-          (message) => message.role === 'user'
-        ).length,
-        assistantCount: preliminarySnapshot.messages.filter(
-          (message) => message.role === 'assistant'
-        ).length
-      })
       const blankConversationSurface =
         !resolvedConversationId &&
         preliminarySnapshot.messages.length === 0
@@ -761,32 +518,6 @@ export async function startGuard(): Promise<void> {
       conversationSession = sessionResolution.state
       preliminarySnapshot.coverageEvidence =
         sessionResolution.coverageEvidence
-      runtimeDiagnostics.record('session_resolution', {
-        coverageEvidence: sessionResolution.coverageEvidence,
-        activeConversationIdPresent: Boolean(
-          sessionResolution.activeConversationId
-        ),
-        sessionActive: Boolean(
-          conversationSession.activeConversationId
-        ),
-        sessionObservedFromStart: Boolean(
-          conversationSession.observedFromStartConversationId
-        ),
-        blankSurfaceObserved: Boolean(
-          conversationSession.blankSurfaceObserved
-        ),
-        persistedAuthoritative,
-        identityChanged,
-        sameConversationEvidence,
-        identityRebound: Boolean(
-          identityChanged &&
-            sameConversationEvidence &&
-            sessionResolution.coverageEvidence ===
-              'observed_from_start'
-        ),
-        consumedBridgedStart:
-          sessionResolution.consumedBridgedStart
-      })
       if (sessionResolution.consumedBridgedStart) {
         clearNewChatStartSessionEvidence()
       }
@@ -805,25 +536,6 @@ export async function startGuard(): Promise<void> {
         ? await persistedConversationKey(adapterResult.conversationKey)
         : activeSessionConversationKey
 
-      runtimeDiagnostics.record('adapter_result', {
-        conversationKeyPresent: Boolean(conversationKey),
-        adapterConversationKeyPresent: Boolean(
-          adapterResult.conversationKey
-        ),
-        activeSessionKeyPresent: Boolean(
-          activeSessionConversationKey
-        ),
-        matchesLatestConversationKey: Boolean(
-          conversationKey &&
-            latestConversationKey &&
-            conversationKey === latestConversationKey
-        ),
-        health: adapterResult.health,
-        coverageState: adapterResult.coverageState,
-        parserCanary,
-        reasons: adapterResult.reasons,
-        messageCount: adapterResult.messages.length
-      })
 
       if (
         !conversationKey ||
@@ -835,18 +547,10 @@ export async function startGuard(): Promise<void> {
         }
         latestConversationKey = conversationKey
         renderUnavailable(
-          'process_unreadable',
           deriveCalibrationState({
             generation: currentGeneration(),
             currentEnvironment: environmentSignature
-          }),
-          {
-            conversationKeyPresent: Boolean(conversationKey),
-            adapterHealth: adapterResult.health,
-            adapterCoverageState: adapterResult.coverageState,
-            parserCanary,
-            adapterReasons: adapterResult.reasons
-          }
+          })
         )
         return
       }
@@ -930,20 +634,6 @@ export async function startGuard(): Promise<void> {
         }
       })
       latestState = response.state
-      runtimeDiagnostics.record('background_observation', {
-        staleObservation: Boolean(response.staleObservation),
-        disposition:
-          response.observationDisposition ?? 'none',
-        snapshotPresent: Boolean(response.snapshot),
-        snapshotRevision:
-          response.snapshot?.ledgerRevision ?? 0,
-        snapshotCoverage:
-          response.snapshot?.coverageState ?? 'none',
-        snapshotParser:
-          response.snapshot?.parserHealth ?? 'none',
-        snapshotSequence:
-          response.snapshot?.sequenceReliability ?? 'none'
-      })
 
       if (response.staleObservation) {
         window.setTimeout(() => scheduleRun?.(), 50)
@@ -1061,15 +751,7 @@ export async function startGuard(): Promise<void> {
       const generation = currentGeneration()
       const ledger = latestState.ledgers[conversationKey]
       if (!generation || !ledger) {
-        renderUnavailable(
-          'process_missing_generation_or_ledger',
-          currentCalibrationState(),
-          {
-            generationPresent: Boolean(generation),
-            ledgerPresent: Boolean(ledger),
-            conversationKeyPresent: Boolean(conversationKey)
-          }
-        )
+        renderUnavailable(currentCalibrationState())
         return
       }
 
@@ -1124,8 +806,7 @@ export async function startGuard(): Promise<void> {
           (item) => item.conversationKey === conversationKey
         )
 
-      renderUiModel(
-        {
+      renderUiModel({
           conversationKey,
           measurementState,
           calibrationState,
@@ -1140,9 +821,7 @@ export async function startGuard(): Promise<void> {
           muted: effectiveControl.muted ?? false,
           pendingFailureConfirmation,
           uncertaintySources: ledger.uncertaintySources
-        },
-        'process_final'
-      )
+        })
 
       if (pendingFailureConfirmation) {
         ui.focusPendingConfirmation()
@@ -1150,16 +829,6 @@ export async function startGuard(): Promise<void> {
         ui.drawAttention()
       }
     } catch (error) {
-      runtimeDiagnostics.record('process_exception', {
-        routeKind: diagnosticRouteKind(location.href),
-        error: diagnosticErrorCode(error),
-        latestConversationKeyPresent: Boolean(
-          latestConversationKey
-        ),
-        sessionActive: Boolean(
-          conversationSession.activeConversationId
-        )
-      })
       const rawConversationKey =
         rawConversationKeyFromUrl(location.href) ??
         (conversationSession.activeConversationId
@@ -1169,17 +838,12 @@ export async function startGuard(): Promise<void> {
         ? await persistedConversationKey(rawConversationKey)
         : latestConversationKey
       if (renderAuthoritativeLedgerIfAvailable(currentKey)) return
-      renderUnavailable(
-        'process_exception_no_authoritative_fallback',
-        currentCalibrationState(),
-        { error: diagnosticErrorCode(error) }
-      )
+      renderUnavailable(currentCalibrationState())
     }
   }
 
   async function runMeasurementScan(): Promise<void> {
     if (historyScanInProgress || measurementScanInProgress) return
-    await cleanupExpiredScanDiagnostics(Date.now())
 
     const startSnapshot = readPageSnapshot(
       document,
@@ -1237,7 +901,6 @@ export async function startGuard(): Promise<void> {
       }
 
       if (!result.complete) {
-        await persistScanFailureDiagnostic(result)
         ui.showScanNotice(
           t(
             'measurementScanIncomplete',
@@ -1279,12 +942,6 @@ export async function startGuard(): Promise<void> {
       })
       latestState = response.state
 
-      try {
-        await chrome.storage.local.remove(SCAN_DIAGNOSTICS_KEY)
-      } catch {
-        // Optional cleanup only.
-      }
-
       ui.showToast(
         t(
           'measurementScanSuccess',
@@ -1309,7 +966,6 @@ export async function startGuard(): Promise<void> {
 
   async function runCalibrationScan(): Promise<void> {
     if (historyScanInProgress) return
-    await cleanupExpiredScanDiagnostics(Date.now())
 
     const startSnapshot = readPageSnapshot(
       document,
@@ -1399,7 +1055,6 @@ export async function startGuard(): Promise<void> {
       }
 
       if (!result.complete) {
-        await persistScanFailureDiagnostic(result)
         ui.showScanNotice(
           historyScanFailureMessage(result.reason),
           'warning'
@@ -1442,12 +1097,6 @@ export async function startGuard(): Promise<void> {
         }
       })
       latestState = response.state
-
-      try {
-        await chrome.storage.local.remove(SCAN_DIAGNOSTICS_KEY)
-      } catch {
-        // Optional cleanup only.
-      }
 
       const generation = currentGeneration()
       const summary = generation
@@ -1503,17 +1152,7 @@ export async function startGuard(): Promise<void> {
     void sendBackground({ type: 'guard.readState' })
       .then((response) => {
         latestState = response.state
-        runtimeDiagnostics.record('storage_state_refresh', {
-          latestConversationKeyPresent: Boolean(
-            latestConversationKey
-          ),
-          latestLedgerPresent: Boolean(
-            latestConversationKey &&
-              latestState.ledgers[latestConversationKey]
-          ),
-          ledgerCount: Object.keys(latestState.ledgers).length
-        })
-        renderCurrentUiFromState('storage_change')
+        renderCurrentUiFromState()
       })
       .catch(() => undefined)
   }
@@ -1578,19 +1217,6 @@ export async function startGuard(): Promise<void> {
         conversationSession,
         now
       )
-      runtimeDiagnostics.record('turn_intent_new_chat_start', {
-        routeKind: diagnosticRouteKind(location.href),
-        messageCount: snapshot.messages.length,
-        preassignedConversationIdPresent: Boolean(
-          snapshotConversationId
-        ),
-        sessionActive: Boolean(
-          conversationSession.activeConversationId
-        ),
-        blankSurfaceObserved: Boolean(
-          conversationSession.blankSurfaceObserved
-        )
-      })
       rememberNewChatStartSessionEvidence(now)
       latestConversationKey = undefined
       pendingTurnIntent = {
@@ -1610,19 +1236,7 @@ export async function startGuard(): Promise<void> {
     captureTurnStart(event.target)
   }
 
-  const resetConversationNavigationState = (
-    reason: string
-  ): void => {
-    runtimeDiagnostics.record('session_reset', {
-      reason,
-      routeKind: diagnosticRouteKind(location.href),
-      sessionWasActive: Boolean(
-        conversationSession.activeConversationId
-      ),
-      latestConversationKeyPresent: Boolean(
-        latestConversationKey
-      )
-    })
+  const resetConversationNavigationState = (): void => {
     conversationSession = resetConversationSession()
     clearNewChatStartSessionEvidence()
     latestConversationKey = undefined
@@ -1630,23 +1244,18 @@ export async function startGuard(): Promise<void> {
     completionTracker = new ResponseCompletionTracker()
   }
 
-  const armNewChatNavigationState = (reason: string): void => {
-    resetConversationNavigationState(reason)
+  const armNewChatNavigationState = (): void => {
+    resetConversationNavigationState()
     const now = Date.now()
     conversationSession = markNewChatStarted(
       conversationSession,
       now
     )
     rememberNewChatStartSessionEvidence(now)
-    runtimeDiagnostics.record('new_chat_navigation_armed', {
-      reason,
-      routeKind: diagnosticRouteKind(location.href),
-      pendingNewChatStart: true
-    })
   }
 
   const onPopState = (): void => {
-    resetConversationNavigationState('popstate')
+    resetConversationNavigationState()
     scheduleRun?.()
   }
 
@@ -1661,10 +1270,10 @@ export async function startGuard(): Promise<void> {
       isConversationNavigationHref(navigationLink.href)
     ) {
       if (isBlankConversationRoute(navigationLink.href)) {
-        armNewChatNavigationState('blank_navigation_link')
+        armNewChatNavigationState()
         newChatNavigationArmed = true
       } else {
-        resetConversationNavigationState('navigation_link')
+        resetConversationNavigationState()
       }
     }
 
@@ -1675,7 +1284,7 @@ export async function startGuard(): Promise<void> {
       navigationControl &&
       isNewChatNavigationTarget(navigationControl)
     ) {
-      armNewChatNavigationState('new_chat_control')
+      armNewChatNavigationState()
     }
 
     const buttonElement =
@@ -1702,28 +1311,31 @@ export async function startGuard(): Promise<void> {
     captureTurnStart(event.target)
   }
 
-  const armNewChatFromComposerActivity = (
-    target: EventTarget | null
-  ): void => {
-    if (!isPromptSendTarget(target)) return
-
-    const snapshot = readPageSnapshot(
-      document,
-      location.href,
-      'none'
-    )
-    const composerHasText = Boolean(
-      (snapshot.composerText ?? '').trim()
-    )
+  const armNewChatFromComposerActivity = (): void => {
     const conversationKey = latestConversationKey
     const hasPersistedLedger = Boolean(
       conversationKey &&
         latestState.ledgers[conversationKey]
     )
+    if (hasPersistedLedger) return
+
+    const now = Date.now()
+    const alreadyArmed = Boolean(
+      pendingTurnIntent &&
+        !pendingTurnIntent.conversationKey &&
+        conversationSession.pendingNewChatStartedAt !== undefined &&
+        now - conversationSession.pendingNewChatStartedAt >= 0 &&
+        now - conversationSession.pendingNewChatStartedAt <=
+          NEW_CHAT_START_EVIDENCE_TTL_MS
+    )
+    if (alreadyArmed) return
+
+    const composerHasText = Boolean(readComposerText(document).trim())
+    const messageCount = hasConversationMessageRoots(document) ? 1 : 0
 
     if (
       !shouldArmNewChatFromComposerActivity({
-        messageCount: snapshot.messages.length,
+        messageCount,
         composerHasText,
         hasPersistedLedger
       })
@@ -1731,7 +1343,6 @@ export async function startGuard(): Promise<void> {
       return
     }
 
-    const now = Date.now()
     conversationSession = markNewChatStarted(
       conversationSession,
       now
@@ -1746,18 +1357,12 @@ export async function startGuard(): Promise<void> {
         capturedAt: now
       }
     }
-    runtimeDiagnostics.record('new_chat_composer_armed', {
-      routeKind: diagnosticRouteKind(location.href),
-      conversationIdPresent: Boolean(
-        resolveConversationId(snapshot)
-      ),
-      messageCount: snapshot.messages.length
-    })
   }
 
   const onInput = (event: Event): void => {
-    armNewChatFromComposerActivity(event.target)
-    scheduleRun?.()
+    if (!isPromptSendTarget(event.target)) return
+    armNewChatFromComposerActivity()
+    composerInputRunner?.schedule()
   }
 
   function startMonitoring(): void {
@@ -1768,11 +1373,11 @@ export async function startGuard(): Promise<void> {
     }
 
     monitoringStarted = true
-    runtimeDiagnostics.record('monitoring_started', {
-      routeKind: diagnosticRouteKind(location.href)
-    })
-    persistRuntimeDiagnostics('monitoring_started')
     scheduleRun = createCoalescedAsyncRunner(processPage)
+    composerInputRunner = createDebouncedRunner(
+      renderCurrentUiFromState,
+      160
+    )
 
     document.addEventListener('submit', onSubmit, true)
     document.addEventListener('click', onClick, true)
@@ -1783,9 +1388,13 @@ export async function startGuard(): Promise<void> {
 
     const mutationRunner = createDebouncedRunner(
       () => scheduleRun?.(),
-      120
+      180
     )
-    const observer = new MutationObserver(mutationRunner.schedule)
+    const observer = new MutationObserver((mutations) => {
+      if (mutationsAffectConversationSurface(mutations)) {
+        mutationRunner.schedule()
+      }
+    })
     observer.observe(document.documentElement, {
       childList: true,
       subtree: true,
@@ -1795,20 +1404,12 @@ export async function startGuard(): Promise<void> {
     window.addEventListener(
       'beforeunload',
       () => {
-        runtimeDiagnostics.record('beforeunload', {
-          routeKind: diagnosticRouteKind(location.href),
-          latestConversationKeyPresent: Boolean(
-            latestConversationKey
-          ),
-          sessionActive: Boolean(
-            conversationSession.activeConversationId
-          )
-        })
-        persistRuntimeDiagnostics('beforeunload')
         activeCalibrationScan = undefined
         activeMeasurementScan = undefined
         observer.disconnect()
         mutationRunner.cancel()
+        composerInputRunner?.cancel()
+        composerInputRunner = undefined
         document.removeEventListener('submit', onSubmit, true)
         document.removeEventListener('click', onClick, true)
         document.removeEventListener('keydown', onKeyDown, true)
@@ -1840,24 +1441,6 @@ export async function startGuard(): Promise<void> {
     scan: ActiveCalibrationScan
   ): boolean {
     return activeMeasurementScan?.id === scan.id
-  }
-}
-
-async function persistScanFailureDiagnostic(
-  result: HistoryScanResult
-): Promise<void> {
-  try {
-    const diagnostic = buildStoredScanDiagnostics(
-      result,
-      Date.now()
-    )
-    if (diagnostic) {
-      await chrome.storage.local.set({
-        [SCAN_DIAGNOSTICS_KEY]: diagnostic
-      })
-    }
-  } catch {
-    // Diagnostics are optional and contain no raw chat content.
   }
 }
 
@@ -1995,35 +1578,6 @@ export function canStartMonitoring(settings: {
   })
 }
 
-function diagnosticRouteKind(url: string): string {
-  try {
-    const parsed = new URL(url, 'https://chatgpt.com')
-    if (parseConversationIdFromUrl(parsed.href)) {
-      return 'conversation'
-    }
-    if (parsed.pathname === '/' || parsed.pathname === '/chat') {
-      return 'root'
-    }
-    if (/^\/g\/[^/]+\/?$/.test(parsed.pathname)) {
-      return 'g_root'
-    }
-    if (parsed.pathname.startsWith('/g/')) return 'g_other'
-    if (parsed.pathname.startsWith('/workspace')) return 'workspace'
-    return 'other'
-  } catch {
-    return 'invalid'
-  }
-}
-
-function diagnosticErrorCode(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message
-      .replace(/[^a-zA-Z0-9_:.-]+/g, '_')
-      .slice(0, 96)
-  }
-  return 'unknown_error'
-}
-
 function isBlankConversationRoute(url: string): boolean {
   try {
     const parsed = new URL(url, location.href)
@@ -2057,6 +1611,42 @@ function isNewChatNavigationTarget(
   return /new[-_ ]?chat|new conversation|新建聊天|新聊天|新的聊天|新建对话|新建對話|新增聊天|新增對話|開始新聊天|开始新聊天/i.test(
     semantic
   )
+}
+
+const MONITORED_SURFACE_SELECTOR =
+  'main, [role="main"], [role="alert"], [data-testid*="toast"], [data-testid="model-switcher-dropdown-button"]'
+const COMPOSER_SURFACE_SELECTOR =
+  '#prompt-textarea, [data-testid="prompt-textarea"], [data-testid="chat-input"], div.ProseMirror[contenteditable="true"], div.ProseMirror[contenteditable="plaintext-only"]'
+
+function mutationsAffectConversationSurface(
+  mutations: MutationRecord[]
+): boolean {
+  return mutations.some((mutation) => {
+    const target = mutationTargetElement(mutation.target)
+    if (target?.closest(COMPOSER_SURFACE_SELECTOR)) return false
+    if (target?.closest(MONITORED_SURFACE_SELECTOR)) return true
+
+    for (const node of [
+      ...Array.from(mutation.addedNodes),
+      ...Array.from(mutation.removedNodes)
+    ]) {
+      const element = mutationTargetElement(node)
+      if (!element) continue
+      if (
+        element.matches(MONITORED_SURFACE_SELECTOR) ||
+        element.querySelector(MONITORED_SURFACE_SELECTOR)
+      ) {
+        return true
+      }
+    }
+    return false
+  })
+}
+
+function mutationTargetElement(node: Node): Element | null {
+  return node instanceof Element
+    ? node
+    : node.parentElement
 }
 
 function isPromptSendTarget(target: EventTarget | null): boolean {

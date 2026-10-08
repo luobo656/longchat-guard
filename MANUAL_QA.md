@@ -1,4 +1,4 @@
-# LongChat Guard 2.1.0 真实浏览器 QA
+# LongChat Guard 2.1.1 真实浏览器 QA
 
 自动测试和 production build 不能替代此清单。使用 Edge / Chrome 开发扩展加载项目 `dist/`，在真实 `chatgpt.com` 页面执行。
 
@@ -12,7 +12,7 @@ npm run verify:dist
 git diff --check
 ```
 
-确认 Manifest version 为正式发布候选 2.1.0；只有全部发布门禁通过后才提交商店与 GitHub Release。
+确认 Manifest version 为正式发布候选 2.1.1；只有全部发布门禁通过后才提交商店与 GitHub Release。
 
 ## A. 无校准
 

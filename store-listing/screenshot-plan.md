@@ -1,4 +1,4 @@
-# Screenshot Plan — LongChat Guard 2.1.0
+# Screenshot Plan — LongChat Guard 2.1.1
 
 ## Fresh store screenshots required
 
@@ -39,10 +39,10 @@ Optional sixth image: a clean 128 px icon/product-brand crop for promotional use
 
 ## Screenshot rules
 
-- Use the actual 2.1.0 extension running on a real ChatGPT page; do not recreate the UI in an image editor.
+- Use the actual 2.1.1 extension running on a real ChatGPT page; do not recreate the UI in an image editor.
 - Use synthetic or non-private conversation text.
 - Do not show private chats, names, emails, account identifiers, API keys, or unrelated personal data.
 - Do not add fake token counts, percentages, “remaining quota”, K values, or an “official limit” badge.
 - Do not imply OpenAI affiliation, sponsorship, endorsement, or official quota access.
 - Do not force the UI into a risk state that the running extension did not actually produce.
-- Do not reuse the 2026-10-01 pre-2.1.0 screenshots as current 2.1.0 product screenshots.
+- Do not reuse the 2026-10-01 pre-2.1.0 screenshots as current 2.1.1 product screenshots.

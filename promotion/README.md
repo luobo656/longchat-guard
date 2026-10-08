@@ -1,6 +1,6 @@
-# LongChat Guard 2.1.0 — SEO / GEO / Launch Kit
+# LongChat Guard 2.1.1 — SEO / GEO / Launch Kit
 
-This directory contains the ready-to-publish launch material for LongChat Guard 2.1.0. Historical 2.0.2 reports/releases remain archived as dated records.
+This directory contains the ready-to-publish launch material for LongChat Guard 2.1.1. Historical 2.0.2 reports/releases remain archived as dated records.
 
 ## Canonical identity
 
@@ -36,12 +36,12 @@ The current product compares browser-local conversation load with a user-confirm
 
 ### Day 1 — Entity + search foundation
 Completed in repository:
-- 2.1.0 product identity synchronized across website, README, AI discovery files, Chrome/Edge listing sources, and all three locales.
+- 2.1.1 product identity synchronized across website, README, AI discovery files, Chrome/Edge listing sources, and all three locales.
 - English / Simplified Chinese / Traditional Chinese canonical pages.
 - Methodology pages explaining current load L, empirical failure reference R, whole-turn growth reserve G, measurement authority, and calibration state.
 - “ChatGPT conversation too long” intent pages.
 - Canonical, hreflang, sitemap, JSON-LD, IndexNow, Google/Bing verification.
-- Existing real localized screenshots are retained as visual assets. Do not attach a version number to an older screenshot; refresh store screenshots only if the current 2.1.0 UI is no longer represented accurately.
+- Existing real localized screenshots are retained as visual assets. Do not attach a version number to an older screenshot; refresh store screenshots only if the current 2.1.1 UI is no longer represented accurately.
 
 ### Day 2 — Search-intent coverage + differentiation
 Completed in repository:

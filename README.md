@@ -16,7 +16,7 @@ LongChat Guard is an open-source, local-first Chrome/Edge extension for empirica
 
 ![LongChat Guard icon](./public/icons/icon128.png)
 
-## 当前 2.1.0 产品模型
+## 当前 2.1.1 产品模型
 
 LongChat Guard 将“能不能判断”和“风险是什么”分开：
 

@@ -50,6 +50,18 @@ export function readConversationHints(doc: Document, url: string): string[] {
   return Array.from(new Set(hints))
 }
 
+export function hasConversationMessageRoots(doc: Document): boolean {
+  if (
+    doc.querySelector(
+      '[data-turn-key], [data-message-author-role], [data-turn="user"], [data-turn="assistant"], [data-testid*="conversation-turn"]'
+    )
+  ) {
+    return true
+  }
+  const main = doc.querySelector('main, [role="main"]')
+  return Boolean(main?.querySelector('article, [role="article"]'))
+}
+
 export function readMessages(doc: Document): PageMessageSnapshot[] {
   const groupedRendererMessages = readTurnKeyMessages(doc)
 

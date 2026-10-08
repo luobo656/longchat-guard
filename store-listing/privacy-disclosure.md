@@ -46,7 +46,7 @@ No chat content is uploaded, sold, shared, used for advertising, or made availab
 - `storage`
 - host permission for `https://chatgpt.com/*`
 
-No new permission is required by LongChat Guard 2.1.0.
+No new permission is required by LongChat Guard 2.1.1.
 
 ## User Control and Deletion
 
