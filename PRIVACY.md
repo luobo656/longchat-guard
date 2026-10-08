@@ -10,7 +10,7 @@ After affirmative consent, the content script may read visible ChatGPT conversat
 
 Raw chat text and composer text are processed transiently in memory. They are not persisted as raw text and are not transmitted to LongChat Guard or to the developer.
 
-A successful history-calibration scan leaves no diagnostic record. If a scan fails, LongChat Guard may keep one bounded local structural diagnostic for up to 7 days. That diagnostic contains only a failure reason and limited scrolling/structure metrics; it does not contain the conversation URL, raw chat text, or raw message fingerprints.
+Runtime and history-scan diagnostics are not persisted or exported in the production extension. Structural scan information needed for fail-closed decisions exists only transiently during the current scan.
 
 ## Data Stored Locally
 
@@ -24,7 +24,6 @@ The extension may store:
 - Internal successful-observation evidence, empirical failure-reference metadata, and whole-turn growth samples.
 - Environment metadata limited to measurement/parser schema versions and an optional model hint only when it can be reliably observed from the page. The model hint is diagnostic metadata only; it does not determine the risk level or calibration validity.
 - Per-conversation reminder controls.
-- On failed history scans only, the bounded structural diagnostic described above.
 
 The pseudonymous identifier reduces direct exposure of the raw conversation ID, but it is not described as absolute anonymity against an attacker who has access to the same browser profile and local install salt.
 
@@ -52,7 +51,7 @@ The Manifest V3 extension uses:
 - `storage` for local pseudonymous state, calibration evidence, and settings.
 - `https://chatgpt.com/*` so the content script can provide its single user-facing purpose on ChatGPT web pages.
 
-No additional permission is required for LongChat Guard 2.1.0.
+No additional permission is required for LongChat Guard 2.1.1.
 
 ## User Control and Deletion
 
