@@ -8,6 +8,12 @@
   "actionTitle": {
     "message": "LongChat Guard"
   },
+  "manualReadTitle": {"message":"Full conversation reading guide"},
+  "manualReadScrollUp": {"message":"Press the middle mouse button over the conversation and autoscroll upward until the first message is visible. Then click below. The extension reads only after both scroll passes are complete. Do not refresh or switch chats."},
+  "manualReadReachedTop": {"message":"Reached the first message"},
+  "manualReadScrollDown": {"message":"Now autoscroll downward through the whole chat until the latest message is visible. Stop scrolling and click below to begin reading."},
+  "manualReadReachedBottom": {"message":"Back at the latest message — read now"},
+  "manualReadCancel": {"message":"Cancel"},
   "riskNormal": {
     "message": "Lower risk"
   },

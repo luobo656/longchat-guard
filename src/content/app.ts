@@ -72,6 +72,7 @@ import {
   type HistoryScanFailureReason,
   type HistoryScanResult
 } from './history-scanner'
+import {withManualHistoryGuide} from './manual-history-guide'
 import { GuardUi, type GuardUiModel } from './ui'
 import { t } from './i18n'
 
@@ -842,6 +843,27 @@ export async function startGuard(): Promise<void> {
     }
   }
 
+  /** The only addition to the frozen 2.1.1 manual-read behavior is
+   * asking the user to prepare the page before the ORIGINAL scanner runs.
+   * Neither DOM identity rules nor the original scanner are replaced.
+   * Passive real-time monitoring never opens this guide.
+   */
+  const guidedManualHistoryRead=async():Promise<HistoryScanResult>=>{
+    const prepared=await withManualHistoryGuide(async wait=>{
+      if(await wait('up',0)!=='next')return false
+      return await wait('down',0)==='next'
+    })
+    if(!prepared){
+      return {
+        complete:false,reason:'scan_limit_reached',
+        observedMessages:[],messageCount:0,
+        attachmentCount:0,unknownRoleCount:0,
+        uncertaintySources:[],diagnostics:[]
+      }
+    }
+    return scanConversationHistory(document,observePageMessages)
+  }
+
   async function runMeasurementScan(): Promise<void> {
     if (historyScanInProgress || measurementScanInProgress) return
 
@@ -881,10 +903,7 @@ export async function startGuard(): Promise<void> {
     ui.setMeasurementBusy(true)
 
     try {
-      const result = await scanConversationHistory(
-        document,
-        observePageMessages
-      )
+      const result=await guidedManualHistoryRead()
 
       if (!isSameActiveMeasurementScan(scan)) {
         throw new Error('scan_session_replaced')
@@ -1035,10 +1054,7 @@ export async function startGuard(): Promise<void> {
     ui.setCalibrationBusy(true)
 
     try {
-      const result = await scanConversationHistory(
-        document,
-        observePageMessages
-      )
+      const result = await guidedManualHistoryRead()
 
       if (!isSameActiveScan(scan)) {
         throw new Error('scan_session_replaced')
@@ -1205,8 +1221,10 @@ export async function startGuard(): Promise<void> {
         snapshot.messages.length === 0
     )
     if (
-      snapshot.messages.length === 0 &&
+      (snapshot.messages.length === 0 ||
+        (isBlankConversationRoute(location.href)&&!snapshotConversationId&&!ledger)) &&
       (
+        isBlankConversationRoute(location.href) ||
         !snapshotConversationId ||
         conversationSession.blankSurfaceObserved === true ||
         recentPendingNewChatStart ||
@@ -1255,7 +1273,12 @@ export async function startGuard(): Promise<void> {
   }
 
   const onPopState = (): void => {
-    resetConversationNavigationState()
+    const now=Date.now()
+    const birth=conversationSession.pendingNewChatStartedAt
+    const pendingFirst=Boolean(birth!==undefined&&now>=birth&&
+      now-birth<=NEW_CHAT_START_EVIDENCE_TTL_MS&&
+      pendingTurnIntent&&!pendingTurnIntent.conversationKey)
+    if(!pendingFirst)resetConversationNavigationState()
     scheduleRun?.()
   }
 
@@ -1331,7 +1354,8 @@ export async function startGuard(): Promise<void> {
     if (alreadyArmed) return
 
     const composerHasText = Boolean(readComposerText(document).trim())
-    const messageCount = hasConversationMessageRoots(document) ? 1 : 0
+    const messageCount = isBlankConversationRoute(location.href)
+      ? 0 : hasConversationMessageRoots(document) ? 1 : 0
 
     if (
       !shouldArmNewChatFromComposerActivity({
@@ -1585,7 +1609,7 @@ function isBlankConversationRoute(url: string): boolean {
     if (parsed.pathname === '/' || parsed.pathname === '/chat') {
       return true
     }
-    return /^\/g\/[^/]+\/?$/.test(parsed.pathname)
+    return /^\/g\/[^/]+(?:\/project)?\/?$/.test(parsed.pathname)
   } catch {
     return false
   }

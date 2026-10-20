@@ -463,6 +463,34 @@ async function clickShadow(page, selector) {
   return evaluate(page, "(() => { const el=document.querySelector('#conversation-guard-root')?.shadowRoot?.querySelector(" + JSON.stringify(selector) + "); if(!el)return false; el.click(); return true; })()")
 }
 
+async function completeGuidedManualRead(page,label) {
+  const initial=await waitEval(page,
+    "(() => {const guide=document.querySelector('[data-long-chat-manual-guide]'); const button=guide?.shadowRoot?.querySelector('button:last-child');return {visible:!!guide,caption:button?.textContent||''}})()",
+    value=>value?.visible&&/Reached|first message|第一条|第一則/.test(value.caption),12000)
+  if(!initial.visible)throw Error(label+': manual window missing')
+  const reachedTop=await evaluate(page,
+    "(() => {const timeline=document.querySelector('#timeline');timeline.scrollTop=0;timeline.dispatchEvent(new Event('scroll',{bubbles:true}));return {top:timeline.scrollTop,range:timeline.scrollHeight-timeline.clientHeight}})()")
+  if(Math.abs(reachedTop.top)>12)throw Error(label+': test did not scroll to top')
+  await sleep(250)
+  const clickedTop=await evaluate(page,
+    "(() => {const el=document.querySelector('[data-long-chat-manual-guide]')?.shadowRoot?.querySelector('button:last-child');if(!el)return false;el.click();return true})()")
+  if(!clickedTop)throw Error(label+': first button missing')
+  await waitEval(page,
+    "document.querySelector('[data-long-chat-manual-guide]')?.shadowRoot?.querySelector('button:last-child')?.textContent||''",
+    value=>/Back at|latest message|最后一条|最後一則/.test(value),12000)
+  const reachedBottom=await evaluate(page,
+    "(() => {const timeline=document.querySelector('#timeline');timeline.scrollTop=timeline.scrollHeight;timeline.dispatchEvent(new Event('scroll',{bubbles:true}));return {top:timeline.scrollTop,max:timeline.scrollHeight-timeline.clientHeight}})()")
+  if(Math.abs(reachedBottom.top-reachedBottom.max)>12)throw Error(label+': test did not return to bottom')
+  await sleep(250)
+  const clickedBottom=await evaluate(page,
+    "(() => {const el=document.querySelector('[data-long-chat-manual-guide]')?.shadowRoot?.querySelector('button:last-child');if(!el)return false;el.click();return true})()")
+  if(!clickedBottom)throw Error(label+': final button missing')
+  await waitEval(page,
+    "!document.querySelector('[data-long-chat-manual-guide]')",
+    Boolean,15000)
+  log('MANUAL_GUIDED_'+label+'_PASS',{top:reachedTop,bottom:reachedBottom,fullScanExecutedOnlyAfterUserFinished:true})
+}
+
 async function nativeClickShadow(page, selector) {
   const point = await evaluate(page, "(() => { const el=document.querySelector('#conversation-guard-root')?.shadowRoot?.querySelector(" + JSON.stringify(selector) + "); if(!el)return null; const rect=el.getBoundingClientRect(); const style=getComputedStyle(el); if(rect.width<=0||rect.height<=0||style.display==='none'||style.visibility==='hidden')return null; return { x:rect.left + rect.width/2, y:rect.top + rect.height/2 }; })()")
   if (!point) return false
@@ -783,6 +811,7 @@ async function run() {
   var beforeScanScrolls = await evaluate(page, 'window.__phase3.scrollEvents')
   assert(await clickShadow(page, '[data-action="calibrate"]'), 'explicit calibration button missing')
   await waitEval(page, uiExpr(), function(value){ return value && /Calibrating|正在校准|正在校準/.test(value.status) }, 5000)
+  await completeGuidedManualRead(page,'REFERENCE')
   var calibratedState = await retry(async function(){
     var state = await getState()
     return stateFacts(state).R ? state : null
@@ -794,7 +823,7 @@ async function run() {
   assert(!afterScanUi.trackHidden && !afterScanUi.scaleHidden, 'calibrated risk track did not appear', afterScanUi)
   assert(afterScanUi.pendingHidden, 'explicit calibration displayed passive Yes/No confirmation', afterScanUi)
   var afterScanScrolls = await evaluate(page, 'window.__phase3.scrollEvents')
-  assert(afterScanScrolls > beforeScanScrolls, 'full-history scan did not actually scroll the conversation')
+  assert(afterScanScrolls >= beforeScanScrolls+2, 'user-controlled top-to-bottom scroll was not observed')
   assert(calibratedFacts.latestLoad === calibratedFacts.R, 'calibration page load is not equal to empirical reference', calibratedFacts)
   log('EXPLICIT_CALIBRATION_PASS', { ui:afterScanUi.status, facts:calibratedFacts, scrollEvents:afterScanScrolls-beforeScanScrolls })
 
@@ -831,6 +860,31 @@ async function run() {
     assert(await nativeClickShadow(page, '[data-role="menu-trigger"]'), 'RS-01 screenshot menu trigger was not natively clickable')
     await assertOverflowMenuVisible(page, 'rs01-screenshot')
     await captureStoreScreenshot(page, '02-overflow-menu')
+    // Regression for project HOME, not just a pre-assigned project chat.
+    // The first send from /g/<id> must bind the born session to its new
+    // /g/<id>/c/<conversationId> route and immediately start live L.
+    await navigate(page,base+'/g/g-fixture')
+    const homeGrowthBefore=stateFacts(await getState()).growthCount
+    await sleep(500)
+    const homePrompt='rs01 project homepage first Send prompt'
+    await evaluate(page,"(() => {const el=document.querySelector('#composer-input'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set;setter.call(el,"+JSON.stringify(homePrompt)+");el.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'x'}));window.__phase3.nextConversationId='project-home-born';return true})()")
+    await sleep(300)
+    await evaluate(page,"document.querySelector('#send').click();true")
+    await waitEval(page,'location.pathname',
+      value=>value==='/g/g-fixture/c/project-home-born',7000)
+    const homeState=await retry(async function(){
+      const state=await getState()
+      const r=restartStateFacts(state,'project-home-born')
+      return r.measurementState==='complete'&&
+        stateFacts(state).growthCount===homeGrowthBefore+1 ? state:null
+    },14000,300)
+    const homeUi=await waitEval(page,uiExpr(),
+      v=>v&&/Lower risk|风险较低|風險較低/.test(v.status),14000)
+    assert(!homeUi.trackHidden,'Project-home first Send did not activate risk track')
+    log('PROJECT_HOME_FIRST_SEND_BIND_PASS',{
+      path:'/g/g-fixture/c/project-home-born',
+      growthDelta:stateFacts(homeState).growthCount-homeGrowthBefore,
+      measurement:restartStateFacts(homeState,'project-home-born').measurementState})
     log('RS01_BROWSER_E2E_PASS')
     return
   }
@@ -898,6 +952,7 @@ async function run() {
   await assertOverflowMenuVisible(page, 'historical-measurement-recovery')
   var beforeHistoricalScrolls = await evaluate(page, 'window.__phase3.scrollEvents')
   assert(await nativeClickShadow(page, '[data-action="measure-current"]'), 'historical chat measurement-recovery action was not clickable')
+  await completeGuidedManualRead(page,'MEASUREMENT')
   var recoveredHistoricalState = await retry(async function(){
     var state = await getState()
     var key = anonymousConversationKey(state, 'old-history')
@@ -913,7 +968,7 @@ async function run() {
   assert(afterHistoricalRecovery.sampleCount === beforeHistoricalRecovery.sampleCount, 'historical measurement recovery changed calibration samples', {beforeHistoricalRecovery:beforeHistoricalRecovery,afterHistoricalRecovery:afterHistoricalRecovery})
   assert(afterHistoricalRecovery.growthCount === beforeHistoricalRecovery.growthCount, 'historical measurement recovery changed growth samples', {beforeHistoricalRecovery:beforeHistoricalRecovery,afterHistoricalRecovery:afterHistoricalRecovery})
   assert(recoveredHistoricalLedger.currentEstimatedLoad < afterHistoricalRecovery.R, 'old-history fixture was not below the calibrated failure reference', {load:recoveredHistoricalLedger.currentEstimatedLoad,R:afterHistoricalRecovery.R})
-  assert(afterHistoricalScrolls > beforeHistoricalScrolls, 'historical measurement recovery did not perform a full-history scan')
+  assert(afterHistoricalScrolls>=beforeHistoricalScrolls+2, 'historical reading did not wait for manual round trip')
   assert(recoveredHistoricalUi.measureHidden === false, 'full-read-current-chat action must remain available after successful recovery', recoveredHistoricalUi)
   log('HISTORICAL_CHAT_MEASUREMENT_RECOVERY_PASS', { ui:recoveredHistoricalUi.status, load:recoveredHistoricalLedger.currentEstimatedLoad, R:afterHistoricalRecovery.R, scrollEvents:afterHistoricalScrolls-beforeHistoricalScrolls })
 
@@ -1080,6 +1135,7 @@ async function run() {
   await waitEval(page, uiExpr(), function(value){ return value && /Recalibration needed|需要重新校准|需要重新校準/.test(value.status) }, 10000)
   await clickShadow(page, '[data-role="pill"]')
   assert(await clickShadow(page, '[data-action="calibrate"]'), 'conservative calibration action missing')
+  await completeGuidedManualRead(page,'CONSERVATIVE_REFERENCE')
   var conservativeState = await retry(async function(){
     var state = await getState()
     var facts = stateFacts(state)

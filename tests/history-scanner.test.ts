@@ -31,6 +31,31 @@ describe('history scanner', () => {
     expect(JSON.stringify(result.diagnostics)).not.toContain('m1')
   })
 
+  it('preserves the original 2.1.1 anonymous-body fallback when stable DOM IDs are absent',async()=>{
+    // 4.2.18's replacement reader rejected ANY message without stableHint.
+    // The frozen 2.1.1 scanner uses unique role/body identity when needed.
+    const surface={scrollTop:500,scrollHeight:900,clientHeight:300}
+    const all=['m1','m2','m3','m4','m5','m6']
+    const source={
+      surface,
+      readWindow:()=>{
+        const start=Math.min(3,Math.floor(surface.scrollTop/150))
+        return all.slice(start,start+3).map(text=>{
+          const {stableHint:ignored,...withoutIdentity}=message(text)
+          void ignored
+          return withoutIdentity
+        })
+      }
+    }
+    const result=await scanHistorySource(source,observe,{
+      settle:async()=>{},requiredStableRounds:1,stepRatio:0.5
+    })
+    expect(result.complete).toBe(true)
+    expect(result.messageCount).toBe(6)
+    expect(result.observedMessages.map(item=>item.contentFingerprint)).toEqual(all)
+    expect(result.observedMessages.every(item=>!item.stableHintHash)).toBe(true)
+  })
+
   it('accumulates uncertainty sources across virtualized history windows', async () => {
     const surface = {
       scrollTop: 500,
