@@ -9,9 +9,9 @@
     "message": "LongChat Guard"
   },
   "manualReadTitle": {"message":"對話完整讀取引導"},
-  "manualReadScrollUp": {"message":"請在對話內容區域按下滑鼠中鍵，移動滑鼠快速向上捲動，直到看到第一則訊息。到達頂部後點擊下方按鈕。擴充功能將在往返捲動完成後才開始讀取，請不要重新整理或切換對話。"},
+  "manualReadScrollUp": {"message":"請在對話區域按下滑鼠中鍵，讓游標只稍微離開中鍵起點，緩慢連續向上捲動，避免快速跳過歷史訊息。看到第一則訊息後停留約2秒，再點擊下方按鈕。完成上下往返後才開始讀取，請不要重新整理或切換對話。"},
   "manualReadReachedTop": {"message":"已到達第一則訊息"},
-  "manualReadScrollDown": {"message":"現在再次使用滑鼠中鍵，向下捲動完整段對話，直到看到最後一則訊息。停止捲動後點擊下方按鈕，擴充功能才會開始讀取。"},
+  "manualReadScrollDown": {"message":"現在再次按下滑鼠中鍵，讓游標靠近中鍵起點，緩慢連續向下捲動，直到看到最後一則訊息。停留約2秒，點擊下方按鈕後才開始讀取。"},
   "manualReadReachedBottom": {"message":"已回到最後一則訊息，開始讀取"},
   "manualReadCancel": {"message":"取消"},
   "riskNormal": {

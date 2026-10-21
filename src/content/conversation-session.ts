@@ -14,6 +14,7 @@ export interface ConversationSessionObservation {
   hasUserMessage: boolean
   persistedAuthoritative: boolean
   sameConversationEvidence?: boolean | undefined
+  verifiedInheritedPrefix?: boolean | undefined
   bridgedNewChatStartedAt?: number | undefined
   now: number
 }
@@ -140,7 +141,8 @@ export function resolveConversationSession(
   const observedFromStart =
     alreadyObservedFromStart ||
     canTransferObservedFromStart ||
-    canBindNewChatStart
+    canBindNewChatStart ||
+    observation.verifiedInheritedPrefix === true
 
   const keepPendingStart =
     !canBindNewChatStart &&

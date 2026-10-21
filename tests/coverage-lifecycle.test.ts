@@ -269,6 +269,36 @@ describe('conversation session lifecycle', () => {
     expect(history.state.observedFromStartConversationId).toBeUndefined()
   })
 
+  it('certifies inherited branch coverage ONLY with verified prefix proof, not merely shared bodies',()=>{
+    const parent=resolveConversationSession(
+      markNewChatStarted(createConversationSessionState(),10000),{
+        conversationId:'project-parent',isBlankSurface:false,
+        messageCount:12,hasUserMessage:true,persistedAuthoritative:false,
+        now:10100
+      })
+    const noProof=resolveConversationSession(parent.state,{
+      conversationId:'project-child',isBlankSurface:false,
+      messageCount:8,hasUserMessage:true,persistedAuthoritative:false,
+      verifiedInheritedPrefix:false,now:12000
+    })
+    expect(noProof.coverageEvidence).toBe('none')
+    expect(noProof.state.observedFromStartConversationId).toBeUndefined()
+
+    const certified=resolveConversationSession(noProof.state,{
+      conversationId:'project-child',isBlankSurface:false,
+      messageCount:8,hasUserMessage:true,persistedAuthoritative:false,
+      verifiedInheritedPrefix:true,now:13100
+    })
+    expect(certified.coverageEvidence).toBe('observed_from_start')
+    expect(certified.state.observedFromStartConversationId).toBe('project-child')
+    const ongoing=resolveConversationSession(certified.state,{
+      conversationId:'project-child',isBlankSurface:false,
+      messageCount:10,hasUserMessage:true,persistedAuthoritative:false,
+      now:15100
+    })
+    expect(ongoing.coverageEvidence).toBe('observed_from_start')
+  })
+
   it('uses persisted authoritative coverage after a reload without pretending the chat was observed from start', () => {
     const reloaded = resolveConversationSession(
       createConversationSessionState(),

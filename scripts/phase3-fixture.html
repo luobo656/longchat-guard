@@ -16,6 +16,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#fafafa}
 <body>
 <main>
 <button data-testid="model-switcher-dropdown-button">GPT Fixture</button>
+<button type="button" id="branch-in-new-chat" role="menuitem" aria-label="Branch in new chat" hidden>Branch in new chat</button>
 <div id="timeline" data-app-action-timeline-scroll></div>
 <form id="composer" onsubmit="return false">
 <textarea id="composer-input" placeholder="询问 ChatGPT"></textarea>
@@ -27,6 +28,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#fafafa}
   var timeline=document.getElementById('timeline');
   var prompt=document.getElementById('composer-input');
   var send=document.getElementById('send');
+  var branchButton=document.getElementById('branch-in-new-chat');
   var seq=0;
   window.__phase3={scrollEvents:0,sends:0,externalMutations:0,rendererTransitionMode:false,postSettleParserLossMode:false,transientWeakTurnMode:false};
   timeline.addEventListener('scroll',function(){window.__phase3.scrollEvents+=1});
@@ -80,6 +82,41 @@ body{margin:0;font-family:system-ui,sans-serif;background:#fafafa}
     addTurn('external-'+(++seq),'External user mutation','External assistant mutation');
   };
 
+  // A genuine "Branch in new chat" action inherits a PREFIX of the
+  // source chat and creates a DIFFERENT conversation id. The stored
+  // ChatGPT source conversation must never be interpreted as a fresh chat.
+  window.__phase3.enableBranch=function(options){
+    options=options||{};
+    window.__phase3.branchConfiguration={
+      childId:options.childId||'project-branched',
+      keepTurns:options.keepTurns||6,
+      fromTail:options.fromTail===true
+    };
+    branchButton.hidden=false;
+  };
+  branchButton.addEventListener('click',function(){
+    var config=window.__phase3.branchConfiguration;
+    if(!config)return;
+    var groups=Array.from(timeline.querySelectorAll('[data-turn-key]'));
+    var chosen=config.fromTail
+      ?groups.slice(-config.keepTurns)
+      :groups.slice(0,config.keepTurns);
+    var copies=chosen.map(function(group,index){
+      var node=group.cloneNode(true);
+      node.setAttribute('data-turn-key','branch-new-'+index);
+      node.querySelectorAll('[data-message-id]').forEach(function(message){
+        message.setAttribute('data-message-id',
+          'branch-copy-'+index+'-'+(message.getAttribute('data-message-author-role')||'body'));
+      });
+      return node;
+    });
+    history.pushState({},'','/g/g-fixture/c/'+config.childId);
+    timeline.replaceChildren.apply(timeline,copies);
+    timeline.scrollTop=timeline.scrollHeight;
+    branchButton.hidden=true;
+    window.__phase3.branchConfiguration=undefined;
+  });
+
   var p=location.pathname;
   if(p==='/c/parser-broken'){
     addTurn('broken-1','Ambiguous role content','',{unknownRole:true});
@@ -94,6 +131,17 @@ body{margin:0;font-family:system-ui,sans-serif;background:#fafafa}
         ('Known limit user turn '+i+' ').repeat(8),
         ('Known limit assistant turn '+i+' ').repeat(15),
         {attachment:p==='/c/limit-attachment' && i===0}
+      );
+    }
+  } else if(p==='/c/limit-branched'){
+    // A separate-tab branch loads a prefix of the already certified
+    // /c/limit-known reference. HTML/DOM identities are NEW, but content
+    // and order remain identical through the selected fork point.
+    for(var forkIndex=0;forkIndex<7;forkIndex+=1){
+      addTurn(
+        'branch-copied-'+forkIndex,
+        ('Known limit user turn '+forkIndex+' ').repeat(8),
+        ('Known limit assistant turn '+forkIndex+' ').repeat(15)
       );
     }
   } else if(p==='/c/old-history'){

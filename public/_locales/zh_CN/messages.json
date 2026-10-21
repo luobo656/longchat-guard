@@ -9,9 +9,9 @@
     "message": "LongChat Guard"
   },
   "manualReadTitle": {"message":"会话完整读取引导"},
-  "manualReadScrollUp": {"message":"请在聊天内容区域按下鼠标中键，移动鼠标快速上翻，直到看到第一条消息。到达顶部后点击下方按钮。插件将在往返滚动完成后才开始读取，请不要刷新或切换会话。"},
+  "manualReadScrollUp": {"message":"请在聊天区域按下鼠标中键，指针只稍微离开中键起点，慢速连续向上滚动，避免快速跳过历史消息。看到第一条消息后停留约2秒，再点击下方按钮。完成上下往返后插件才开始读取，请不要刷新或切换会话。"},
   "manualReadReachedTop": {"message":"已到达第一条消息"},
-  "manualReadScrollDown": {"message":"现在再次使用鼠标中键，向下翻完整个会话，直到看到最后一条消息。停止滚动后点击下方按钮，插件才会开始读取。"},
+  "manualReadScrollDown": {"message":"现在再次按下鼠标中键，让指针靠近中键起点，缓慢连续向下滚动，直到看到最后一条消息。停留约2秒，点击下方按钮后插件才会开始读取。"},
   "manualReadReachedBottom": {"message":"已回到最后一条消息，开始读取"},
   "manualReadCancel": {"message":"取消"},
   "riskNormal": {

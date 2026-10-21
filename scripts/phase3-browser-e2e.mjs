@@ -500,6 +500,15 @@ async function nativeClickShadow(page, selector) {
   return true
 }
 
+async function nativeClickPageElement(page,selector) {
+  const position=await evaluate(page,"(() => {const el=document.querySelector("+JSON.stringify(selector)+"); if(!el||el.hidden)return null;const r=el.getBoundingClientRect();if(r.width<=0||r.height<=0)return null;return {x:r.left+r.width/2,y:r.top+r.height/2}})()")
+  if(!position)return false
+  await page.send('Input.dispatchMouseEvent',{type:'mouseMoved',x:position.x,y:position.y})
+  await page.send('Input.dispatchMouseEvent',{type:'mousePressed',x:position.x,y:position.y,button:'left',clickCount:1})
+  await page.send('Input.dispatchMouseEvent',{type:'mouseReleased',x:position.x,y:position.y,button:'left',clickCount:1})
+  return true
+}
+
 async function overflowMenuFacts(page) {
   return evaluate(page, "(() => { const host=document.querySelector('#conversation-guard-root'); const menu=host?.shadowRoot?.querySelector('[data-role=\"menu-popover\"]'); if(!menu)return null; const rect=menu.getBoundingClientRect(); const style=getComputedStyle(menu); return { hidden:menu.hidden, display:style.display, left:rect.left, top:rect.top, right:rect.right, bottom:rect.bottom, width:rect.width, height:rect.height, viewportWidth:innerWidth, viewportHeight:innerHeight, ariaExpanded:host.shadowRoot.querySelector('[data-role=\"menu-trigger\"]')?.getAttribute('aria-expanded') }; })()")
 }
@@ -885,6 +894,119 @@ async function run() {
       path:'/g/g-fixture/c/project-home-born',
       growthDelta:stateFacts(homeState).growthCount-homeGrowthBefore,
       measurement:restartStateFacts(homeState,'project-home-born').measurementState})
+    // Branching does not start from a blank chat. Create a genuine
+    // certified project conversation, then branch from an EARLIER
+    // message. The new branch must inherit ONLY its exact verified
+    // prefix, not the parent's entire load or false blank-start proof.
+    await evaluate(page,"(() => {for(let i=0;i<7;i++)window.__phase3.addExternalTurn();return true})()")
+    const certifiedParent=await retry(async()=>{
+      const state=await getState()
+      const r=restartStateFacts(state,'project-home-born')
+      const key=anonymousConversationKey(state,'project-home-born')
+      const ledger=state.ledgers[key]
+      return r.measurementState==='complete'&&
+        ledger?.activeFingerprints?.length>=16 ? state:null
+    },14000,350)
+    const parentLoad=restartStateFacts(certifiedParent,'project-home-born').currentEstimatedLoad
+    const growthBeforeBranch=stateFacts(certifiedParent).growthCount
+    await evaluate(page,"window.__phase3.enableBranch({childId:'project-fork-earlier',keepTurns:6});true")
+    assert(await nativeClickPageElement(page,'#branch-in-new-chat'),
+      'Native branch command not clickable from a certified project chat')
+    await waitEval(page,'location.pathname',
+      p=>p==='/g/g-fixture/c/project-fork-earlier',5000)
+    const inherited=await retry(async()=>{
+      const state=await getState()
+      const b=restartStateFacts(state,'project-fork-earlier')
+      return b.measurementState==='complete'&&b.currentEstimatedLoad>0&&
+        b.currentEstimatedLoad<parentLoad ? state:null
+    },14000,300)
+    const branched=restartStateFacts(inherited,'project-fork-earlier')
+    const parentAfter=restartStateFacts(inherited,'project-home-born')
+    assert(parentAfter.currentEstimatedLoad===parentLoad,
+      'Original project chat ledger changed during branch',{parentLoad,parentAfter})
+    assert(branched.currentEstimatedLoad>0&&branched.currentEstimatedLoad<parentLoad,
+      'Branched child did not inherit exact shorter prefix',branched)
+    assert(stateFacts(inherited).growthCount===growthBeforeBranch,
+      'Branch creation incorrectly recorded new-chat turn growth')
+    const branchUi=await waitEval(page,uiExpr(),
+      v=>v&&/Lower risk|风险较低|風險較低/.test(v.status)&&!v.trackHidden,
+      8000)
+    log('PROJECT_BRANCH_CERTIFIED_PREFIX_PASS',{
+      parentLoad,branchLoad:branched.currentEstimatedLoad,
+      parentUnchanged:true,childHasIndependentCompleteLedger:true,
+      riskTrackVisible:!branchUi.trackHidden})
+
+    // The first real SEND in the branch must append to the CHILD, not
+    // to its parent, and record exactly one new turn.
+    const branchPrompt='project branch first new user turn'
+    await evaluate(page,"(() => {const e=document.querySelector('#composer-input');const set=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set;set.call(e,"+JSON.stringify(branchPrompt)+");e.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:'x'}));return true})()")
+    await sleep(250)
+    assert(await nativeClickPageElement(page,'#send'),
+      'Native child conversation Send was not clickable')
+    const branchSent=await retry(async()=>{
+      const state=await getState()
+      const child=restartStateFacts(state,'project-fork-earlier')
+      return child.measurementState==='complete'&&
+        child.currentEstimatedLoad>branched.currentEstimatedLoad&&
+        stateFacts(state).growthCount===growthBeforeBranch+1 ? state:null
+    },15000,350)
+    assert(restartStateFacts(branchSent,'project-home-born').currentEstimatedLoad===parentLoad,
+      'Sending in fork mutated the parent chat')
+    log('PROJECT_BRANCH_FIRST_SEND_CONTINUES_MONITORING_PASS',{
+      parentLoad,
+      beforeBranchSend:branched.currentEstimatedLoad,
+      afterBranchSend:restartStateFacts(branchSent,'project-fork-earlier').currentEstimatedLoad,
+      growthDelta:stateFacts(branchSent).growthCount-growthBeforeBranch
+    })
+
+    // A tail-only fork with an inherited MISSING prefix cannot be
+    // certified. It must show "Unable to assess", never fake low risk.
+    await evaluate(page,"window.__phase3.enableBranch({childId:'project-fork-tail-only',keepTurns:6,fromTail:true});true")
+    assert(await nativeClickPageElement(page,'#branch-in-new-chat'),
+      'Native tail-only branch action not clickable')
+    await waitEval(page,'location.pathname',
+      p=>p==='/g/g-fixture/c/project-fork-tail-only',5000)
+    const uncertainBranch=await retry(async()=>{
+      const state=await getState()
+      const child=restartStateFacts(state,'project-fork-tail-only')
+      return child.measurementState!=='unavailable'?state:null
+    },10000,300)
+    const unknown=restartStateFacts(uncertainBranch,'project-fork-tail-only')
+    assert(unknown.measurementState!=='complete'&&unknown.riskState==='unknown',
+      'Tail-only inherited history falsely certified as a complete chat',unknown)
+    const unknownUi=await waitEval(page,uiExpr(),
+      v=>v&&/Unable to assess|暂无法判断|暫無法判斷/.test(v.status),8000)
+    assert(unknownUi.trackHidden,'Unknown fork showed a confident risk track')
+    log('PROJECT_BRANCH_UNPROVEN_PREFIX_FAIL_CLOSED_PASS',{
+      measurement:unknown.measurementState,riskState:unknown.riskState,
+      parentStillFull:restartStateFacts(uncertainBranch,'project-home-born').currentEstimatedLoad===parentLoad
+    })
+
+    // A branch can open in a NEW TAB, where no user click witness or
+    // in-memory parent conversation id is available. Only independently
+    // verified inherited content can grant complete measurement.
+    const newTab=await createPage(base+'/c/limit-branched')
+    const newTabUi=await waitEval(newTab.page,uiExpr(),
+      v=>v&&/Lower risk|风险较低|風險較低/.test(v.status)&&!v.trackHidden,15000)
+    const newTabState=await retry(async()=>{
+      const state=await getState()
+      const child=restartStateFacts(state,'limit-branched')
+      return child.measurementState==='complete'&&child.currentEstimatedLoad>0&&
+        child.currentEstimatedLoad<calibratedFacts.R ? state:null
+    },15000,350)
+    const childNewTab=restartStateFacts(newTabState,'limit-branched')
+    assert(stateFacts(newTabState).R===calibratedFacts.R,
+      'Branch-new-tab changed certified reference')
+    assert(!newTabUi.trackHidden,
+      'Separate tab inherited full prefix but was not auto monitored')
+    log('NONPROJECT_BRANCH_NEW_TAB_CERTIFIED_PREFIX_PASS',{
+      initialReference:calibratedFacts.R,
+      inheritedPrefixUnits:childNewTab.currentEstimatedLoad,
+      measurement:childNewTab.measurementState,
+      riskVisible:!newTabUi.trackHidden
+    })
+    try{await browser.send('Target.closeTarget',{targetId:newTab.targetId})}catch{}
+
     log('RS01_BROWSER_E2E_PASS')
     return
   }

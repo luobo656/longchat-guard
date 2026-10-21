@@ -73,6 +73,11 @@ import {
   type HistoryScanResult
 } from './history-scanner'
 import {withManualHistoryGuide} from './manual-history-guide'
+import {
+  BranchPrefixStabilityWitness,
+  findCertifiedInheritedPrefix,
+  isBranchCreationTarget
+} from './branch-lineage'
 import { GuardUi, type GuardUiModel } from './ui'
 import { t } from './i18n'
 
@@ -128,6 +133,7 @@ export async function startGuard(): Promise<void> {
   let pendingTurnIntent: PendingTurnIntent | undefined
   let observationEpoch = Date.now()
   let completionTracker = new ResponseCompletionTracker()
+  const branchPrefixWitness = new BranchPrefixStabilityWitness()
 
   const refresh = (): void => scheduleRun?.()
 
@@ -467,8 +473,19 @@ export async function startGuard(): Promise<void> {
           resolvedConversationId &&
           previousSessionConversationId !== resolvedConversationId
       )
+      // A branched chat can share the ENTIRE old prefix. Body overlap
+      // alone is NOT proof that the changed conversation ID is a rebind.
+      // Only a recent native send on the previous ID permits rebinding.
+      const recentRebindSend = Boolean(
+        pendingTurnIntent?.conversationKey &&
+        pendingTurnIntent.conversationKey === previousSessionConversationKey &&
+        Date.now() - pendingTurnIntent.capturedAt >= 0 &&
+        Date.now() - pendingTurnIntent.capturedAt <=
+          NEW_CHAT_START_EVIDENCE_TTL_MS
+      )
       const sameConversationEvidence = Boolean(
         identityChanged &&
+          recentRebindSend &&
           previousSessionConversationId &&
           conversationSession.observedFromStartConversationId ===
             previousSessionConversationId &&
@@ -499,6 +516,46 @@ export async function startGuard(): Promise<void> {
           environmentSignature
         })
 
+      // Branches created from an earlier message inherit the preceding
+      // transcript. They can be monitored without guessing only when the
+      // new page shows an exact stable prefix of ANOTHER certified chat.
+      // There is NO inheritance of the parent's coverage from overlap
+      // alone, and no content is stored by this proof.
+      let verifiedInheritedPrefix = false
+      const eligibleInheritedCandidate = Boolean(
+        resolvedConversationId && !persistedAuthoritative &&
+        !conversationSession.pendingNewChatStartedAt &&
+        !conversationSession.blankSurfaceObserved &&
+        !sameConversationEvidence &&
+        preliminarySnapshot.tailEvidence === 'at_tail' &&
+        preliminarySnapshot.messages.length >= 2
+      )
+      if (eligibleInheritedCandidate && resolvedConversationId &&
+          knownConversationKey) {
+        const inheritedObserved=await observePageMessages(
+          preliminarySnapshot.messages
+        )
+        const sourceKey=findCertifiedInheritedPrefix({
+          observed:inheritedObserved,
+          currentConversationKey:knownConversationKey,
+          ledgers:latestState.ledgers,
+          generationId:latestState.settings.generationId,
+          environmentSignature,
+          atTail:true
+        })
+        verifiedInheritedPrefix=branchPrefixWitness.observe({
+          newConversationId:resolvedConversationId,
+          ...(sourceKey?{sourceKey}:{}),
+          messageFingerprints:inheritedObserved.map(m=>m.contentFingerprint),
+          observedAt:Date.now()
+        })
+        if(sourceKey&&!verifiedInheritedPrefix){
+          window.setTimeout(()=>scheduleRun?.(),950)
+        }
+      }else{
+        branchPrefixWitness.reset()
+      }
+
       const nowForSession = Date.now()
       const sessionResolution = resolveConversationSession(
         conversationSession,
@@ -511,6 +568,7 @@ export async function startGuard(): Promise<void> {
           ),
           persistedAuthoritative,
           sameConversationEvidence,
+          verifiedInheritedPrefix,
           bridgedNewChatStartedAt:
             readNewChatStartSessionEvidence(nowForSession),
           now: nowForSession
@@ -1285,6 +1343,14 @@ export async function startGuard(): Promise<void> {
   const onClick = (event: MouseEvent): void => {
     const element =
       event.target instanceof Element ? event.target : null
+    if(isBranchCreationTarget(element)){
+      // Branch-in-new-chat is not blank New Chat. The new route must prove
+      // inherited prefix completeness or request a manual full read.
+      pendingTurnIntent=undefined
+      clearNewChatStartSessionEvidence()
+      branchPrefixWitness.reset()
+      return
+    }
     const navigationLink =
       element?.closest<HTMLAnchorElement>('a[href]')
     let newChatNavigationArmed = false
@@ -1631,6 +1697,7 @@ function isConversationNavigationHref(url: string): boolean {
 function isNewChatNavigationTarget(
   element: HTMLElement
 ): boolean {
+  if(isBranchCreationTarget(element))return false
   const semantic = `${element.getAttribute('data-testid') ?? ''} ${element.getAttribute('aria-label') ?? ''} ${element.getAttribute('title') ?? ''} ${element.textContent ?? ''}`
   return /new[-_ ]?chat|new conversation|新建聊天|新聊天|新的聊天|新建对话|新建對話|新增聊天|新增對話|開始新聊天|开始新聊天/i.test(
     semantic
