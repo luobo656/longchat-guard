@@ -1,6 +1,6 @@
 {
   "name": "longchat-guard",
-  "version": "4.2.21",
+  "version": "4.2.22",
   "description": "Local-first ChatGPT long-conversation warning, conversation length monitor and context-risk browser extension for Chrome and Edge.",
   "keywords": [
     "chatgpt",
@@ -34,8 +34,8 @@
     "build": "vite build && vite build --config vite.content.config.ts && npm run verify:dist",
     "verify:dist": "node scripts/verify-extension-build.mjs",
     "verify:site": "node scripts/verify-site.mjs",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run --dir=tests",
+    "test:watch": "vitest --dir=tests",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

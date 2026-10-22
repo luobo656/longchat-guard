@@ -14,6 +14,14 @@
   "manualReadScrollDown": {"message":"現在再次按下滑鼠中鍵，讓游標靠近中鍵起點，緩慢連續向下捲動，直到看到最後一則訊息。停留約2秒，點擊下方按鈕後才開始讀取。"},
   "manualReadReachedBottom": {"message":"已回到最後一則訊息，開始讀取"},
   "manualReadCancel": {"message":"取消"},
+  "autoReadModeDescription": {"message":"如需自動操作，可點擊「自動捲動（實驗）」。這會使用瀏覽器內部滑鼠滾輪訊號，可能顯示瀏覽器偵錯提示；期間不要切換分頁。"},
+  "autoReadManualOption": {"message":"人工捲動"},
+  "autoReadStart": {"message":"自動捲動（實驗）"},
+  "autoReadUp": {"message":"正在透過瀏覽器內部滑鼠滾輪訊號緩慢向上載入歷史訊息。請勿切換分頁或操作網頁。"},
+  "autoReadDown": {"message":"正在緩慢向下捲動至最新訊息。請勿切換分頁或操作網頁。"},
+  "autoReadSettling": {"message":"正在等待對話頁面載入穩定。"},
+  "autoReadPrepared": {"message":"自動捲動準備完成，開始執行原版完整讀取。"},
+  "autoReadFailed": {"message":"自動捲動未能通過驗證，沒有儲存任何掃描結果。請選擇已驗證的人工模式繼續，或取消。"},
   "riskNormal": {
     "message": "風險較低"
   },

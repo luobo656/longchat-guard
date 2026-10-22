@@ -14,6 +14,14 @@
   "manualReadScrollDown": {"message":"现在再次按下鼠标中键，让指针靠近中键起点，缓慢连续向下滚动，直到看到最后一条消息。停留约2秒，点击下方按钮后插件才会开始读取。"},
   "manualReadReachedBottom": {"message":"已回到最后一条消息，开始读取"},
   "manualReadCancel": {"message":"取消"},
+  "autoReadModeDescription": {"message":"如需自动操作，可点击「自动滚动（实验）」。这会使用浏览器内部鼠标滚轮信号，可能显示浏览器调试提示；期间不要切换标签页。"},
+  "autoReadManualOption": {"message":"人工滚动"},
+  "autoReadStart": {"message":"自动滚动（实验）"},
+  "autoReadUp": {"message":"正在通过浏览器内部鼠标滚轮信号缓慢向上加载历史消息。请勿切换标签页或操作网页。"},
+  "autoReadDown": {"message":"正在缓慢向下滚动至最新消息。请勿切换标签页或操作网页。"},
+  "autoReadSettling": {"message":"正在等待会话页面加载稳定。"},
+  "autoReadPrepared": {"message":"自动滚动准备完成，开始执行原版完整读取。"},
+  "autoReadFailed": {"message":"自动滚动未能通过验证，没有保存任何扫描结果。请选择已验证的人工模式继续，或取消。"},
   "riskNormal": {
     "message": "风险较低"
   },

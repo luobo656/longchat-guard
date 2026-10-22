@@ -72,7 +72,8 @@ import {
   type HistoryScanFailureReason,
   type HistoryScanResult
 } from './history-scanner'
-import {withManualHistoryGuide} from './manual-history-guide'
+import { withHistoryReadGuide, type HistoryReadGuide } from './manual-history-guide'
+import { prepareHistoryWithBrowserInput } from './auto-history-scroll'
 import {
   BranchPrefixStabilityWitness,
   findCertifiedInheritedPrefix,
@@ -901,15 +902,36 @@ export async function startGuard(): Promise<void> {
     }
   }
 
-  /** The only addition to the frozen 2.1.1 manual-read behavior is
-   * asking the user to prepare the page before the ORIGINAL scanner runs.
-   * Neither DOM identity rules nor the original scanner are replaced.
-   * Passive real-time monitoring never opens this guide.
+  /** Both user-initiated full-read paths prepare the renderer, then invoke
+   * the unchanged 2.1.1 reader. Passive monitoring never opens this guide.
    */
   const guidedManualHistoryRead=async():Promise<HistoryScanResult>=>{
-    const prepared=await withManualHistoryGuide(async wait=>{
-      if(await wait('up',0)!=='next')return false
-      return await wait('down',0)==='next'
+    const prepared=await withHistoryReadGuide(async(guide:HistoryReadGuide)=>{
+      const manualDown=async():Promise<boolean>=>await guide.wait('down',0)==='next'
+      const manual=async():Promise<boolean>=>{
+        if(await guide.wait('up',0)!=='next')return false
+        return manualDown()
+      }
+      // The first guide is already the ORIGINAL manual-up instruction.
+      // Confirming "reached top" goes directly to the old manual-down stage;
+      // only the additional auto button chooses CDP.
+      const selection=await guide.chooseMode()
+      if(selection==='cancel')return false
+      if(selection==='manual')return manualDown()
+      const controller=new AbortController()
+      const unsubscribe=guide.onCancel(()=>controller.abort())
+      try{
+        await prepareHistoryWithBrowserInput(controller.signal,stage=>guide.showAutoProgress(stage))
+        return true
+      }catch{
+        if(controller.signal.aborted || location.hostname!=='chatgpt.com' ||
+           document.visibilityState==='hidden')return false
+        // Never silently count an automatic failure as an automatic success.
+        if(await guide.offerManualFallback()!=='manual')return false
+        return manual()
+      }finally{
+        unsubscribe()
+      }
     })
     if(!prepared){
       return {

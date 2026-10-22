@@ -15,7 +15,7 @@ if (/^\s*import\s/m.test(content) || /^\s*export\s/m.test(content)) {
   throw new Error('content_script_must_be_self_contained_classic_script')
 }
 
-if (JSON.stringify(manifest.permissions ?? []) !== JSON.stringify(['storage'])) {
+if (JSON.stringify(manifest.permissions ?? []) !== JSON.stringify(['storage', 'debugger'])) {
   throw new Error('unexpected_extension_permissions')
 }
 

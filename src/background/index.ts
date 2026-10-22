@@ -1,6 +1,8 @@
 import { StorageMutationCoordinator, type BackgroundRequest } from './coordinator'
+import { DebugScrollController, isDebugScrollRequest, type DebugScrollRequest } from './debug-scroll'
 
 const coordinator = new StorageMutationCoordinator(chrome.storage.local)
+const debugScrollController = new DebugScrollController()
 const OBSOLETE_DIAGNOSTIC_STORAGE_KEYS = [
   'longChatGuardRuntimeDiagnostics',
   'longChatGuardLastScanDiagnostics'
@@ -12,7 +14,13 @@ chrome.runtime.onInstalled.addListener(() => {
 })
 
 chrome.runtime.onMessage.addListener(
-  (request: BackgroundRequest, _sender, sendResponse) => {
+  (request: BackgroundRequest | DebugScrollRequest, sender, sendResponse) => {
+    if (isDebugScrollRequest(request)) {
+      debugScrollController.handle(request, sender)
+        .then(sendResponse)
+        .catch(() => sendResponse({ ok: false, error: 'debug_scroll_failed' }))
+      return true
+    }
     const fail = (error: unknown): void => {
       sendResponse({
         ok: false,

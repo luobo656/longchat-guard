@@ -1,5 +1,9 @@
 # LongChat Guard 2.1.1 架构基线
 
+## 4.2.22 CDP 滚动实验附录
+
+仅在人工触发的完整读取入口临时使用 `chrome.debugger`（实验版独立必选权限），background 独占当前前台 chatgpt.com 标签页，允许 `Input.dispatchMouseEvent(type=mouseWheel)` 而不得开放其他 CDP 命令；content 只发送边界校验后的坐标与滚动方向，检测页面位置和变化，不在预备阶段采集正文。离开标签、刷新/导航、取消、附加/输入错误都释放调试会话并 fail closed。4.2.21 既有 `storage` 单权限为稳定基线；CDP 实验权限不回写稳定版。预备工作成功后保留调用原 `scanConversationHistory()`，不修改任何读取、计量、基准或风险公式。
+
 ## 1. 技术栈与边界
 
 - Chrome / Microsoft Edge

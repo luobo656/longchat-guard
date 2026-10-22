@@ -14,6 +14,14 @@
   "manualReadScrollDown": {"message":"Middle-click again, keep the pointer close to the middle-click starting point, and scroll slowly down through the full conversation. Pause about 2 seconds at the latest message, then click below to begin reading."},
   "manualReadReachedBottom": {"message":"Back at the latest message — read now"},
   "manualReadCancel": {"message":"Cancel"},
+  "autoReadModeDescription": {"message":"Alternatively, click Automatic (experimental) to have the browser simulate slow wheel input. Browser debugging may show a warning; do not switch tabs."},
+  "autoReadManualOption": {"message":"Manual scrolling"},
+  "autoReadStart": {"message":"Automatic (experimental)"},
+  "autoReadUp": {"message":"Automatically scrolling slowly toward the oldest messages. Do not switch tabs or interact with the page."},
+  "autoReadDown": {"message":"Automatically scrolling slowly toward the newest messages. Do not switch tabs or interact with the page."},
+  "autoReadSettling": {"message":"Waiting for the conversation to finish rendering."},
+  "autoReadPrepared": {"message":"Automatic scroll preparation finished; starting the original full-history reader."},
+  "autoReadFailed": {"message":"Automatic scroll preparation could not be verified. Nothing was saved. Select the proven manual method or cancel."},
   "riskNormal": {
     "message": "Lower risk"
   },
