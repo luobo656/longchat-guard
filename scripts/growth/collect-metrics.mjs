@@ -60,13 +60,31 @@ if(existsSync(path)){
   if(!Array.isArray(old)) throw new Error('Invalid existing history')
   arr=old
 }
+// The scheduled GitHub Actions token may lack Traffic API access. Preserve
+// only this same day's earlier, independently verified private-owner totals;
+// never carry an older rolling 14-day window into a different date.
+const priorToday=arr.find(x=>x.asOfDate===today)
+if(priorToday){
+  const preserved=[]
+  for(const key of ['recentViews14d','recentClones14d']){
+    if(snap.github[key]===null && priorToday.github?.[key]){
+      snap.github[key]=priorToday.github[key]
+      preserved.push(key)
+    }
+  }
+  if(preserved.length){
+    snap.github.trafficAvailability=(snap.github.trafficAvailability??'not_available')+
+      '; same-day verified GitHub Traffic kept from '+priorToday.recordedAt+
+      ' for '+preserved.join(',')
+  }
+}
 arr=arr.filter(x=>x.asOfDate!==today)
 arr.push(snap)
 arr.sort((a,b)=>a.asOfDate.localeCompare(b.asOfDate))
 writeFileSync(path,JSON.stringify(arr,null,2)+'\n','utf8')
 const n=(x)=>x===null?'未取得':String(x)
-const views=trafficViews? `${trafficViews.total}（独立访客 ${trafficViews.unique}，近14天）`:'未取得（GitHub API 权限不足）'
-const clones=trafficClones? `${trafficClones.total}（独立克隆者 ${trafficClones.unique}，近14天）`:'未取得（GitHub API 权限不足）'
+const views=snap.github.recentViews14d? `${snap.github.recentViews14d.total}（独立访客 ${snap.github.recentViews14d.unique}，近14天）`:'未取得（GitHub API 权限不足）'
+const clones=snap.github.recentClones14d? `${snap.github.recentClones14d.total}（独立克隆者 ${snap.github.recentClones14d.unique}，近14天）`:'未取得（GitHub API 权限不足）'
 const markdown=`# LongChat Guard 推广指标公开记录
 
 > 数据日期：${today}。统计记录时间：${snap.recordedAt}。这份记录来自 GitHub 官方 REST API 和网站可访问性检查，**不是网站访客分析或商店安装统计**。

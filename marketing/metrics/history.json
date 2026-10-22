@@ -1,7 +1,7 @@
 [
   {
     "asOfDate": "2026-10-22",
-    "recordedAt": "2026-10-22T13:44:59.426Z",
+    "recordedAt": "2026-10-22T13:56:33.740Z",
     "source": "GitHub REST API + publicly reachable GitHub Pages; NOT Google analytics",
     "github": {
       "repo": "luobo656/longchat-guard",
@@ -33,7 +33,7 @@
     "website": {
       "homepageStatus": 200,
       "sitemapStatus": 200,
-      "sitemapUrlCount": 27
+      "sitemapUrlCount": 30
     },
     "search": {
       "googleClicks": null,

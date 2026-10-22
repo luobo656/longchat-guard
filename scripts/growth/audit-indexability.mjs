@@ -63,7 +63,7 @@ await Promise.all(Array.from({length:5},()=>worker()))
 const eligibleCount=results.filter(x=>x.technicalFetchEligible).length
 const out={schema:'LCG-PUBLIC-INDEXABILITY-v1',auditTime:new Date().toISOString(),source:'direct HTTPS requests to owned GitHub Pages website',
  scope:'sitemap-listed canonical HTML pages',total:urls.length,technicalEligible:eligibleCount,
- robotsHttp:robots.status,sitemapHttp:remoteSitemap.status,robotsAllows, sitemapReachable,
+ robotsHttp:robots.status,sitemapHttp:remoteSitemap.status,robotsAllows:robotsAllowed, sitemapReachable,
  googleIndexed:null,bingIndexed:null,
  caveat:'HTTP 200, robots and canonical evidence is NOT a Google/Bing URL Inspection result and does not prove index inclusion.',
  failed:failReasons, pages:results}
