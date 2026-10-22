@@ -35,6 +35,8 @@ Key features:
 
 Privacy is local-first. Monitoring starts only after affirmative consent. Visible ChatGPT content and Composer text are processed transiently in the browser for the warning function. Raw user messages, assistant responses, Composer drafts, attachment/file bodies, and tool-result text are not persisted or uploaded to a LongChat Guard analysis server. Stored conversation identifiers are install-salted SHA-256 pseudonymous identifiers rather than raw ChatGPT conversation IDs. No OpenAI API key is required.
 
+**One-click automatic reading:** When you explicitly start full-history reading or calibrate with a confirmed limit-reached chat, LongChat Guard temporarily sends browser-internal mouse-wheel events to the active ChatGPT tab to load older content. It displays a progress overlay and a Cancel button, then runs the original continuity and completeness checks. There is no manual scrolling mode and no automatic transmission of chat data. A browser debugging permission warning may appear; the debugging connection is detached after use.
+
 ## Single Purpose
 
 Provide local long-conversation risk warnings and handoff assistance for `chatgpt.com`.
@@ -44,6 +46,8 @@ Provide local long-conversation risk warnings and handoff assistance for `chatgp
 - `storage`: stores local pseudonymous fingerprints, internal estimates, empirical calibration metadata, whole-turn growth samples, and reminder settings.
 - `https://chatgpt.com/*`: runs only on the supported ChatGPT website.
 
+- `debugger`: required only for a user-initiated full read or calibration. Sends Chrome DevTools Protocol `Input.dispatchMouseEvent` mouse-wheel events to the active `chatgpt.com` tab; never reads raw messages through the debugger, and detaches promptly. This is a powerful permission and its installation warning may mention all websites even though our implementation operates only on the user-selected ChatGPT tab.
+
 ## Unofficial Notice
 
 LongChat Guard is an independent open-source project and is not affiliated with, sponsored by, endorsed by, or maintained by OpenAI. “ChatGPT” identifies the supported website and use case only.
@@ -51,6 +55,6 @@ LongChat Guard is an independent open-source project and is not affiliated with,
 ## Listing Links
 
 - Official website: https://luobo656.github.io/longchat-guard/
-- Privacy policy: https://luobo656.github.io/longchat-guard/PRIVACY.md
+- Privacy policy: https://github.com/luobo656/longchat-guard/blob/main/PRIVACY.md
 - Source code: https://github.com/luobo656/longchat-guard
 - Support / issues: https://github.com/luobo656/longchat-guard/issues

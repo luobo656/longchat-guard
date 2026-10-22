@@ -52,66 +52,164 @@ export function createAutoReadShield(
   const shadow = root.attachShadow({ mode: 'open' })
   shadow.innerHTML = `
     <style>
-      :host { all:initial; pointer-events:none }
-      * {box-sizing:border-box}
+      :host {
+        all: initial;
+        pointer-events: none;
+        --accent: #188b7c;
+        --accent-soft: #e2f3ee;
+        --ink: #142a35;
+        --muted: #62727d;
+      }
+      * { box-sizing: border-box; }
       .veil {
-        position:fixed;inset:0;pointer-events:none;
-        background:rgba(12,17,25,.47);
+        position: fixed; inset: 0; pointer-events: none;
+        background: rgba(12, 24, 35, .28);
       }
       .banner {
-        position:fixed;top:clamp(12px,4vh,42px);left:50%;
-        transform:translateX(-50%);width:min(550px,calc(100vw - 24px));
-        padding:17px 19px 16px;
-        background:#fff;color:#1e2734;border:1px solid #d7dfe8;
-        border-radius:14px;box-shadow:0 18px 60px rgba(8,17,28,.23);
-        pointer-events:none;
-        font-family:system-ui,-apple-system,"Segoe UI","PingFang SC",
-          "Microsoft YaHei",sans-serif;font-size:13px;line-height:1.55;
-        font-weight:400;
+        position: fixed; top: clamp(16px, 8vh, 88px); left: 50%;
+        transform: translateX(-50%); width: min(472px, calc(100vw - 28px));
+        padding: 24px 26px 20px;
+        color: var(--ink); background: rgba(255, 255, 255, .97);
+        border: 1px solid rgba(225, 235, 235, .96);
+        border-radius: 22px;
+        box-shadow: 0 32px 90px rgba(9, 29, 40, .23),
+                    0 3px 12px rgba(9, 29, 40, .055);
+        pointer-events: none; overflow: hidden;
+        font: 400 13px/1.55 system-ui, -apple-system, "Segoe UI",
+          "PingFang SC", "Microsoft YaHei", sans-serif;
+        -webkit-font-smoothing: antialiased;
       }
-      .topline {display:flex;align-items:center;gap:10px;margin-bottom:9px}
-      .spinner {
-        flex:0 0 17px;width:17px;height:17px;border-radius:50%;
-        border:2px solid #d8e5f2;border-top-color:#2669a8;
-        animation:spin 1.1s linear infinite;
+      .banner::before {
+        content: ""; position: absolute; top: 0; left: 25px; right: 25px;
+        height: 2px; border-radius: 0 0 4px 4px;
+        background: linear-gradient(90deg, #62c6ae, #1b8d7c 62%, #c9ece4);
       }
-      .heading {font-size:15px;font-weight:700;color:inherit}
-      .state {font-weight:650;font-size:13px;margin:0 0 5px}
-      .explanation {color:#5c697a;font-size:12px;margin:0}
-      .bottom {margin-top:13px;display:flex;align-items:center;gap:10px;
-        justify-content:space-between;flex-wrap:wrap}
-      .steps {font-size:11px;font-weight:600;color:#687b8c}
+      .topline { display:flex; align-items:center; gap:11px; }
+      .mark {
+        width: 38px; height: 38px; flex: 0 0 38px;
+        border-radius: 12px; display:grid; place-items:center;
+        background: linear-gradient(145deg, #173a43, #286c64);
+        box-shadow: 0 4px 12px rgba(22, 100, 90, .16);
+      }
+      .mark svg { width:23px; height:23px; display:block; }
+      .identity { display:flex; flex-direction:column; gap:1px; min-width:0; }
+      .heading { font-size:14px; font-weight:710; letter-spacing:-.2px; }
+      .mode { font-size:11px; color:#81919a; line-height:1.3; }
+      .activity {
+        margin-left:auto; display:flex; align-items:center; gap:6px;
+        padding:5px 9px; border-radius:99px; white-space:nowrap;
+        background:var(--accent-soft); color:#157b70;
+        font-size:10px; font-weight:650;
+      }
+      .activity-dot {
+        width:6px; height:6px; border-radius:50%;
+        background:var(--accent);
+        box-shadow:0 0 0 3px rgba(24,139,124,.11);
+        animation: breathe 1.8s ease-in-out infinite;
+      }
+      .content { margin-top:23px; }
+      .eyebrow { margin:0 0 4px; color:var(--accent);
+        font-size:11px; font-weight:660; letter-spacing:.35px; }
+      .state { margin:0; font-size:21px; line-height:1.38;
+        font-weight:720; letter-spacing:-.6px; color:var(--ink); }
+      .explanation { margin:9px 0 0; min-height:39px; max-width:405px;
+        font-size:12px; color:var(--muted); line-height:1.7; }
+      .progress { margin-top:22px; display:grid; grid-template-columns:repeat(3,1fr);
+        gap:7px; }
+      .bar { height:5px; border-radius:999px; background:#e3e9eb;
+        overflow:hidden; position:relative; }
+      .bar::after { content:""; position:absolute; inset:0;
+        border-radius:inherit; background:linear-gradient(90deg,#1b9381,#61c9ac);
+        opacity:0; transform:scaleX(.22); transform-origin:left;
+        transition:transform .35s ease, opacity .3s ease; }
+      :host([data-stage="up"]) .bar.one::after,
+      :host([data-stage="settle"]) .bar.one::after,
+      :host([data-stage="down"]) .bar.one::after,
+      :host([data-stage="verify"]) .bar.one::after,
+      :host([data-stage="save"]) .bar.one::after,
+      :host([data-stage="down"]) .bar.two::after,
+      :host([data-stage="verify"]) .bar.two::after,
+      :host([data-stage="save"]) .bar.two::after,
+      :host([data-stage="verify"]) .bar.three::after,
+      :host([data-stage="save"]) .bar.three::after {
+        opacity:1; transform:scaleX(1); }
+      :host([data-stage="up"]) .bar.one::after,
+      :host([data-stage="settle"]) .bar.one::after,
+      :host([data-stage="down"]) .bar.two::after,
+      :host([data-stage="verify"]) .bar.three::after {
+        animation: grow 1.7s ease-in-out infinite alternate; }
+      .steps { margin:8px 0 0; font-size:11px; color:#73838a;
+        font-weight:550; }
+      .bottom { display:flex; align-items:center; justify-content:space-between;
+        gap:14px; margin-top:20px; padding-top:16px;
+        border-top:1px solid #edf1f1; }
+      .footnote { font-size:11px; line-height:1.55;
+        color:#7f8f96; max-width:240px; }
       .cancel {
-        pointer-events:auto;min-height:34px;padding:7px 14px;
-        border:1px solid #bfcbd8;border-radius:9px;background:#fff;
-        color:#1c2935;font-size:12px;font-weight:650;cursor:pointer;
+        pointer-events:auto; flex:0 0 auto; min-width:93px; min-height:36px;
+        padding:8px 13px; border:1px solid #d9e2e3;
+        background:#f8faf9; color:#3b555c;
+        border-radius:10px; font-size:12px; font-weight:650; line-height:1.3;
         font-family:inherit;
+        cursor:pointer; transition:background .16s, border-color .16s, transform .16s;
       }
-      .cancel:hover:not(:disabled) {background:#eef3f8}
-      .cancel:focus-visible {outline:3px solid #4689cd;outline-offset:2px}
-      .cancel:disabled {opacity:.6;cursor:default}
-      @keyframes spin {to {transform:rotate(360deg)}}
-      @media(prefers-reduced-motion:reduce) {
-        .spinner {animation:none;border-top-color:#2669a8}
+      .cancel:hover:not(:disabled) { background:#edf5f2; border-color:#b9d9d2; }
+      .cancel:active:not(:disabled) { transform:scale(.98); }
+      .cancel:focus-visible { outline:3px solid #37a88c; outline-offset:3px; }
+      .cancel:disabled { opacity:.54; cursor:default; }
+      @keyframes grow { from { opacity:.7; } to { opacity:1; } }
+      @keyframes breathe { 50% { box-shadow:0 0 0 5px rgba(24,139,124,.07); } }
+      @media (max-width:420px) {
+        .banner { padding:19px 18px 16px; border-radius:18px; }
+        .state { font-size:19px; }
+        .content { margin-top:19px; }
+        .footnote { max-width:190px; }
       }
-      @media(prefers-color-scheme:dark) {
-        .banner {background:#24282e;border-color:#434b56;color:#f2f4f6}
-        .state {color:#f1f5f9}
-        .explanation,.steps {color:#c2cbd5}
-        .cancel {background:#313840;border-color:#596473;color:#f3f6f9}
-        .cancel:hover:not(:disabled) {background:#3c4652}
+      @media (prefers-reduced-motion:reduce) {
+        .activity-dot,.bar::after { animation:none !important; }
+        .bar::after,.cancel { transition:none !important; }
+      }
+      @media (prefers-color-scheme: dark) {
+        :host { --ink:#eff6f4; --muted:#a9b9bc; --accent:#6dd6b9; --accent-soft:#203f3d; }
+        .veil { background:rgba(3,9,15,.44); }
+        .banner { color:var(--ink); background:rgba(26,34,42,.97);
+          border-color:#354a4d; box-shadow:0 30px 90px rgba(0,0,0,.38); }
+        .mode,.steps,.footnote { color:#93a6ab; }
+        .activity { color:#8ce1c7; }
+        .bar { background:#3a4a50; }
+        .bottom { border-top-color:#35464b; }
+        .cancel { background:#2b3b40; color:#e1eeeb; border-color:#486066; }
+        .cancel:hover:not(:disabled) { background:#36534f; border-color:#6ca89b; }
       }
     </style>
     <div class="veil" aria-hidden="true"></div>
     <section class="banner" role="status" aria-live="polite" aria-atomic="true">
       <div class="topline">
-        <span class="spinner" aria-hidden="true"></span>
-        <strong class="heading" data-role="heading"></strong>
+        <span class="mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 7h14M5 12h10M5 17h7"/>
+            <path d="m16 16 2 2 3-4"/>
+          </svg>
+        </span>
+        <span class="identity">
+          <strong class="heading" data-role="heading"></strong>
+          <span class="mode" data-role="mode"></span>
+        </span>
+        <span class="activity"><span class="activity-dot" aria-hidden="true"></span><span data-role="activity"></span></span>
       </div>
-      <p class="state" data-role="state"></p>
-      <p class="explanation" data-role="explanation"></p>
+      <div class="content">
+        <p class="eyebrow" data-role="steps"></p>
+        <p class="state" data-role="state"></p>
+        <p class="explanation" data-role="explanation"></p>
+        <div class="progress" aria-hidden="true">
+          <span class="bar one"></span>
+          <span class="bar two"></span>
+          <span class="bar three"></span>
+        </div>
+      </div>
       <div class="bottom">
-        <span class="steps" data-role="steps"></span>
+        <span class="footnote" data-role="footnote"></span>
         <button class="cancel" data-role="cancel" type="button"></button>
       </div>
     </section>
@@ -122,12 +220,18 @@ export function createAutoReadShield(
     return found
   }
   const heading = element<HTMLElement>('[data-role="heading"]')
+  const mode = element<HTMLElement>('[data-role="mode"]')
+  const activity = element<HTMLElement>('[data-role="activity"]')
+  const footnote = element<HTMLElement>('[data-role="footnote"]')
   const stateText = element<HTMLElement>('[data-role="state"]')
   const explanation = element<HTMLElement>('[data-role="explanation"]')
   const steps = element<HTMLElement>('[data-role="steps"]')
   const cancel = element<HTMLButtonElement>('[data-role="cancel"]')
-  heading.textContent = t('autoShieldTitle', 'Automatic reading in progress')
-  cancel.textContent = t('autoShieldCancel', 'Cancel automatic reading')
+  heading.textContent = 'LongChat Guard'
+  mode.textContent = t('autoShieldMode', 'Full conversation read')
+  activity.textContent = t('autoShieldActivity', 'Reading locally')
+  footnote.textContent = t('autoShieldQuietNote', 'Keep this tab active. You can stop at any time.')
+  cancel.textContent = t('autoShieldCancel', 'Cancel')
   let stage: AutoReadShieldStage = 'up'
   let disposed = false
   let cancelled = false
@@ -166,6 +270,7 @@ export function createAutoReadShield(
   const setStage = (next: AutoReadShieldStage): void => {
     if (disposed || (cancelled && next !== 'stopping')) return
     stage = next
+    root.dataset.stage = next
     const copy: Record<AutoReadShieldStage, [string, string, string]> = {
       up: [
         t('autoShieldUp', 'Loading older messages'),
@@ -206,8 +311,8 @@ export function createAutoReadShield(
     cancel.textContent = next === 'save'
       ? t('autoShieldFinishing', 'Finishing…')
       : next === 'stopping'
-        ? t('autoShieldStoppingStep', 'Cancellation requested')
-        : t('autoShieldCancel', 'Cancel automatic reading')
+        ? t('autoShieldStoppingStep', 'Stopping…')
+        : t('autoShieldCancel', 'Cancel')
   }
 
   const onCancelClick = (): void => { requestCancel('user_cancelled') }

@@ -65,4 +65,21 @@ for (const [locale, expectedName] of Object.entries(expectedLocaleNames)) {
   }
 }
 
+// Store candidates must not ship any experimental manual UI or test-log export.
+for (const forbidden of [
+  'LCG-READ-COMPARE-v1', 'copy-test-log', 'longChatManualGuide',
+  'manualReadScrollUp', 'actionCopyReadTestLog', 'menu-version'
+]) {
+  if (content.includes(forbidden)) throw new Error(`dev_only_feature_bundled:${forbidden}`)
+}
+for (const locale of Object.keys(expectedLocaleNames)) {
+  const keys = JSON.parse(fs.readFileSync(`dist/_locales/${locale}/messages.json`, 'utf8'))
+  for (const key of ['manualReadTitle', 'manualReadReachedTop', 'actionCopyReadTestLog']) {
+    if (Object.hasOwn(keys, key)) throw new Error(`dev_only_locale_key:${locale}:${key}`)
+  }
+  for (const key of ['autoShieldMode', 'autoShieldQuietNote', 'consentAutoWheel']) {
+    if (!keys[key]?.message) throw new Error(`missing_auto_locale_key:${locale}:${key}`)
+  }
+}
+
 console.log('Extension build verification passed.')

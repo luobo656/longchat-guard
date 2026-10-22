@@ -5,7 +5,7 @@ import {
 
 function fakeMaskEnvironment() {
   const elements = new Map<string, any>()
-  for (const key of ['heading', 'state', 'explanation', 'steps', 'cancel']) {
+  for (const key of ['heading', 'state', 'explanation', 'steps', 'cancel', 'mode', 'activity', 'footnote']) {
     elements.set('[data-role="' + key + '"]', {
       textContent: '', disabled: false, focus: vi.fn(),
       addEventListener: vi.fn(), removeEventListener: vi.fn()
@@ -84,9 +84,14 @@ describe('CDP-compatible automatic read overlay', () => {
     expect(env.root.dataset.longChatAutoReadShield).toBe('true')
     expect(env.root.style.cssText).toContain('pointer-events:none')
     expect(env.shadow.innerHTML).toContain('.veil')
-    expect(env.shadow.innerHTML).toContain('pointer-events:none')
+    expect(env.shadow.innerHTML).toMatch(/pointer-events:\s*none/)
     expect(env.shadow.innerHTML).toContain('.cancel')
-    expect(env.shadow.innerHTML).toContain('pointer-events:auto')
+    expect(env.shadow.innerHTML).toMatch(/pointer-events:\s*auto/)
+    expect(env.shadow.innerHTML).toContain('class="progress"')
+    expect(env.shadow.innerHTML).toContain('prefers-reduced-motion')
+    expect(env.shadow.innerHTML).toContain('prefers-color-scheme: dark')
+    expect(env.shadow.innerHTML).toContain('min(472px, calc(100vw - 28px))')
+    expect(env.elements.get('[data-role="mode"]').textContent.length).toBeGreaterThan(0)
     expect(env.viewHandlers.has('wheel')).toBe(false)
     expect(env.documentSpy.documentElement.appendChild).toHaveBeenCalledWith(env.root)
     expect(env.elements.get('[data-role="cancel"]').focus).toHaveBeenCalled()
@@ -116,10 +121,12 @@ describe('CDP-compatible automatic read overlay', () => {
     const onCancel=vi.fn()
     const shield=createAutoReadShield(onCancel,env.doc,env.view)
     shield.setStage('down')
+    expect(env.root.dataset.stage).toBe('down')
     expect(shield.getStage()).toBe('down')
     shield.setStage('verify')
+    expect(env.root.dataset.stage).toBe('verify')
     expect(env.elements.get('[data-role="state"]').textContent)
-      .toMatch(/check|验证|驗證/i)
+      .toMatch(/check|检查|檢查|验证|驗證/i)
     const escape=env.fire('keydown',{key:'Escape'})
     expect(escape.preventDefault).toHaveBeenCalledOnce()
     expect(onCancel).toHaveBeenCalledOnce()

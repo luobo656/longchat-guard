@@ -42,10 +42,9 @@ No chat content is uploaded, sold, shared, used for advertising, or made availab
 
 ## Permissions
 
-- `storage`
-- host permission for `https://chatgpt.com/*`
-
-No new permission is required by LongChat Guard 2.1.1.
+- `storage` for pseudonymous local data and settings;
+- `https://chatgpt.com/*` for on-page monitoring;
+- `debugger` only for temporary, user-initiated browser-internal wheel input during full reads and historical calibration. This broad permission can display an all-websites warning, although the extension restricts its own operations to the active ChatGPT tab, uses only wheel-input commands and detaches promptly. No conversation text is read through the debugger.
 
 ## User Control and Deletion
 

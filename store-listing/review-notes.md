@@ -8,12 +8,9 @@ On first use, before reading conversation content, the extension presents an in-
 
 ## Permissions
 
-The extension requests only:
+The extension requires `storage`, `https://chatgpt.com/*`, and the `debugger` permission. The debugger is only used when a user actively requests full-history reading or calibration: it attaches temporarily to the focused ChatGPT tab to issue Chrome DevTools Protocol `Input.dispatchMouseEvent` mouse-wheel events, then detaches. The command surface is strictly limited and does not extract conversation text through CDP. The powerful permission may show a warning mentioning all websites, even though the extension's actual use is constrained to the active ChatGPT tab.
 
-- `storage`
-- host permission for `https://chatgpt.com/*`
-
-It does not request `<all_urls>`, cookies, history, webRequest, tabs, or scripting.
+It does not request `<all_urls>` host access, cookies, history, webRequest, tabs, or scripting. Normal passive risk monitoring does not use the debugger.
 
 ## No Remote Backend
 
@@ -36,6 +33,16 @@ A user can establish the local empirical reference by opening a historical chat 
 The overflow menu always exposes “Read full current chat / 完整读取当前会话 / 完整讀取目前對話”. This user-initiated measurement action updates only the current conversation ledger/load; it does not create or modify the empirical failure reference, calibration samples, generation, or growth samples.
 
 Whole-turn growth is learned from reliable before/after conversation-load deltas. It is not an OpenAI-provided quota or official limit. The continuation action only copies a local meta-prompt: after the user pastes it into the current ChatGPT conversation, the current GPT generates a self-contained handoff from the conversation/project context it can actually see; the extension does not auto-transfer or upload conversation content.
+
+## Reviewer Test Steps (4.3.0)
+
+1. Open `https://chatgpt.com/` and accept the localized privacy disclosure (it also explains temporary browser-level auto-scrolling).
+2. Open a chat with enough history to scroll; in the LongChat Guard overflow menu choose **Read full current chat**. The visual progress overlay appears immediately, the browser sends wheel input, and the unchanged scanner checks completeness. The Cancel button or Esc safely stops without saving incomplete results.
+3. For empirical calibration use a historical conversation already known by the tester to have reached ChatGPT's length limit and click **Calibrate with this chat**. Merely reading an ordinary chat is not sufficient to establish a failed-limit reference.
+4. Confirm that normal risk monitoring, continuation prompt copy, and per-chat mute work without the debugger.
+5. Check English, Simplified Chinese, Traditional Chinese, dark mode and small windows. The browser may show a debugger banner; this is a local browser API, not a remote service.
+
+The user must already be signed into ChatGPT. The extension does not request credentials or an OpenAI API key. Private account conversations are not included in the submission package.
 
 ## Localization / Brand
 

@@ -44,6 +44,12 @@ LongChat Guard must not persist:
 
 Conversation content and locally derived extension data are not transmitted to the developer or to a LongChat Guard server. The extension has no server component, cloud sync, advertising pipeline, or OpenAI API integration.
 
+### Automatic conversation reading and browser debugging
+
+When the user explicitly starts a full conversation read or historical calibration, LongChat Guard temporarily uses the browser's `debugger` permission to send synthetic **mouse-wheel input** through the browser debugger protocol to the currently active ChatGPT tab. It does not enable remote debugging, send conversation text through the debugging protocol, or remotely transmit any content. The debugging session is detached after scrolling, cancellation, navigation, or an error.
+
+This is a powerful browser permission: **the browser may warn that the extension can read and change data on all websites**, even though LongChat Guard deliberately restricts its own debugger actions to the active `chatgpt.com` tab and the wheel-input method. Users can cancel the operation. The browser permission itself is broader than this application-level policy.
+
 ## Browser Permissions
 
 The Manifest V3 extension uses:
@@ -51,7 +57,7 @@ The Manifest V3 extension uses:
 - `storage` for local pseudonymous state, calibration evidence, and settings.
 - `https://chatgpt.com/*` so the content script can provide its single user-facing purpose on ChatGPT web pages.
 
-No additional permission is required for LongChat Guard 2.1.1.
+- `debugger` for temporary, user-initiated browser-internal mouse-wheel simulation on the active ChatGPT tab only. Chrome/Edge may warn about access to all websites because this permission is intrinsically broad; the extension restricts its actual debugging actions to wheel input and immediately detaches after use.
 
 ## User Control and Deletion
 

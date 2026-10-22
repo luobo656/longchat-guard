@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   isScrollBoundary, runWheelPass
 } from '../src/content/auto-history-scroll'
-import { withHistoryReadGuide } from '../src/content/manual-history-guide'
 
 describe('CDP wheel preparation geometry', () => {
   it('moves up and down in small wheel steps and requires a settled edge', async () => {
@@ -56,25 +55,5 @@ describe('CDP wheel preparation geometry', () => {
     await expect(runWheelPass('up', surface, async () => {}, async () => {},
       () => { throw new Error('user_cancelled') }
     )).rejects.toThrow('user_cancelled')
-  })
-})
-
-describe('user-initiated mode selection lifecycle', () => {
-  it('cleans up a canceled guide before the original scanner can be invoked', async () => {
-    const close = vi.fn()
-    const choice = vi.fn(async () => 'cancel' as const)
-    const mockGuide = {
-      wait: vi.fn(async () => 'cancel' as const),
-      chooseMode: choice,
-      showAutoProgress: vi.fn(),
-      offerManualFallback: vi.fn(async () => 'cancel' as const),
-      onCancel: vi.fn(() => () => {}),
-      close
-    }
-    const result = await withHistoryReadGuide(async guide => {
-      return await guide.chooseMode()
-    }, () => mockGuide)
-    expect(result).toBe('cancel')
-    expect(close).toHaveBeenCalledOnce()
   })
 })

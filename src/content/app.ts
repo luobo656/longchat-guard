@@ -76,14 +76,13 @@ import {
   type HistoryScanFailureReason,
   type HistoryScanResult
 } from './history-scanner'
-import { withHistoryReadGuide, type HistoryReadGuide } from './manual-history-guide'
 import { prepareHistoryWithBrowserInput } from './auto-history-scroll'
+import { runHistoryAfterAutomaticPreparation } from './automatic-read-gate'
 import {
   createAutoReadShield,
   type AutoReadShield,
   type AutoReadShieldCancelReason
 } from './auto-read-shield'
-import { ScanComparisonLog, type ScanTestAttempt } from './scan-test-log'
 import { shouldRecordPassiveLengthFailure } from './passive-failure-evidence'
 import {
   BranchPrefixStabilityWitness,
@@ -104,7 +103,7 @@ interface ActiveCalibrationScan {
   expectedLedgerRevision: number
 }
 
-/** Only the experimental auto path owns the shield; manual scans do not. */
+/** The user-initiated automatic read owns cancellation and the status shield. */
 interface AutoReadActivity {
   controller?: AbortController
   shield?: AutoReadShield
@@ -351,10 +350,6 @@ export async function startGuard(): Promise<void> {
     return false
   }
 
-  // Experimental comparison logs are scoped to this page instance only.
-  // They never enter chrome.storage or the background coordinator.
-  const scanTestLog = new ScanComparisonLog(chrome.runtime.getManifest().version)
-
   const ui = new GuardUi({
     onCopyContinuation: () => {
       void copyText(continuationPrompt())
@@ -368,19 +363,6 @@ export async function startGuard(): Promise<void> {
             t('toastCopyFailed', 'Copy failed. Please try again.')
           )
         )
-    },
-
-    onCopyTestLog: () => {
-      if (!scanTestLog.hasReports()) return
-      void copyText(scanTestLog.exportText())
-        .then(() => ui.showToast(t(
-          'toastReadTestLogCopied',
-          'Anonymized read-test results copied. Paste them into the chat.'
-        )))
-        .catch(() => ui.showToast(t(
-          'toastReadTestLogCopyFailed',
-          'Test-log copy failed. Please try again.'
-        )))
     },
 
     onCalibrate: () => {
@@ -987,105 +969,42 @@ export async function startGuard(): Promise<void> {
     }
   }
 
-  /** Both user-initiated full-read paths prepare the renderer, then invoke
-   * the unchanged 2.1.1 reader. Passive monitoring never opens this guide.
+  /** One user-initiated automatic read path for measurement and calibration.
+   * CDP wheel input prepares virtualized history; the original scanner alone
+   * determines completeness. Cancellation never commits partial evidence.
    */
-  const guidedManualHistoryRead=async(
-    attempt:ScanTestAttempt, activity:AutoReadActivity
-  ):Promise<HistoryScanResult>=>{
-    const prepared=await withHistoryReadGuide(async(guide:HistoryReadGuide)=>{
-      const manualDown=async():Promise<boolean>=>{
-        if(await guide.wait('down',0)!=='next'){
-          attempt.cancelled('user_cancelled')
-          return false
-        }
-        attempt.manualBottom()
-        return true
-      }
-      const manual=async():Promise<boolean>=>{
-        if(await guide.wait('up',0)!=='next'){
-          attempt.cancelled('user_cancelled')
-          return false
-        }
-        attempt.manualTop()
-        return manualDown()
-      }
-      // The original manual path needs no new confirmation steps.
-      const selection=await guide.chooseMode()
-      if(selection==='cancel'){
-        attempt.cancelled('user_cancelled')
-        return false
-      }
-      attempt.choose(selection)
-      if(selection==='manual'){
-        attempt.manualTop()
-        return manualDown()
-      }
-      const controller=new AbortController()
-      activity.controller=controller
-      const abort=(reason:AutoReadShieldCancelReason):void=>{
-        if(controller.signal.aborted)return
-        activity.cancelReason=reason
-        attempt.stage('stopping')
-        attempt.cancelled(reason)
-        controller.abort()
-      }
-      const unsubscribe=guide.onCancel(()=>abort('user_cancelled'))
-      try{
-        // Painting must remain hit-test transparent so CDP wheel reaches ChatGPT.
-        activity.shield=createAutoReadShield(abort)
-        await prepareHistoryWithBrowserInput(
-          controller.signal,
-          stage=>{
-            guide.showAutoProgress(stage)
-            attempt.stage(stage)
-            activity.shield?.setStage(stage==='done'?'verify':stage)
-          },
-          document,
-          sample=>attempt.step(sample)
-        )
-        activity.shield?.setStage('verify')
-        attempt.stage('verify')
-        return true
-      }catch(error){
-        attempt.autoFailed(error)
-        // Restore the underlying manual guide before offering the fallback.
-        activity.shield?.close()
-        delete activity.shield
-        if(controller.signal.aborted || location.hostname!=='chatgpt.com' ||
-           document.visibilityState==='hidden'){
-          attempt.cancelled(activity.cancelReason??'user_cancelled')
-          return false
-        }
-        delete activity.controller
-        if(await guide.offerManualFallback()!=='manual'){
-          attempt.cancelled('user_declined_fallback')
-          return false
-        }
-        attempt.fallBackToManual()
-        return manual()
-      }finally{
-        unsubscribe()
-      }
+  const automaticHistoryRead = async(activity:AutoReadActivity):Promise<HistoryScanResult>=>{
+    const controller = new AbortController()
+    activity.controller = controller
+    const cancel = (reason:AutoReadShieldCancelReason):void => {
+      if (controller.signal.aborted) return
+      activity.cancelReason = reason
+      controller.abort()
+    }
+    const cancelledResult = ():HistoryScanResult=>({
+      complete:false,reason:'scan_limit_reached',
+      observedMessages:[],messageCount:0,
+      attachmentCount:0,unknownRoleCount:0,
+      uncertaintySources:[],diagnostics:[]
     })
-    if(!prepared){
-      return {
-        complete:false,reason:'scan_limit_reached',
-        observedMessages:[],messageCount:0,
-        attachmentCount:0,unknownRoleCount:0,
-        uncertaintySources:[],diagnostics:[]
-      }
+    try {
+      // The user's action starts the read immediately. The shield must stay
+      // hit-test transparent over ChatGPT's actual conversation scroll target.
+      activity.shield = createAutoReadShield(cancel)
+      return await runHistoryAfterAutomaticPreparation(
+        controller.signal,
+        () => prepareHistoryWithBrowserInput(controller.signal,phase=>{
+          activity.shield?.setStage(phase==='done'?'verify':phase)
+        }),
+        () => scanConversationHistory(document,observePageMessages),
+        () => activity.shield?.setStage('verify')
+      )
+    } catch(error) {
+      if(controller.signal.aborted) return cancelledResult()
+      throw error
     }
-    const result=await scanConversationHistory(document,observePageMessages)
-    await attempt.scannerResult(result)
-    if(activity.controller?.signal.aborted){
-      // The frozen scanner has no cancellation API. Ignore its eventual result
-      // instead of writing unapproved evidence after the user pressed Cancel.
-      attempt.cancelled(activity.cancelReason??'user_cancelled')
-      return {...result,complete:false,reason:'scan_limit_reached'}
-    }
-    return result
   }
+
 
   async function runMeasurementScan(): Promise<void> {
     if (historyScanInProgress || measurementScanInProgress) return
@@ -1121,17 +1040,15 @@ export async function startGuard(): Promise<void> {
         latestState.ledgers[persistedKey]?.ledgerRevision ?? 0
     }
 
-    const testAttempt=scanTestLog.start('current_chat',persistedKey)
     const activity:AutoReadActivity={}
     activeMeasurementScan = scan
     measurementScanInProgress = true
     ui.setMeasurementBusy(true)
 
     try {
-      const result=await guidedManualHistoryRead(testAttempt,activity)
+      const result=await automaticHistoryRead(activity)
 
       if(activity.controller?.signal.aborted){
-        testAttempt.cancelled(activity.cancelReason??'user_cancelled')
         ui.showScanNotice(t('autoShieldCancelledNotice',
           'Automatic reading was stopped. No unfinished result was saved.'),'warning')
         return
@@ -1162,7 +1079,6 @@ export async function startGuard(): Promise<void> {
       }
 
       if (result.unknownRoleCount > 0) {
-        testAttempt.parserRejected()
         ui.showScanNotice(
           t(
             'measurementParserFailed',
@@ -1180,11 +1096,9 @@ export async function startGuard(): Promise<void> {
           : [])
       ])
       if(activity.controller?.signal.aborted){
-        testAttempt.cancelled(activity.cancelReason??'user_cancelled')
         return
       }
       activity.shield?.setStage('save')
-      if(activity.shield) testAttempt.stage('save')
       const response = await sendBackground({
         type: 'guard.commitMeasurementScan',
         event: {
@@ -1198,7 +1112,6 @@ export async function startGuard(): Promise<void> {
         }
       })
       latestState = response.state
-      testAttempt.saved(latestState.ledgers[persistedKey]?.currentEstimatedLoad)
 
       ui.showToast(
         t(
@@ -1208,17 +1121,14 @@ export async function startGuard(): Promise<void> {
         4200
       )
     } catch (error) {
-      testAttempt.failed(error)
       const reason =
         error instanceof Error ? error.message : 'unknown_error'
       ui.showScanNotice(
-        measurementCommitFailureMessage(reason),
+        automaticReadFailureMessage(reason) ?? measurementCommitFailureMessage(reason),
         'error'
       )
     } finally {
       activity.shield?.close()
-      scanTestLog.complete(testAttempt)
-      ui.setTestLogAvailable(scanTestLog.hasReports())
       if (isSameActiveMeasurementScan(scan)) activeMeasurementScan = undefined
       measurementScanInProgress = false
       ui.setMeasurementBusy(false)
@@ -1292,17 +1202,15 @@ export async function startGuard(): Promise<void> {
       expectedLedgerRevision
     }
 
-    const testAttempt=scanTestLog.start('historical_calibration',persistedKey)
     const activity:AutoReadActivity={}
     activeCalibrationScan = scan
     historyScanInProgress = true
     ui.setCalibrationBusy(true)
 
     try {
-      const result = await guidedManualHistoryRead(testAttempt,activity)
+      const result = await automaticHistoryRead(activity)
 
       if(activity.controller?.signal.aborted){
-        testAttempt.cancelled(activity.cancelReason??'user_cancelled')
         ui.showScanNotice(t('autoShieldCancelledNotice',
           'Automatic reading was stopped. No unfinished result was saved.'),'warning')
         return
@@ -1330,7 +1238,6 @@ export async function startGuard(): Promise<void> {
       }
 
       if (result.unknownRoleCount > 0) {
-        testAttempt.parserRejected()
         ui.showScanNotice(
           t(
             'calibrationParserFailed',
@@ -1352,11 +1259,9 @@ export async function startGuard(): Promise<void> {
       const observedAt = Date.now()
 
       if(activity.controller?.signal.aborted){
-        testAttempt.cancelled(activity.cancelReason??'user_cancelled')
         return
       }
       activity.shield?.setStage('save')
-      if(activity.shield) testAttempt.stage('save')
       const response = await sendBackground({
         type: 'guard.commitCalibration',
         event: {
@@ -1371,7 +1276,6 @@ export async function startGuard(): Promise<void> {
         }
       })
       latestState = response.state
-      testAttempt.saved(latestState.ledgers[persistedKey]?.currentEstimatedLoad)
 
       const generation = currentGeneration()
       const summary = generation
@@ -1398,17 +1302,14 @@ export async function startGuard(): Promise<void> {
         )
       }
     } catch (error) {
-      testAttempt.failed(error)
       const reason =
         error instanceof Error ? error.message : 'unknown_error'
       ui.showScanNotice(
-        calibrationCommitFailureMessage(reason),
+        automaticReadFailureMessage(reason) ?? calibrationCommitFailureMessage(reason),
         'error'
       )
     } finally {
       activity.shield?.close()
-      scanTestLog.complete(testAttempt)
-      ui.setTestLogAvailable(scanTestLog.hasReports())
       if (isSameActiveScan(scan)) activeCalibrationScan = undefined
       historyScanInProgress = false
       ui.setCalibrationBusy(false)
@@ -1817,6 +1718,15 @@ function historyScanFailureMessage(
     'scanIncomplete',
     'Complete history was not confirmed, so calibration was not saved.'
   )
+}
+
+function automaticReadFailureMessage(reason: string): string | undefined {
+  if (reason.startsWith('auto_scroll_') || reason.startsWith('debug_scroll_') ||
+      reason === 'conversation_changed' || reason === 'invalid_scroll_coordinates') {
+    return t('autoReadRetryHelp',
+      'Automatic reading could not finish. Keep this ChatGPT tab active and retry. Nothing incomplete was saved.')
+  }
+  return undefined
 }
 
 function measurementCommitFailureMessage(reason: string): string {

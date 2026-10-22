@@ -35,6 +35,8 @@ LongChat Guard 是面向 `chatgpt.com` 的本機優先 Chrome 擴充功能，用
 
 隱私處理全部在瀏覽器本機完成。只有使用者主動同意後，擴充功能才會暫時讀取目前 ChatGPT 頁面可見內容和 Composer，用於風險判斷。聊天原文、Assistant 回覆原文、Composer 草稿、附件/檔案正文和工具結果正文不會持久化，也不會上傳到 LongChat Guard 分析伺服器。持久化對話標識使用 install-salted SHA-256 pseudonymous identifier，而不是原始 ChatGPT conversation ID。不需要 OpenAI API Key。
 
+**一鍵自動讀取：** 使用者主動點擊「完整讀取目前對話」或「用此對話校準」後，擴充功能暫時使用瀏覽器內部滑鼠滾輪事件載入歷史訊息，無須手動捲動。讀取期間會顯示階段提示與取消按鈕，再由原版讀取器檢查訊息連續性與完整性；不完整時不會儲存結果。瀏覽器可能顯示偵錯權限警告，自動操作結束後會中斷偵錯連線。不會透過偵錯器匯出聊天原文，也不會上傳對話。
+
 ## 單一用途
 
 為 `chatgpt.com` 長對話提供本機經驗風險提醒與續接輔助。
@@ -44,6 +46,8 @@ LongChat Guard 是面向 `chatgpt.com` 的本機優先 Chrome 擴充功能，用
 - `storage`：儲存本機 pseudonymous 指紋、內部估算、經驗校準中繼資料、整輪增長樣本和提醒設定。
 - `https://chatgpt.com/*`：只在支援的 ChatGPT 網頁端執行。
 
+- `debugger`：僅在使用者主動開始完整讀取或歷史校準時使用，透過瀏覽器內部滑鼠滾輪事件捲動目前的 ChatGPT 分頁，並於完成、取消或失敗後解除偵錯連線。此權限本身較強，安裝警告可能涉及所有網站，但擴充功能實際操作僅限使用者主動選擇的 ChatGPT 頁面。
+
 ## 非官方聲明
 
 LongChat Guard 是獨立開源專案，與 OpenAI 不存在隸屬、贊助、認可或維護關係。「ChatGPT」僅用於說明支援的網站和使用情境。
@@ -51,6 +55,6 @@ LongChat Guard 是獨立開源專案，與 OpenAI 不存在隸屬、贊助、認
 ## 商店連結
 
 - 官方網站：https://luobo656.github.io/longchat-guard/zh-tw/
-- 隱私政策：https://luobo656.github.io/longchat-guard/PRIVACY.md
+- 隱私政策：https://github.com/luobo656/longchat-guard/blob/main/PRIVACY.md
 - 原始碼：https://github.com/luobo656/longchat-guard
 - 支援 / 問題回報：https://github.com/luobo656/longchat-guard/issues

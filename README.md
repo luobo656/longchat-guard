@@ -16,6 +16,10 @@ LongChat Guard is an open-source, local-first Chrome/Edge extension for empirica
 
 ![LongChat Guard icon](./public/icons/icon128.png)
 
+## 4.3.0 自动读取正式分发候选
+
+4.2.26 的已验证自动滚动版本已在 GitHub 独立冻结。4.3.0 移除人工中键滚动和开发诊断菜单，统一由浏览器内部滚轮模拟预加载历史，再调用既有完整性扫描器。仅在用户主动点击完整读取或历史基准校准时临时启用 debugger；正常实时监测不使用调试器。强权限可能出现浏览器警告，发布须通过 Chrome/Edge 商店审核，具体参见 [隐私政策](./PRIVACY.md) 和 `STORE_SUBMISSION_4_3_0.md`。仍非官方 Token 或官方剩余额度计算。
+
 ## 当前 2.1.1 产品模型
 
 LongChat Guard 将“能不能判断”和“风险是什么”分开：

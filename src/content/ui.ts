@@ -25,7 +25,6 @@ export interface GuardUiCallbacks {
   onCopyContinuation(): void
   onCalibrate(): void
   onMeasureCurrentChat(): void
-  onCopyTestLog(): void
   onRecalibrate(): void
   onToggleMute(): void
   onConfirmFailure(accepted: boolean): void
@@ -64,7 +63,6 @@ export class GuardUi {
   private menuOpen = false
   private calibrationBusy = false
   private measurementBusy = false
-  private testLogAvailable = false
   private preBusyCalibrationState: CalibrationState | undefined
   private toastTimer: number | undefined
   private latestModel: GuardUiModel | undefined
@@ -160,7 +158,6 @@ export class GuardUi {
     this.bindButton('copy', callbacks.onCopyContinuation)
     this.bindButton('calibrate', callbacks.onCalibrate)
     this.bindMenuAction('measure-current', callbacks.onMeasureCurrentChat)
-    this.bindMenuAction('copy-test-log', callbacks.onCopyTestLog)
     this.bindMenuAction('relearn', callbacks.onRecalibrate)
     this.bindMenuAction('mute', callbacks.onToggleMute)
     this.bindButton('confirm-yes', () => callbacks.onConfirmFailure(true))
@@ -248,8 +245,6 @@ export class GuardUi {
     const relearn = button(this.shadow, 'relearn')
     measureCurrent.disabled = this.measurementBusy || this.calibrationBusy
     relearn.disabled = this.measurementBusy || this.calibrationBusy
-    button(this.shadow, 'copy-test-log').disabled =
-      !this.testLogAvailable || this.measurementBusy || this.calibrationBusy
     setText(
       this.shadow,
       'measure-current-label',
@@ -295,14 +290,6 @@ export class GuardUi {
         : t('actionMute', 'Mute this chat')
     )
     mute.disabled = !model.conversationKey
-  }
-
-  /** Experimental test tool only; no restyling of the frozen monitoring card. */
-  setTestLogAvailable(available: boolean): void {
-    this.testLogAvailable = available
-    const action = button(this.shadow, 'copy-test-log')
-    action.hidden = !available
-    action.disabled = !available || this.calibrationBusy || this.measurementBusy
   }
 
   setCalibrationBusy(busy: boolean): void {
@@ -621,7 +608,6 @@ function standardRiskAdvice(state: RiskState): string {
 }
 
 function template(): string {
-  const extensionVersion = chrome.runtime.getManifest().version
   return `
     <style>
       :host { all: initial; }
@@ -648,7 +634,6 @@ function template(): string {
       button.menu-action + button.menu-action { margin-top:2px; }
       button.menu-action:hover:not(:disabled),button.menu-action:focus-visible { background:#f3f3f3; color:#171717; outline:none; }
       button.menu-action:disabled { opacity:.45; cursor:not-allowed; }
-      .menu-version { padding:6px 10px 2px; color:#9a9a9a; font-size:10px; line-height:1; text-align:right; user-select:none; }
       .trend { border-radius:13px; padding:10px 11px 9px; background:linear-gradient(180deg,#252527,#222224); color:#fff; box-shadow:inset 0 0 0 1px rgba(255,255,255,.045),0 7px 18px rgba(0,0,0,.09); }
       .risk-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
       .risk-head span { color:rgba(255,255,255,.68); font-size:11px; font-weight:400; }
@@ -737,6 +722,7 @@ function template(): string {
           <div class="title">${t('consentTitle', 'Enable local long-chat alerts')}</div>
           <ul class="consent-copy">
             <li>${t('consentLocalRead', PRIVACY_CONSENT_COPY[0])}</li>
+            <li>${t('consentAutoWheel', 'Full reads temporarily use browser debugging to scroll the current ChatGPT tab. Debugging ends when the read stops.')}</li>
             <li>${t('consentNoUpload', PRIVACY_CONSENT_COPY[1])}</li>
             <li>${t('consentNoRawPersist', PRIVACY_CONSENT_COPY[2])}</li>
             <li>${t('consentDeleteLocal', PRIVACY_CONSENT_COPY[3])}</li>
@@ -749,10 +735,8 @@ function template(): string {
       </div>
       <div class="menu-popover" data-role="menu-popover" role="menu" aria-label="${t('menuMore', 'More')}" hidden>
         <button class="menu-action" type="button" role="menuitem" tabindex="-1" data-action="measure-current"><span data-value="measure-current-label">${t('actionMeasureCurrentChat', 'Read full current chat')}</span></button>
-        <button class="menu-action" type="button" role="menuitem" tabindex="-1" data-action="copy-test-log" hidden>${t('actionCopyReadTestLog', 'Copy read test log')}</button>
         <button class="menu-action" type="button" role="menuitem" tabindex="-1" data-action="relearn">${t('actionRecalibrate', 'Recalibrate alert reference')}</button>
         <button class="menu-action" type="button" role="menuitem" tabindex="-1" data-action="mute"><span data-value="mute-label">${t('actionMute', 'Mute this chat')}</span></button>
-        <div class="menu-version" data-role="menu-version">v${extensionVersion}</div>
       </div>
       <button class="pill" data-role="pill" aria-expanded="false" aria-label="${t('pillAria', 'Open LongChat Guard')}">
         <span class="dot" data-role="status-dot"></span>

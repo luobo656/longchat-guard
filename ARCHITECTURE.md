@@ -22,6 +22,12 @@
 
 蒙版监听 `window.blur` 只能使用非捕获监听并核验事件 `target === window`。元素 blur 不冒泡，但会经过 window 捕获阶段；例如在蒙版安装监听后 `cancel.focus()` 让引导按钮失焦，若使用 capture:true 就立即触发自动取消。保留 `window.pagehide` 与 document `visibilitychange(hidden)` 的独立导航/隐藏中止，保留 `auto-history-scroll.ts` 的当前 CDP 焦点和中断验证；测试必须模拟窗口仍聚焦而按钮切换造成的 blur，证明无取消，同时真实 Window blur、Esc、手动取消仍有效。不得通过屏蔽一切 blur 或撤销安全保护绕开问题。
 
+## 4.3.0 自动化主路径与最小发行界面
+
+历史校准、当前会话完整读取共享 `prepareHistoryWithBrowserInput(signal,stage)` → 既有不可替换的 `scanConversationHistory()` → 完整性/环境/代数/修订门禁 → 现有 coordinator commit。抽掉 `manual-history-guide.ts`、`scan-test-log.ts` 和 `GuardUi` 的 copy-test-log/version DOM；自动滚轮仅保留真正执行所需几何稳定性判定，不能让测试日志调用副作用决定是否扫描。`AutoReadActivity` 拥有 AbortController 与 shield，`try/finally` 清理遮罩；取消时停止输入，扫描后再次核对 abort，提交前禁止保存。保留 `debug-scroll.ts` sender 前台/站点/路径/会话权限校验和 detach。
+
+遮罩 Shadow DOM 只负责视觉反馈与拦截网页误操作：根层透明命中 (`pointer-events:none`)，只有取消按钮允许指针操作；任何 backdrop-filter/模糊不得制造覆盖 CDP wheel 的命中对象。Window blur 非捕获 + target===window，忽略 UI 内按钮失焦；实际 tab 切换/pagehide/隐藏仍中止。避免额外网络请求、遥测或持久诊断。
+
 ## 1. 技术栈与边界
 
 - Chrome / Microsoft Edge
