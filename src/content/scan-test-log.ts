@@ -4,7 +4,7 @@ import type { WheelPassStep } from './auto-history-scroll'
 
 export type ReadOperation = 'current_chat' | 'historical_calibration'
 export type ReadMethod = 'manual' | 'auto'
-export type PreparationStage = 'up' | 'down' | 'settle' | 'done'
+export type PreparationStage = 'up' | 'down' | 'settle' | 'done' | 'verify' | 'save' | 'stopping'
 
 type RunStatus =
   | 'running' | 'cancelled' | 'preparation_failed'
@@ -226,7 +226,7 @@ export class ScanTestAttempt {
 
   fallBackToManual(): void { this.effectiveMode = 'manual' }
 
-  cancelled(code: 'user_cancelled' | 'user_declined_fallback'): void {
+  cancelled(code: 'user_cancelled' | 'user_declined_fallback' | 'auto_scroll_focus_lost'): void {
     this.status = 'cancelled'
     this.finalError = code
   }

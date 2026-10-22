@@ -8,6 +8,10 @@
 
 新增 `scan-test-log.ts` 纯内存按次记录：仅从原 `HistoryScanResult` 读取安全数值、有限枚举和加盐内容指纹的二次 SHA-256 聚合摘要；摘要只用于比较两次采样的一致性，不是用户消息数据导出。`auto-history-scroll.ts` 仅向诊断记录器报告实际执行的滚轮步数和滚动容器几何状态，不改原来的滚动策略。记录不保存到 chrome.storage、sessionStorage 或 console；只在用户手动点击实验菜单按钮时导出严格白名单 JSON 文本。后台不新增读取聊天内容的权限和功能，`history-scanner.ts`、计量、风险和账本保持不变。
 
+## 4.2.24 视觉蒙版与滚轮事件隔离
+
+新增独立 `auto-read-shield.ts` 仅在用户选择自动模式后挂载，以 Shadow DOM 的 fixed 全页视觉遮罩及顶部状态面板展示阶段、取消；根层 `pointer-events:none` 以保证 `Input.dispatchMouseEvent(mouseWheel)` 穿透命中真实 ChatGPT 滚动容器（此限制由浏览器命中测试规则决定）；仅「取消」按钮恢复 pointer events。window 捕获阶段阻止网页普通点击、键盘/输入、拖拽与提交等操作，**不拦截 wheel**，因为 CDP 和用户的物理滚轮不能可靠区分；因此不是操作系统级输入锁。取消由 AbortController 标记并尽快 detach，页面切换/失焦也标记中止；如果原版扫描器已启动，则不改其扫描规则，而是等待读窗结束并拒绝保存，完成后清理蒙版与事件监听。自动失败切回人工前拆掉蒙版；自动成功保留到正式扫描/校准结束。新增日志只记录有限枚举状态，不包含正文或 URL。
+
 ## 1. 技术栈与边界
 
 - Chrome / Microsoft Edge
