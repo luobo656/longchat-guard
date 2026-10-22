@@ -138,6 +138,28 @@ describe('CDP-compatible automatic read overlay', () => {
     expect(env.root.remove).toHaveBeenCalledTimes(1)
   })
 
+  it('does not cancel when the old guide Auto button blurs as the new Cancel button gains focus', () => {
+    const env=fakeMaskEnvironment()
+    const onCancel=vi.fn()
+    const shield=createAutoReadShield(onCancel,env.doc,env.view)
+    // The old 4.2.24 bug was window.addEventListener('blur', handler, true):
+    // a child control's non-bubbling blur still reaches WINDOW CAPTURE.
+    const registration=env.viewSpy.addEventListener.mock.calls.find(
+      (call:unknown[])=>call[0]==='blur'
+    )
+    expect(registration).toBeDefined()
+    expect(registration).toHaveLength(2)
+    // Defensive target gate: even a delivered child-focus event is ignored.
+    env.viewHandlers.get('blur')?.({
+      type:'blur',target:{id:'manual-guide-auto-button'}
+    } as unknown as Event)
+    expect(onCancel).not.toHaveBeenCalled()
+    expect(shield.getStage()).toBe('up')
+    expect(env.elements.get('[data-role="cancel"]').focus).toHaveBeenCalledOnce()
+    shield.close()
+    expect(env.viewHandlers.has('blur')).toBe(false)
+  })
+
   it('stops on explicit cancel button and window focus loss', () => {
     const env=fakeMaskEnvironment()
     const onCancel=vi.fn()
@@ -147,16 +169,37 @@ describe('CDP-compatible automatic read overlay', () => {
     expect(click).toBeDefined()
     click?.[1]()
     expect(onCancel).toHaveBeenCalledWith('user_cancelled')
-    env.viewHandlers.get('blur')?.({type:'blur'} as Event)
+    env.viewHandlers.get('blur')?.({type:'blur',target:env.view} as unknown as Event)
     expect(onCancel).toHaveBeenCalledTimes(1)
     shield.close()
 
     const later=fakeMaskEnvironment()
     const secondCancel=vi.fn()
     const second=createAutoReadShield(secondCancel,later.doc,later.view)
-    later.viewHandlers.get('blur')?.({type:'blur'} as Event)
+    later.viewHandlers.get('blur')?.({type:'blur',target:later.view} as unknown as Event)
     expect(secondCancel).toHaveBeenCalledWith('auto_scroll_focus_lost')
     second.close()
+  })
+
+  it('still aborts when the tab hides or navigates away', () => {
+    const env=fakeMaskEnvironment()
+    const onCancel=vi.fn()
+    const shield=createAutoReadShield(onCancel,env.doc,env.view)
+    env.documentSpy.visibilityState='hidden'
+    env.documentHandlers.get('visibilitychange')?.({type:'visibilitychange'} as Event)
+    expect(onCancel).toHaveBeenCalledOnce()
+    expect(onCancel).toHaveBeenCalledWith('auto_scroll_focus_lost')
+    env.viewHandlers.get('pagehide')?.({type:'pagehide',target:env.view} as unknown as Event)
+    expect(onCancel).toHaveBeenCalledTimes(1)
+    shield.close()
+
+    const newPage=fakeMaskEnvironment()
+    const cancelled=vi.fn()
+    const freshShield=createAutoReadShield(cancelled,newPage.doc,newPage.view)
+    newPage.viewHandlers.get('pagehide')?.({type:'pagehide',target:newPage.view} as unknown as Event)
+    expect(cancelled).toHaveBeenCalledWith('auto_scroll_focus_lost')
+    freshShield.close()
+    expect(newPage.viewHandlers.size).toBe(0)
   })
 
   it('disables cancellation during the final saving stage', () => {

@@ -152,9 +152,15 @@ export function createAutoReadShield(
     event.stopImmediatePropagation()
     if (action === 'cancel') requestCancel('user_cancelled')
   }
-  const onFocusLoss = (): void => { requestCancel('auto_scroll_focus_lost') }
+  // Element blur is capturable at window even though it does not bubble.
+  // Moving focus from the guide's Auto button to this shield's Cancel button
+  // must never be mistaken for the browser tab losing focus.
+  const onWindowBlur = (event: Event): void => {
+    if (event.target === view) requestCancel('auto_scroll_focus_lost')
+  }
+  const onPageHide = (): void => { requestCancel('auto_scroll_focus_lost') }
   const onVisibilityChange = (): void => {
-    if (doc.visibilityState === 'hidden') onFocusLoss()
+    if (doc.visibilityState === 'hidden') onPageHide()
   }
 
   const setStage = (next: AutoReadShieldStage): void => {
@@ -209,8 +215,9 @@ export function createAutoReadShield(
   for (const name of BLOCKED_INPUT_EVENTS) {
     view.addEventListener(name, onInput, { capture: true, passive: false })
   }
-  view.addEventListener('blur', onFocusLoss, true)
-  view.addEventListener('pagehide', onFocusLoss, true)
+  // Never use capture:true for window.blur: it also captures DOM child blur.
+  view.addEventListener('blur', onWindowBlur)
+  view.addEventListener('pagehide', onPageHide)
   doc.addEventListener('visibilitychange', onVisibilityChange, true)
   doc.documentElement.appendChild(root)
   setStage('up')
@@ -228,8 +235,8 @@ export function createAutoReadShield(
       for (const name of BLOCKED_INPUT_EVENTS) {
         view.removeEventListener(name, onInput, true)
       }
-      view.removeEventListener('blur', onFocusLoss, true)
-      view.removeEventListener('pagehide', onFocusLoss, true)
+      view.removeEventListener('blur', onWindowBlur)
+      view.removeEventListener('pagehide', onPageHide)
       doc.removeEventListener('visibilitychange', onVisibilityChange, true)
       root.remove()
     }

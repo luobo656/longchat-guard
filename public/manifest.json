@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "__MSG_extensionName__",
   "short_name": "LongChat Guard",
-  "version": "4.2.25",
+  "version": "4.2.26",
   "description": "__MSG_extensionDescription__",
   "default_locale": "en",
   "permissions": [

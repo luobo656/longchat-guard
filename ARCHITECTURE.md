@@ -18,6 +18,10 @@
 
 `dom-reader.ts` 的错误候选限定为与当前消息正文无关、可见的紧凑 alert/toast；`app.ts` 的被动触顶事件仅允许当前会话、当前 generation、最新可靠捕捉的实际发送动作或已接受的用户发送轮次、明确高置信长度失败、且提交时错误未预先存在。其他提示不写 `pendingFailureConfirmations`；不会篡改已认证 R、原 `history-scanner`、CDP 蒙版、内容单位与风险引擎。已有历史误记的 pending 不自动删除；用户可点击「忽略」。
 
+## 4.2.26 真实失焦与元素焦点事件隔离
+
+蒙版监听 `window.blur` 只能使用非捕获监听并核验事件 `target === window`。元素 blur 不冒泡，但会经过 window 捕获阶段；例如在蒙版安装监听后 `cancel.focus()` 让引导按钮失焦，若使用 capture:true 就立即触发自动取消。保留 `window.pagehide` 与 document `visibilitychange(hidden)` 的独立导航/隐藏中止，保留 `auto-history-scroll.ts` 的当前 CDP 焦点和中断验证；测试必须模拟窗口仍聚焦而按钮切换造成的 blur，证明无取消，同时真实 Window blur、Esc、手动取消仍有效。不得通过屏蔽一切 blur 或撤销安全保护绕开问题。
+
 ## 1. 技术栈与边界
 
 - Chrome / Microsoft Edge
