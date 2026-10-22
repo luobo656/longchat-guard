@@ -1,10 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import {
   analyzePageSnapshot,
+  isBlankConversationRoute,
   resolveConversationId
 } from '../src/core/page-adapter'
 
 describe('chatgpt.com page adapter', () => {
+  it('recognizes blank project composers without trusting stale canonical IDs', () => {
+    for (const url of [
+      'https://chatgpt.com/',
+      'https://chatgpt.com/chat',
+      'https://chatgpt.com/g/g-p-project123/project',
+      'https://chatgpt.com/g/g-p-project123'
+    ]) {
+      expect(isBlankConversationRoute(url)).toBe(true)
+      expect(resolveConversationId({
+        url, conversationIdHints: ['stalePreviousChat123']
+      })).toBeUndefined()
+    }
+    expect(isBlankConversationRoute('https://chatgpt.com/g/g-p-project123/c/newChat456')).toBe(false)
+    expect(isBlankConversationRoute('https://example.com/g/g-p-project123')).toBe(false)
+  })
+
   it('extracts a healthy semantic conversation fixture', () => {
     const result = analyzePageSnapshot({
       url: 'https://chatgpt.com/c/abc123456789',

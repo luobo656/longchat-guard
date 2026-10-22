@@ -7,6 +7,7 @@ import {
   readGenerationState,
   readMessages,
   readPageSnapshot,
+  readVisibleErrors,
   readTailEvidence
 } from '../src/content/dom-reader'
 
@@ -173,7 +174,7 @@ describe('chatgpt DOM reader', () => {
     expect(readConversationHints(doc as unknown as Document, 'https://chatgpt.com/')).toEqual([])
   })
 
-  it('extracts canonical conversation ids only from /c/id paths', () => {
+  it('extracts canonical conversation IDs on nonblank routes, not on a new-chat root', () => {
     const doc = fakeDocument([
       el('link', { rel: 'canonical', href: 'https://chatgpt.com/c/canonical123?x=1' }),
       el('nav', { 'data-conversation-id': 'sidebar456' })
@@ -182,7 +183,7 @@ describe('chatgpt DOM reader', () => {
     expect(
       readConversationHints(
         doc as unknown as Document,
-        'https://chatgpt.com/'
+        'https://chatgpt.com/workspace/current'
       )
     ).toEqual(['canonical123'])
   })
@@ -376,6 +377,52 @@ describe('chatgpt DOM reader', () => {
     expect(readMessages(doc as unknown as Document)[0]?.stableHint).toBe(
       'conversation-turn:conversation-turn-42'
     )
+  })
+})
+
+describe('stale SPA content and alert boundaries', () => {
+  it('ignores old turn nodes and canonical links on explicit project blank routes', () => {
+    const doc = fakeDocument([
+      el('link', { rel: 'canonical', href: 'https://chatgpt.com/c/previous-chat' }),
+      el('main', {}, [
+        el('div', { 'data-turn-key': 'previous-turn',
+          'data-message-author-role': 'assistant',
+          'data-conversation-id': 'previous-chat' }, [], 'old text')
+      ]),
+      el('div', { role: 'alert' }, [], 'Maximum length for this conversation')
+    ])
+    const url = 'https://chatgpt.com/g/g-p-project123/project'
+    const snapshot = readPageSnapshot(doc as unknown as Document, url, 'none')
+    expect(readConversationHints(doc as unknown as Document, url)).toEqual([])
+    expect(snapshot.conversationIdHints).toEqual([])
+    expect(snapshot.messages).toEqual([])
+    expect(snapshot.visibleErrors).toEqual([])
+    expect(snapshot.tailEvidence).toBe('unknown')
+  })
+
+  it('does not classify quoted message text or hidden long alerts as ChatGPT failures', () => {
+    const cssHiddenToast = el('div', { role: 'alert' }, [],
+      "You've reached the maximum length for this conversation")
+    Object.defineProperty(cssHiddenToast, 'getClientRects', {
+      value: () => []
+    })
+    const doc = fakeDocument([
+      el('article', { 'data-turn-key': 'turn-1' }, [
+        el('div', { role: 'alert' }, [],
+          "You've reached the maximum length for this conversation")
+      ]),
+      cssHiddenToast,
+      el('div', { role: 'alert', hidden: '' }, [],
+        "You've reached the maximum length for this conversation"),
+      el('div', { role: 'alert', 'aria-hidden': 'true' }, [],
+        "You've reached the maximum length for this conversation"),
+      el('div', { role: 'alert' }, [], 'x'.repeat(500)),
+      el('div', { role: 'alert', 'data-testid': 'error-toast' }, [],
+        "You've reached the maximum length for this conversation")
+    ])
+    expect(readVisibleErrors(doc as unknown as Document)).toEqual([
+      "You've reached the maximum length for this conversation"
+    ])
   })
 })
 

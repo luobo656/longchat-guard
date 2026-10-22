@@ -3,12 +3,14 @@ import type {
   BackgroundResponse
 } from '../background/coordinator'
 import { summarizeGeneration } from '../core/calibration'
+import { classifyVisibleError } from '../core/error-classifier'
 import {
   anonymizeConversationKey,
   WebCryptoFingerprinter
 } from '../core/fingerprinter'
 import {
   parseConversationIdFromUrl,
+  isBlankConversationRoute,
   resolveConversationId,
   analyzePageSnapshot
 } from '../core/page-adapter'
@@ -49,6 +51,7 @@ import {
 } from './coalesced-runner'
 import {
   createConversationSessionState,
+  enterBlankConversationRoute,
   markNewChatStarted,
   NEW_CHAT_START_EVIDENCE_TTL_MS,
   resetConversationSession,
@@ -60,6 +63,7 @@ import {
   findComposerElement,
   hasConversationMessageRoots,
   readComposerText,
+  readVisibleErrors,
   readPageSnapshot
 } from './dom-reader'
 import {
@@ -80,6 +84,7 @@ import {
   type AutoReadShieldCancelReason
 } from './auto-read-shield'
 import { ScanComparisonLog, type ScanTestAttempt } from './scan-test-log'
+import { shouldRecordPassiveLengthFailure } from './passive-failure-evidence'
 import {
   BranchPrefixStabilityWitness,
   findCertifiedInheritedPrefix,
@@ -113,6 +118,8 @@ interface PendingTurnIntent {
   load: number
   accepted: boolean
   capturedAt: number
+  submitted?: boolean
+  lengthErrorVisibleAtStart?: boolean
 }
 
 function continuationPrompt(): string {
@@ -466,10 +473,41 @@ export async function startGuard(): Promise<void> {
     }
   })
 
+  /** An explicit blank ChatGPT/Projects composer route supersedes every
+   * leftover SPA identity, canonical URL, ledger and error confirmation.
+   * Never infer a new-chat birth from a temporarily empty /c/<id> route.
+   */
+  const enterExplicitBlankRoute = (): void => {
+    if (!isBlankConversationRoute(location.href)) return
+    const now = Date.now()
+    const transition = enterBlankConversationRoute(
+      conversationSession,
+      Boolean(latestConversationKey),
+      now
+    )
+    if (!transition.resetPreviousBinding) return
+    conversationSession = transition.state
+    latestConversationKey = undefined
+    pendingTurnIntent = undefined
+    completionTracker = new ResponseCompletionTracker()
+    branchPrefixWitness.reset()
+    clearNewChatStartSessionEvidence()
+    rememberNewChatStartSessionEvidence(now)
+  }
+
   const processPage = async (): Promise<void> => {
     if (historyScanInProgress || measurementScanInProgress) return
 
     try {
+      enterExplicitBlankRoute()
+      const observedRoute = location.href
+      const routeStillCurrent = (): boolean => {
+        if (location.href === observedRoute) return true
+        // A previous chat's in-flight async observation must not overwrite
+        // the newly opened project's identity or its visible risk state.
+        window.setTimeout(() => scheduleRun?.(), 0)
+        return false
+      }
       const preliminarySnapshot = readPageSnapshot(
         document,
         location.href,
@@ -482,13 +520,13 @@ export async function startGuard(): Promise<void> {
         parseConversationIdFromUrl(location.href)
       const observedConversationId =
         resolveConversationId(preliminarySnapshot)
-      const resolvedConversationId =
-        resolveSessionConversationId({
-          activeConversationId:
-            previousSessionConversationId,
-          routeConversationId,
-          observedConversationId
-        })
+      const resolvedConversationId = isBlankConversationRoute(location.href)
+        ? undefined
+        : resolveSessionConversationId({
+            activeConversationId: previousSessionConversationId,
+            routeConversationId,
+            observedConversationId
+          })
       const previousSessionConversationKey =
         previousSessionConversationId
           ? await persistedConversationKey(
@@ -527,8 +565,8 @@ export async function startGuard(): Promise<void> {
           ))
       )
       const blankConversationSurface =
-        !resolvedConversationId &&
-        preliminarySnapshot.messages.length === 0
+        isBlankConversationRoute(location.href) ||
+        (!resolvedConversationId && preliminarySnapshot.messages.length === 0)
       const lookupConversationId =
         resolvedConversationId ??
         conversationSession.activeConversationId
@@ -587,6 +625,7 @@ export async function startGuard(): Promise<void> {
         branchPrefixWitness.reset()
       }
 
+      if (!routeStillCurrent()) return
       const nowForSession = Date.now()
       const sessionResolution = resolveConversationSession(
         conversationSession,
@@ -705,6 +744,7 @@ export async function startGuard(): Promise<void> {
           : [])
       ])
 
+      if (!routeStillCurrent()) return
       observationEpoch = Math.max(observationEpoch + 1, now)
       let response = await sendBackground({
         type: 'guard.observeWindow',
@@ -725,6 +765,7 @@ export async function startGuard(): Promise<void> {
       })
       latestState = response.state
 
+      if (!routeStillCurrent()) return
       if (response.staleObservation) {
         window.setTimeout(() => scheduleRun?.(), 50)
         return
@@ -762,7 +803,14 @@ export async function startGuard(): Promise<void> {
       }
 
       for (const error of adapterResult.visibleErrors) {
-        if (error.kind !== 'conversation_length_limit') continue
+        if (!shouldRecordPassiveLengthFailure({
+          errorKind: error.kind,
+          confidence: error.confidence,
+          turn: pendingTurnIntent,
+          conversationKey,
+          generationId: persistedSnapshot.generationId,
+          observedAt: now
+        })) continue
         response = await sendBackground({
           type: 'guard.recordFailure',
           event: {
@@ -786,10 +834,15 @@ export async function startGuard(): Promise<void> {
       const tail = persistedSnapshot.messages.find(
         (message) => message.fingerprint === tailFingerprint
       )
-      const hasLengthError = adapterResult.visibleErrors.some(
-        (error) =>
-          error.kind === 'conversation_length_limit' &&
-          error.confidence !== 'low'
+      const hasLengthError = adapterResult.visibleErrors.some((error) =>
+        shouldRecordPassiveLengthFailure({
+          errorKind: error.kind,
+          confidence: error.confidence,
+          turn: pendingTurnIntent,
+          conversationKey,
+          generationId: persistedSnapshot.generationId,
+          observedAt: now
+        })
       )
 
       const completion = completionTracker.observe({
@@ -896,6 +949,7 @@ export async function startGuard(): Promise<void> {
           (item) => item.conversationKey === conversationKey
         )
 
+      if (!routeStillCurrent()) return
       renderUiModel({
           conversationKey,
           measurementState,
@@ -919,6 +973,7 @@ export async function startGuard(): Promise<void> {
         ui.drawAttention()
       }
     } catch (error) {
+      enterExplicitBlankRoute()
       const rawConversationKey =
         rawConversationKeyFromUrl(location.href) ??
         (conversationSession.activeConversationId
@@ -1376,6 +1431,7 @@ export async function startGuard(): Promise<void> {
     void sendBackground({ type: 'guard.readState' })
       .then((response) => {
         latestState = response.state
+        enterExplicitBlankRoute()
         renderCurrentUiFromState()
       })
       .catch(() => undefined)
@@ -1383,6 +1439,7 @@ export async function startGuard(): Promise<void> {
 
   const captureTurnStart = (target: EventTarget | null): boolean => {
     if (!isPromptSendTarget(target)) return false
+    enterExplicitBlankRoute()
     const snapshot = readPageSnapshot(
       document,
       location.href,
@@ -1390,11 +1447,27 @@ export async function startGuard(): Promise<void> {
     )
     if (!(snapshot.composerText ?? '').trim()) return false
 
+    // Check the raw visible error surface even on blank composer routes:
+    // readPageSnapshot deliberately hides stale SPA errors there, but any
+    // lingering toast must still disqualify passive failure attribution.
+    const lengthErrorVisibleAtStart = readVisibleErrors(document).some(
+      (text) => classifyVisibleError(text).kind === 'conversation_length_limit'
+    )
+
     const now = Date.now()
     if (
       pendingTurnIntent &&
       now - pendingTurnIntent.capturedAt < 750
     ) {
+      // Composer input may have armed this chat milliseconds before Enter.
+      pendingTurnIntent = {
+        ...pendingTurnIntent,
+        submitted: true,
+        capturedAt: now,
+        lengthErrorVisibleAtStart:
+          pendingTurnIntent.lengthErrorVisibleAtStart === true ||
+          lengthErrorVisibleAtStart
+      }
       return true
     }
 
@@ -1411,7 +1484,9 @@ export async function startGuard(): Promise<void> {
         ledgerRevision: ledger.ledgerRevision,
         load: ledger.currentEstimatedLoad,
         accepted: false,
-        capturedAt: now
+        capturedAt: now,
+        submitted: true,
+        lengthErrorVisibleAtStart
       }
       return true
     }
@@ -1450,7 +1525,9 @@ export async function startGuard(): Promise<void> {
         ledgerRevision: 0,
         load: 0,
         accepted: false,
-        capturedAt: now
+        capturedAt: now,
+        submitted: true,
+        lengthErrorVisibleAtStart
       }
       return true
     }
@@ -1551,6 +1628,7 @@ export async function startGuard(): Promise<void> {
   }
 
   const armNewChatFromComposerActivity = (): void => {
+    enterExplicitBlankRoute()
     const conversationKey = latestConversationKey
     const hasPersistedLedger = Boolean(
       conversationKey &&
@@ -1594,7 +1672,10 @@ export async function startGuard(): Promise<void> {
         ledgerRevision: 0,
         load: 0,
         accepted: false,
-        capturedAt: now
+        capturedAt: now,
+        lengthErrorVisibleAtStart: readVisibleErrors(document).some(
+          (text) => classifyVisibleError(text).kind === 'conversation_length_limit'
+        )
       }
     }
   }
@@ -1623,6 +1704,13 @@ export async function startGuard(): Promise<void> {
     document.addEventListener('click', onClick, true)
     document.addEventListener('keydown', onKeyDown, true)
     document.addEventListener('input', onInput, true)
+    // SPA pushState/replaceState do not fire popstate. The browser's
+    // Navigation API surfaces their committed route changes without hooking
+    // or modifying ChatGPT's History API or adding permissions.
+    const navigationApi = (window as Window & { navigation?: EventTarget }).navigation
+    const onNavigationSettled = (): void => { scheduleRun?.() }
+    navigationApi?.addEventListener('currententrychange', onNavigationSettled)
+    navigationApi?.addEventListener('navigatesuccess', onNavigationSettled)
     window.addEventListener('popstate', onPopState)
     chrome.storage.onChanged.addListener(onStorageChanged)
 
@@ -1655,6 +1743,8 @@ export async function startGuard(): Promise<void> {
         document.removeEventListener('keydown', onKeyDown, true)
         document.removeEventListener('input', onInput, true)
         window.removeEventListener('popstate', onPopState)
+        navigationApi?.removeEventListener('currententrychange', onNavigationSettled)
+        navigationApi?.removeEventListener('navigatesuccess', onNavigationSettled)
         chrome.storage.onChanged.removeListener(onStorageChanged)
         ui.destroy()
       },
@@ -1816,19 +1906,6 @@ export function canStartMonitoring(settings: {
     generationId: 'test',
     ...settings
   })
-}
-
-function isBlankConversationRoute(url: string): boolean {
-  try {
-    const parsed = new URL(url, location.href)
-    if (parsed.hostname !== 'chatgpt.com') return false
-    if (parsed.pathname === '/' || parsed.pathname === '/chat') {
-      return true
-    }
-    return /^\/g\/[^/]+(?:\/project)?\/?$/.test(parsed.pathname)
-  } catch {
-    return false
-  }
 }
 
 function isConversationNavigationHref(url: string): boolean {

@@ -12,6 +12,12 @@
 
 新增独立 `auto-read-shield.ts` 仅在用户选择自动模式后挂载，以 Shadow DOM 的 fixed 全页视觉遮罩及顶部状态面板展示阶段、取消；根层 `pointer-events:none` 以保证 `Input.dispatchMouseEvent(mouseWheel)` 穿透命中真实 ChatGPT 滚动容器（此限制由浏览器命中测试规则决定）；仅「取消」按钮恢复 pointer events。window 捕获阶段阻止网页普通点击、键盘/输入、拖拽与提交等操作，**不拦截 wheel**，因为 CDP 和用户的物理滚轮不能可靠区分；因此不是操作系统级输入锁。取消由 AbortController 标记并尽快 detach，页面切换/失焦也标记中止；如果原版扫描器已启动，则不改其扫描规则，而是等待读窗结束并拒绝保存，完成后清理蒙版与事件监听。自动失败切回人工前拆掉蒙版；自动成功保留到正式扫描/校准结束。新增日志只记录有限枚举状态，不包含正文或 URL。
 
+## 4.2.25 新会话身份及被动失败归属
+
+`page-adapter.ts` 增加共享显式空白会话路由判定；`dom-reader.ts` 在此类路由不读取可能遗留的对话 ID、canonical 和旧会话 DOM 作为当前会话；`app.ts` 在从已分配会话转到显式空白路由时重置旧身份与待提交轮次，记录从空白开始的证据；浏览器原生 Navigation API（存在时）仅触发路由重新观察，不注入 History API、网页脚本或新权限。项目新会话由实际空白→Composer 输入/首次发送→新 ID 串联；旧会话只读打开、短暂零消息不构成新聊天证明。
+
+`dom-reader.ts` 的错误候选限定为与当前消息正文无关、可见的紧凑 alert/toast；`app.ts` 的被动触顶事件仅允许当前会话、当前 generation、最新可靠捕捉的实际发送动作或已接受的用户发送轮次、明确高置信长度失败、且提交时错误未预先存在。其他提示不写 `pendingFailureConfirmations`；不会篡改已认证 R、原 `history-scanner`、CDP 蒙版、内容单位与风险引擎。已有历史误记的 pending 不自动删除；用户可点击「忽略」。
+
 ## 1. 技术栈与边界
 
 - Chrome / Microsoft Edge

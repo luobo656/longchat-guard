@@ -44,6 +44,23 @@ export function resetConversationSession(): ConversationSessionState {
   return {}
 }
 
+/** Explicitly entering a blank composer route invalidates an old chat ID.
+ * Preserve existing pending birth evidence when already in a blank session.
+ */
+export function enterBlankConversationRoute(
+  state: ConversationSessionState,
+  hasPreviousConversationBinding: boolean,
+  now: number
+): { state: ConversationSessionState; resetPreviousBinding: boolean } {
+  if (!state.activeConversationId && !hasPreviousConversationBinding) {
+    return { state, resetPreviousBinding: false }
+  }
+  return {
+    state: markNewChatStarted(resetConversationSession(), now),
+    resetPreviousBinding: true
+  }
+}
+
 export function shouldArmNewChatFromComposerActivity(input: {
   messageCount: number
   composerHasText: boolean

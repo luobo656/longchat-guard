@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   createConversationSessionState,
+  enterBlankConversationRoute,
   markNewChatStarted,
   resetConversationSession,
   resolveConversationSession,
@@ -353,6 +354,51 @@ describe('conversation session lifecycle', () => {
     expect(reset.observedFromStartConversationId).toBeUndefined()
     expect(reset.pendingNewChatStartedAt).toBeUndefined()
     expect(reset.blankSurfaceObserved).toBeUndefined()
+  })
+})
+
+describe('project blank route isolation', () => {
+  it('drops a previous project chat identity before new blank-composer and first-turn binding', () => {
+    const previous = resolveConversationSession(
+      markNewChatStarted(createConversationSessionState(), 1000), {
+        conversationId: 'old-project-chat', isBlankSurface: false,
+        messageCount: 6, hasUserMessage: true,
+        persistedAuthoritative: true, now: 1300
+      }
+    )
+    const entered = enterBlankConversationRoute(previous.state, true, 3000)
+    expect(entered.resetPreviousBinding).toBe(true)
+    expect(entered.state.activeConversationId).toBeUndefined()
+    expect(entered.state.observedFromStartConversationId).toBeUndefined()
+    expect(entered.state.blankSurfaceObserved).toBe(true)
+    const start = resolveConversationSession(entered.state, {
+      isBlankSurface: true, messageCount: 0,
+      hasUserMessage: false, persistedAuthoritative: false, now: 3050
+    })
+    const first = resolveConversationSession(start.state, {
+      conversationId: 'brand-new-project-chat', isBlankSurface: false,
+      messageCount: 2, hasUserMessage: true,
+      persistedAuthoritative: false, now: 3450
+    })
+    expect(first.coverageEvidence).toBe('observed_from_start')
+    expect(first.state.activeConversationId).toBe('brand-new-project-chat')
+    expect(first.state.observedFromStartConversationId).toBe('brand-new-project-chat')
+  })
+
+  it('does not reset or fake birth evidence for a direct existing-chat route', () => {
+    const current = resolveConversationSession(createConversationSessionState(), {
+      conversationId: 'existing-opened-project-chat', isBlankSurface: false,
+      messageCount: 3, hasUserMessage: true,
+      persistedAuthoritative: false, now: 1200
+    })
+    expect(current.coverageEvidence).toBe('none')
+    const notEnteringAgain = enterBlankConversationRoute(current.state, false, 1400)
+    expect(notEnteringAgain.resetPreviousBinding).toBe(true)
+    // enterBlankConversationRoute must only be called for a REAL blank route;
+    // app.ts explicitly gates it behind isBlankConversationRoute(url).
+    const pending = enterBlankConversationRoute(createConversationSessionState(), false, 2000)
+    expect(pending.resetPreviousBinding).toBe(false)
+    expect(pending.state).toEqual({})
   })
 })
 

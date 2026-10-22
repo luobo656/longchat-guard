@@ -1,5 +1,6 @@
 import {
   parseConversationIdFromUrl,
+  isBlankConversationRoute,
   type PageAdapterSnapshot,
   type PageMessageSnapshot
 } from '../core/page-adapter'
@@ -9,21 +10,25 @@ export function readPageSnapshot(
   url: string,
   coverageEvidence: PageAdapterSnapshot['coverageEvidence']
 ): PageAdapterSnapshot {
+  const blankRoute = isBlankConversationRoute(url)
   return {
     url,
     title: doc.title,
     documentText: '',
-    conversationIdHints: readConversationHints(doc, url),
-    messages: readMessages(doc),
+    conversationIdHints: blankRoute ? [] : readConversationHints(doc, url),
+    // The old conversation renderer can survive an SPA transition briefly.
+    // A blank composer route is not evidence of that old conversation.
+    messages: blankRoute ? [] : readMessages(doc),
     composerText: readComposerText(doc),
-    visibleErrors: readVisibleErrors(doc),
+    visibleErrors: blankRoute ? [] : readVisibleErrors(doc),
     generationState: readGenerationState(doc),
     coverageEvidence,
-    tailEvidence: readTailEvidence(doc)
+    tailEvidence: blankRoute ? 'unknown' : readTailEvidence(doc)
   }
 }
 
 export function readConversationHints(doc: Document, url: string): string[] {
+  if (isBlankConversationRoute(url)) return []
   const hints: string[] = []
   const pathId = parseConversationIdFromUrl(url)
   if (pathId) hints.push(pathId)
@@ -248,9 +253,26 @@ export function findComposerElement(doc: Document): HTMLElement | undefined {
 }
 
 export function readVisibleErrors(doc: Document): string[] {
-  return Array.from(doc.querySelectorAll<HTMLElement>('[role="alert"], [data-testid*="toast"]'))
-    .map(readText)
-    .filter(Boolean)
+  const visible = Array.from(doc.querySelectorAll<HTMLElement>(
+    '[role="alert"], [data-testid*="toast"]'
+  ))
+  return Array.from(new Set(visible.filter((element) => {
+    if (element.hasAttribute('hidden') ||
+        element.getAttribute('aria-hidden') === 'true') return false
+    // A dormant CSS-hidden toast is not a newly visible application error.
+    if (typeof element.getClientRects === 'function' &&
+        element.getClientRects().length === 0) return false
+    // Do not classify user/assistant transcript as an application error.
+    const messageRoot = '[data-turn-key], [data-message-author-role], ' +
+      '[data-turn="user"], [data-turn="assistant"], ' +
+      '[data-testid*="conversation-turn"], article, [role="article"]'
+    let ancestor: HTMLElement | null = element
+    while (ancestor) {
+      if (ancestor.matches(messageRoot)) return false
+      ancestor = ancestor.parentElement
+    }
+    return true
+  }).map(readText).filter((value) => value.length > 0 && value.length <= 280)))
 }
 
 export function readGenerationState(doc: Document): 'generating' | 'idle' | 'unknown' {

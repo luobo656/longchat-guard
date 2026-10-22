@@ -93,6 +93,7 @@ export function analyzePageSnapshot(snapshot: PageAdapterSnapshot): PageAdapterR
 export function resolveConversationId(
   snapshot: Pick<PageAdapterSnapshot, 'url' | 'conversationIdHints'>
 ): string | undefined {
+  if (isBlankConversationRoute(snapshot.url)) return undefined
   const urlId = parseConversationIdFromUrl(snapshot.url)
   if (urlId) return urlId
 
@@ -104,6 +105,20 @@ export function resolveConversationId(
   }
 
   return undefined
+}
+
+/** A blank composer URL is authoritative: stale SPA DOM/canonical state
+ * from the prior conversation must not be treated as a live chat ID.
+ */
+export function isBlankConversationRoute(value: string): boolean {
+  try {
+    const url = new URL(value, 'https://chatgpt.com')
+    if (url.hostname !== 'chatgpt.com') return false
+    if (url.pathname === '/' || url.pathname === '/chat') return true
+    return /^\/g\/[^/]+(?:\/project)?\/?$/.test(url.pathname)
+  } catch {
+    return false
+  }
 }
 
 export function parseConversationIdFromUrl(value: string): string | undefined {
