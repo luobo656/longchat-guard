@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LongChat Guard 暂无法判断怎么办？自动读取失败排查指南</title>
+<meta name="description" content="LongChat Guard 暂无法判断、未校准或自动读取中断？逐项排查 ChatGPT 长会话历史不完整、页面失焦、触顶参考和本地风险判断问题。">
+<meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large">
+<link rel="canonical" href="https://luobo656.github.io/longchat-guard/zh/guides/longchat-guard-unable-to-assess/">
+<link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/guides/longchat-guard-unable-to-assess/">
+<link rel="alternate" hreflang="zh-CN" href="https://luobo656.github.io/longchat-guard/zh/guides/longchat-guard-unable-to-assess/">
+<link rel="alternate" hreflang="zh-TW" href="https://luobo656.github.io/longchat-guard/zh-tw/guides/longchat-guard-unable-to-assess/">
+<link rel="alternate" hreflang="x-default" href="https://luobo656.github.io/longchat-guard/guides/longchat-guard-unable-to-assess/">
+<link rel="icon" href="../../../icon128.png"><link rel="stylesheet" href="../../../styles.css">
+<meta property="og:type" content="article"><meta property="og:title" content="LongChat Guard 暂无法判断怎么办？自动读取失败排查指南">
+<meta property="og:description" content="LongChat Guard 暂无法判断、未校准或自动读取中断？逐项排查 ChatGPT 长会话历史不完整、页面失焦、触顶参考和本地风险判断问题。">
+<meta property="og:url" content="https://luobo656.github.io/longchat-guard/zh/guides/longchat-guard-unable-to-assess/"><meta property="og:image" content="https://luobo656.github.io/longchat-guard/icon128.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"LongChat Guard 显示「暂无法判断」，应该怎么办？","description":"LongChat Guard 暂无法判断、未校准或自动读取中断？逐项排查 ChatGPT 长会话历史不完整、页面失焦、触顶参考和本地风险判断问题。","datePublished":"2026-10-22","dateModified":"2026-10-22","inLanguage":"zh-CN","mainEntityOfPage":"https://luobo656.github.io/longchat-guard/zh/guides/longchat-guard-unable-to-assess/","author":{"@type":"Organization","name":"LongChat Guard project","url":"https://github.com/luobo656/longchat-guard"},"about":{"@type":"SoftwareApplication","name":"LongChat Guard","softwareVersion":"4.3.0","url":"https://luobo656.github.io/longchat-guard/"}}</script>
+</head>
+<body>
+<header class="topbar"><div class="wrap nav">
+<a class="brand" href="../../"><img src="../../../icon128.png" alt="LongChat Guard"><span>LongChat Guard</span></a>
+<nav class="navlinks" aria-label="Languages and navigation"><a href="../../">简体首页</a><a href="../../methodology/">测量原理</a><a href="https://luobo656.github.io/longchat-guard/guides/longchat-guard-unable-to-assess/" hreflang="en">English</a>
+<a href="https://luobo656.github.io/longchat-guard/zh-tw/guides/longchat-guard-unable-to-assess/" hreflang="zh-TW">繁體中文</a></nav>
+</div></header>
+<main><article class="wrap">
+<section><span class="eyebrow">问题排查 · 4.3.0</span><h1>LongChat Guard 显示「暂无法判断」，应该怎么办？</h1>
+<div class="answer"><strong>直接回答：</strong> 「暂无法判断」代表插件还不能证明这条会话已被可靠完整读取，不代表额度充足，也不表示已经触顶。刚安装后显示「未校准」则可能是缺少用户确认真实触顶的历史参考。</div>
+<p><time datetime="2026-10-22">2026-10-22</time></p></section>
+<section><h2>先区分这三种状态</h2><div class="grid">
+<article class="card"><h3>未校准</h3><p>当前没有可使用的、由用户确认真实达到长度上限的历史失败参考 R。普通长聊天不能拿来冒充已触顶样本。</p></article>
+<article class="card"><h3>暂无法判断</h3><p>当前会话的历史覆盖、消息顺序或测量环境还无法证实完整。这与官方剩余额度是多少无关。</p></article>
+<article class="card"><h3>自动读取停止</h3><p>可能是用户取消、切换标签页、浏览器无法完成滚动或最终校验失败。插件会拒绝保存不完整的结果。</p></article>
+</div></section>
+<section><h2>对照症状逐项处理</h2>
+<table class="info-table"><caption>常见状态、建议操作和不能做的推断</caption><thead><tr><th scope="col">当前情况</th><th scope="col">可以怎么做</th><th scope="col">不要误认为</th></tr></thead><tbody>
+<tr><td>项目里新建会话仍暂无法判断</td><td>正常从第一条消息使用；如果持续无法判断，可从菜单启动「完整读取当前会话」。</td><td>页面看见几条消息就证明全部历史完整。</td></tr>
+<tr><td>旧会话无法可靠读取</td><td>打开对应历史页面，保持 ChatGPT 标签页在前台，让自动读取完成向上、向下及完整性校验。</td><td>滚动到顶部就证明旧消息全部加载。</td></tr>
+<tr><td>当前读取成功但仍未校准</td><td>仅在亲自确认有历史会话真实触顶时，打开那个历史会话建立参考。</td><td>普通长聊天可以作为经验最大值。</td></tr>
+<tr><td>自动读取取消或出现浏览器调试提示</td><td>保持页面在前台，不要切换或操作滚轮，需要时取消后重新读取；阅读权限说明。</td><td>调试权限可以获取官方 Token 剩余额度。</td></tr>
+</tbody></table></section>
+<section><h2>如果 ChatGPT 已经提示「会话过长，无法继续」</h2><p>硬性限制可能让旧会话无法继续发送，因此「再让旧会话帮我总结一次」不一定做得到。可以从仍可查看的聊天片段、项目文件和原始资料里，整理当前目标、已确认决定、重要限制和待完成事项，再在新会话继续。LongChat Guard 不会绕过官方限制，也不代替你自动搬运旧对话。</p><p>建议参考<a href="../how-to-continue-long-chatgpt-conversation/">长会话续接示例</a>。对于 ChatGPT 项目，<a href="https://help.openai.com/zh-hans-cn/articles/10169521-projects-in-chatgpt">OpenAI 官方项目说明</a>指出项目上下文与记忆能力还受套餐和设置影响，不能保证新项目会话完整掌握旧会话每条消息。</p></section>
+<section><h2>为什么自动滚动要用调试权限？</h2><p>只有用户主动点击完整读取或历史校准时，插件才临时使用浏览器的 <code>debugger</code> 强权限向当前前台 ChatGPT 标签页发送模拟滚轮事件。随后原版读取器检查消息连续性；普通实时监测不启用调试器，结束、取消或失败后会解除连接。浏览器底层权限本身较广，不应将代码自身的前台范围限制说成浏览器底层的权限边界。详见<a href="../../../PRIVACY.md">隐私说明</a>。</p></section>
+<section><h2>示例情境（虚构，不是用户诊断数据）</h2><div class="answer"><strong>假设：</strong>你直接打开几个月前的研究会话，网页当前只显示靠后的聊天内容，插件因此显示「暂无法判断」。你主动完整读取并保持标签页在前台。如果消息连续性通过，当前负载可被更新；如果不通过，插件仍保守地拒绝判断。要显示经验风险，还需要另一个已确认真正触顶的历史参考。</div></section>
+<section><h2>常见问题</h2><div class="faq">
+<details open><summary>「暂无法判断」就是 Token 用完了吗？</summary><p>不是。它描述的是插件本地测量的证据质量，不是官方 Token 剩余额度。</p></details>
+<details><summary>反复重新校准就能修复未知状态吗？</summary><p>不能。历史基准和当前会话完整性是两回事。不要用不可靠的历史记录覆盖真实校准样本。</p></details>
+<details><summary>自动读取总失败该怎么办？</summary><p>保留本地学习数据，确认当前标签页在前台并重试。可在 <a href="https://github.com/luobo656/longchat-guard/issues">GitHub Issues</a> 反馈浏览器版本及脱敏步骤，不要贴私人聊天正文。</p></details>
+</div></section>
+<section><h2>接下来怎么做</h2><p>LongChat Guard 是独立开源扩展，与 OpenAI 无隶属或合作关系。本指南不宣称存在统一的官方 ChatGPT 会话长度上限。</p>
+<div class="actions"><a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">前往 Chrome 商店</a>
+<a class="btn" href="../how-to-calibrate-longchat-guard/">了解历史校准</a>
+<a class="btn" href="../../methodology/">查看测量原理</a></div></section>
+</article></main>
+<footer><div class="wrap footer-grid"><span>LongChat Guard · MIT License</span>
+<span><a href="../../../PRIVACY.md">Privacy</a> · <a href="https://github.com/luobo656/longchat-guard">GitHub</a></span>
+</div></footer></body></html>

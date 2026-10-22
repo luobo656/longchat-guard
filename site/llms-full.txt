@@ -76,6 +76,9 @@ Canonical supporting documents:
 - https://luobo656.github.io/longchat-guard/guides/how-to-calibrate-longchat-guard/
 - https://luobo656.github.io/longchat-guard/zh/guides/how-to-calibrate-longchat-guard/
 - https://luobo656.github.io/longchat-guard/zh-tw/guides/how-to-calibrate-longchat-guard/
+- https://luobo656.github.io/longchat-guard/guides/longchat-guard-unable-to-assess/
+- https://luobo656.github.io/longchat-guard/zh/guides/longchat-guard-unable-to-assess/
+- https://luobo656.github.io/longchat-guard/zh-tw/guides/longchat-guard-unable-to-assess/
 - https://luobo656.github.io/longchat-guard/methodology/
 - https://luobo656.github.io/longchat-guard/guides/chatgpt-conversation-too-long/
 - https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-extension/

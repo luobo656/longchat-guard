@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LongChat Guard Unable to Assess? Fix Incomplete Chat Reading</title>
+<meta name="description" content="LongChat Guard shows Unable to assess, Not calibrated, or stops automatic reading? Diagnose missing ChatGPT history, browser focus, and reliable risk data.">
+<meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large">
+<link rel="canonical" href="https://luobo656.github.io/longchat-guard/guides/longchat-guard-unable-to-assess/">
+<link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/guides/longchat-guard-unable-to-assess/">
+<link rel="alternate" hreflang="zh-CN" href="https://luobo656.github.io/longchat-guard/zh/guides/longchat-guard-unable-to-assess/">
+<link rel="alternate" hreflang="zh-TW" href="https://luobo656.github.io/longchat-guard/zh-tw/guides/longchat-guard-unable-to-assess/">
+<link rel="alternate" hreflang="x-default" href="https://luobo656.github.io/longchat-guard/guides/longchat-guard-unable-to-assess/">
+<link rel="icon" href="../../icon128.png"><link rel="stylesheet" href="../../styles.css">
+<meta property="og:type" content="article"><meta property="og:title" content="LongChat Guard Unable to Assess? Fix Incomplete Chat Reading">
+<meta property="og:description" content="LongChat Guard shows Unable to assess, Not calibrated, or stops automatic reading? Diagnose missing ChatGPT history, browser focus, and reliable risk data.">
+<meta property="og:url" content="https://luobo656.github.io/longchat-guard/guides/longchat-guard-unable-to-assess/"><meta property="og:image" content="https://luobo656.github.io/longchat-guard/icon128.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Why does LongChat Guard say “Unable to assess”?","description":"LongChat Guard shows Unable to assess, Not calibrated, or stops automatic reading? Diagnose missing ChatGPT history, browser focus, and reliable risk data.","datePublished":"2026-10-22","dateModified":"2026-10-22","inLanguage":"en","mainEntityOfPage":"https://luobo656.github.io/longchat-guard/guides/longchat-guard-unable-to-assess/","author":{"@type":"Organization","name":"LongChat Guard project","url":"https://github.com/luobo656/longchat-guard"},"about":{"@type":"SoftwareApplication","name":"LongChat Guard","softwareVersion":"4.3.0","url":"https://luobo656.github.io/longchat-guard/"}}</script>
+</head>
+<body>
+<header class="topbar"><div class="wrap nav">
+<a class="brand" href="../../"><img src="../../icon128.png" alt="LongChat Guard"><span>LongChat Guard</span></a>
+<nav class="navlinks" aria-label="Languages and navigation"><a href="../../">Home</a><a href="../../methodology/">How it works</a><a href="https://luobo656.github.io/longchat-guard/zh/guides/longchat-guard-unable-to-assess/" hreflang="zh-CN">简体中文</a>
+<a href="https://luobo656.github.io/longchat-guard/zh-tw/guides/longchat-guard-unable-to-assess/" hreflang="zh-TW">繁體中文</a></nav>
+</div></header>
+<main><article class="wrap">
+<section><span class="eyebrow">Troubleshooting · Version 4.3.0</span><h1>Why does LongChat Guard say “Unable to assess”?</h1>
+<div class="answer"><strong>Quick answer:</strong> “Unable to assess” means that the extension cannot prove this chat was read reliably. It does not mean you have room left or that you reached the limit. A fresh install may instead show “Not calibrated” because a confirmed historical limit reference is absent.</div>
+<p><time datetime="2026-10-22">2026-10-22</time></p></section>
+<section><h2>Start with the correct status</h2><div class="grid">
+<article class="card"><h3>Not calibrated</h3><p>There is no usable, user-confirmed historical conversation-length failure reference (R). Reading an ordinary long chat cannot safely create one.</p></article>
+<article class="card"><h3>Unable to assess</h3><p>The current chat's measured history, sequence, or environment cannot yet be proven complete. This is different from knowing its remaining capacity.</p></article>
+<article class="card"><h3>Automatic reading stopped</h3><p>The user cancelled, the foreground tab changed, or the browser could not finish the scroll and verification. Incomplete results are rejected rather than saved.</p></article>
+</div></section>
+<section><h2>What to do next — an evidence-based checklist</h2>
+<table class="info-table"><caption>Symptoms, next steps, and their limits</caption><thead><tr><th scope="col">You see</th><th scope="col">Try this</th><th scope="col">Do not assume</th></tr></thead><tbody>
+<tr><td>New chat says “Unable to assess”</td><td>Continue naturally from its first turn; if coverage stays unknown, request “Read full current chat” from the menu.</td><td>A few visible messages prove the complete sequence.</td></tr>
+<tr><td>Older chat cannot be fully measured</td><td>Open that exact chat, keep its browser tab in front, start a full automatic read and let both directions plus verification finish.</td><td>Reaching the top alone means all older messages were captured.</td></tr>
+<tr><td>“Not calibrated” despite a successful current read</td><td>Use a different historical chat only if you personally confirmed it reached a conversation-length limit; then calibrate it.</td><td>An ordinary long conversation is a proven maximum.</td></tr>
+<tr><td>Auto-read cancels or the browser warns about debugging</td><td>Keep the ChatGPT tab focused, avoid scrolling or switching tabs, then retry or choose Cancel. Review the privacy permission disclosure.</td><td>The strong debugger permission reveals official token allowance.</td></tr>
+</tbody></table></section>
+<section><h2>If ChatGPT has already reached a hard conversation limit</h2><p>A hard limit can prevent new messages in that same thread, so “ask the old conversation for one last summary” may no longer work. Use any existing user-visible information and source files you can still access, gather the current objective, confirmed decisions, constraints and unfinished work, and begin a fresh thread. The extension does not bypass ChatGPT's limit or automatically transfer a conversation.</p><p>For an actionable example, read <a href="../how-to-continue-long-chatgpt-conversation/">how to prepare a compact handoff</a>. If you use ChatGPT Projects, <a href="https://help.openai.com/en/articles/10169521-projects-in-chatgpt">OpenAI's Projects documentation</a> explains that project context and memory vary with plan and settings. Do not assume a new project chat can reconstruct every old turn.</p></section>
+<section><h2>Why does automatic reading require debugger access?</h2><p>Only when you start a full read or calibration, LongChat Guard temporarily uses the browser's powerful <code>debugger</code> permission to send mouse-wheel input to the active ChatGPT tab. The original reader then checks message continuity. Normal passive risk monitoring does not attach a debugger; the extension detaches at the end, on cancellation or error. The browser permission itself is broader than this self-imposed restriction. <a href="../../PRIVACY.md">Read the exact disclosure</a>.</p></section>
+<section><h2>Illustrative scenario (not user telemetry)</h2><div class="answer"><strong>Example:</strong> You open a months-old research thread directly from history. Only the most recent messages have rendered, so the panel says “Unable to assess.” You request the full read, keep the tab active, and the reader checks history in both directions. If verification succeeds, current load can be updated. If it fails, the status remains conservative. A risk track still requires a separately confirmed historical failure reference.</div></section>
+<section><h2>Frequently asked questions</h2><div class="faq">
+<details open><summary>Does “Unable to assess” mean ChatGPT is out of tokens?</summary><p>No. It describes evidence quality for the extension's local measurement, not an official token or capacity reading.</p></details>
+<details><summary>Will recalibrating solve every unknown status?</summary><p>No. The historical reference and current chat coverage are separate. Do not overwrite a reliable historical reference with an unverified sample.</p></details>
+<details><summary>What if automatic reading repeatedly fails?</summary><p>Preserve your local data, verify you're in the correct foreground ChatGPT tab, and retry. Report the website/browser version and sanitized steps in <a href="https://github.com/luobo656/longchat-guard/issues">GitHub Issues</a>—never paste private conversation text.</p></details>
+</div></section>
+<section><h2>Next steps</h2><p>LongChat Guard is an independent open-source extension, not affiliated with OpenAI. This page is guidance, not a claim of a universal ChatGPT length limit.</p>
+<div class="actions"><a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">Install on Chrome Web Store</a>
+<a class="btn" href="../how-to-calibrate-longchat-guard/">Calibrate a confirmed limit</a>
+<a class="btn" href="../../methodology/">Method and limitations</a></div></section>
+</article></main>
+<footer><div class="wrap footer-grid"><span>LongChat Guard · MIT License</span>
+<span><a href="../../PRIVACY.md">Privacy</a> · <a href="https://github.com/luobo656/longchat-guard">GitHub</a></span>
+</div></footer></body></html>

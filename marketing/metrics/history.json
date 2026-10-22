@@ -1,0 +1,54 @@
+[
+  {
+    "asOfDate": "2026-10-22",
+    "recordedAt": "2026-10-22T13:44:59.426Z",
+    "source": "GitHub REST API + publicly reachable GitHub Pages; NOT Google analytics",
+    "github": {
+      "repo": "luobo656/longchat-guard",
+      "stars": 0,
+      "forks": 0,
+      "openIssues": 4,
+      "recentViews14d": {
+        "windowDays": 14,
+        "total": 6,
+        "unique": 5
+      },
+      "recentClones14d": {
+        "windowDays": 14,
+        "total": 102,
+        "unique": 51
+      },
+      "trafficAvailability": null,
+      "releaseTag": "v4.3.0",
+      "releaseDownloads": 2,
+      "releaseAssetDownloads": {
+        "LongChat-Guard-4.3.0-store-candidate.zip": 1,
+        "LongChat-Guard-4.3.0-store-candidate.zip.sha256": 0,
+        "LongChat-Guard-4.3.0-store-listing-kit.zip": 1,
+        "LongChat-Guard-4.3.0-store-listing-kit.zip.sha256": 0,
+        "longchat-guard-v4.3.0.sha256": 0,
+        "longchat-guard-v4.3.0.zip": 0
+      }
+    },
+    "website": {
+      "homepageStatus": 200,
+      "sitemapStatus": 200,
+      "sitemapUrlCount": 27
+    },
+    "search": {
+      "googleClicks": null,
+      "googleImpressions": null,
+      "googleIndexedPages": null,
+      "bingClicks": null,
+      "bingImpressions": null,
+      "bingIndexedPages": null,
+      "aiMentions": null,
+      "missingReason": "requires search property and proprietary search/AI analytics access; NOT inferred from site: queries"
+    },
+    "commerce": {
+      "chromeInstalls": null,
+      "edgeInstalls": null,
+      "missingReason": "store analytics not connected; GitHub clone/download counts are NOT extension installations"
+    }
+  }
+]

@@ -246,6 +246,16 @@ details {
 summary { cursor: pointer; font-weight: 750; }
 details p { color: var(--muted); margin: 12px 0 0; }
 
+.info-table { width: 100%; border-collapse: collapse; margin: 28px 0; color: var(--text); }
+.info-table caption { text-align: left; color: var(--muted); padding: 0 0 9px; }
+.info-table th, .info-table td { border: 1px solid var(--line); padding: 12px 14px; text-align: left; vertical-align: top; }
+.info-table th { background: var(--surface-2); font-size: 14px; }
+.info-table td { font-size: 14px; color: var(--muted); }
+@media (max-width: 700px) {
+  .info-table { display: block; width: 100%; overflow-x: auto; }
+  .info-table th, .info-table td { min-width: 155px; }
+}
+
 .notice {
   border: 1px solid rgba(255, 122, 24, .35);
   background: rgba(255, 122, 24, .08);

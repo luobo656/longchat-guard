@@ -17,6 +17,7 @@
   {
     "@context":"https://schema.org",
     "@type":"HowTo",
+    "dateModified":"2026-10-22",
     "name":"ChatGPT 长会话怎么续接到新对话？",
     "description":"把长 ChatGPT 会话的必要工作上下文结构化迁移到新对话的方法。",
     "step":[
@@ -41,6 +42,9 @@
       <article class="card"><h3>决策与约束</h3><p>列出已经确认的决定、必须遵守的边界，以及不应被随意改变的内容。</p></article>
       <article class="card"><h3>当前状态与下一步</h3><p>说明已经完成了什么、还有什么没解决，以及新会话应该马上继续做什么。</p></article>
     </div>
+    <h2>带具体内容的续接示例（虚构，非用户会话）</h2>
+    <div class="answer"><p><strong>目标：</strong>完成一个三语言帮助站点。<strong>已确定：</strong>品牌名称统一，不宣称有官方 Token 剩余额度。<strong>已完成：</strong>导航和隐私政策页面。<strong>权威资料：</strong>仓库 README 和已确认的设计决定。<strong>待解决：</strong>新帮助页是否被搜索引擎正式索引。<strong>下一步：</strong>核对 canonical 链接，再通过已验证的站长账号提交站点地图。<strong>不要重复：</strong>重新设计已经定稿的品牌图标。</p><p>这只是一份假设示例，不来自任何用户的真实聊天。实际续接应以当前真实上下文为准，并在粘贴到新会话前核对。</p></div>
+    <p>如果旧会话达到硬性长度上限，无法发送总结指令，应从仍可查看的历史和文件手动恢复状态。项目记忆受套餐与设置影响，不保证完整复现旧消息。参见<a href="https://help.openai.com/zh-hans-cn/articles/10169521-projects-in-chatgpt">OpenAI 项目说明</a>和<a href="../longchat-guard-unable-to-assess/">读取失败排查</a>。</p>
     <h2>哪些内容不必全部搬过去</h2>
     <div class="grid">
       <article class="card"><h3>重复讨论</h3><p>已经形成结论的长讨论通常只需要保留最终决策和必要理由。</p></article>

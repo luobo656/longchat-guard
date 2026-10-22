@@ -21,6 +21,7 @@
   {
     "@context":"https://schema.org",
     "@type":"HowTo",
+    "dateModified":"2026-10-22",
     "name":"How to Continue a Long ChatGPT Conversation Without Losing Context",
     "description":"A practical handoff method for moving a long ChatGPT conversation into a fresh thread without copying the whole history.",
     "step":[
@@ -45,6 +46,9 @@
       <article class="card"><h3>Decisions and constraints</h3><p>What has already been decided, what must remain true, and what should not be changed casually.</p></article>
       <article class="card"><h3>Current state and next action</h3><p>What has been completed, what remains open, and exactly what the new conversation should do next.</p></article>
     </div>
+    <h2>Worked handoff example (fictional, not a user chat)</h2>
+    <div class="answer"><p><strong>Goal:</strong> finish a three-language documentation site. <strong>Already decided:</strong> one canonical brand; pages must not claim official AI token quotas. <strong>Done:</strong> navigation and privacy pages. <strong>Sources of truth:</strong> repository README and confirmed decisions. <strong>Unresolved:</strong> whether the new help pages are indexed. <strong>Next action:</strong> inspect canonical links and submit the sitemap using a verified webmaster account. <strong>Do not repeat:</strong> redesigning an already-approved brand icon.</p><p>This is a made-up example of a self-contained handoff, not any user conversation. Review and correct facts before using your own handoff.</p></div>
+    <p>If the old conversation can no longer accept messages after a hard limit, recover the essential state from visible history and original files. Project memory may help depending on your plan and settings, but does not guarantee full access to old turns; see <a href="https://help.openai.com/en/articles/10169521-projects-in-chatgpt">OpenAI Projects documentation</a> and <a href="../longchat-guard-unable-to-assess/">our troubleshooting guide</a>.</p>
     <h2>What not to carry forward</h2>
     <div class="grid">
       <article class="card"><h3>Repeated discussion</h3><p>Long debates that ended in a clear decision can usually be reduced to the decision and its rationale.</p></article>

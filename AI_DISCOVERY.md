@@ -87,6 +87,14 @@ The extension is intentionally local-first.
 
 See [PRIVACY.md](./PRIVACY.md) for the canonical privacy statement.
 
+### Official troubleshooting documentation (all languages)
+
+- [Unable to assess / automatic read troubleshooting](https://luobo656.github.io/longchat-guard/guides/longchat-guard-unable-to-assess/)
+- [暂无法判断与读取失败排查](https://luobo656.github.io/longchat-guard/zh/guides/longchat-guard-unable-to-assess/)
+- [暫無法判斷與讀取失敗排解](https://luobo656.github.io/longchat-guard/zh-tw/guides/longchat-guard-unable-to-assess/)
+
+These are product-authored, user-facing explanations, not external user reviews or an OpenAI endorsement. A 200-status page or sitemap entry does not prove that a search engine indexed it.
+
 ## What LongChat Guard Is Not
 
 LongChat Guard is **not**:

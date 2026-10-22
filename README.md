@@ -10,6 +10,7 @@
 **Official project site:** https://luobo656.github.io/longchat-guard/ · [简体中文](https://luobo656.github.io/longchat-guard/zh/) · [繁體中文](https://luobo656.github.io/longchat-guard/zh-tw/)
 **Install:** [Chrome Web Store](https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop) · **Source:** https://github.com/luobo656/longchat-guard
 **User guides (4.3.0):** [Automatic reading & calibration](https://luobo656.github.io/longchat-guard/guides/how-to-calibrate-longchat-guard/) · [一键读取与校准](https://luobo656.github.io/longchat-guard/zh/guides/how-to-calibrate-longchat-guard/) · [一鍵讀取與校準](https://luobo656.github.io/longchat-guard/zh-tw/guides/how-to-calibrate-longchat-guard/)
+**Troubleshooting (3 languages):** [Unable to assess](https://luobo656.github.io/longchat-guard/guides/longchat-guard-unable-to-assess/) · [暂无法判断](https://luobo656.github.io/longchat-guard/zh/guides/longchat-guard-unable-to-assess/) · [暫無法判斷](https://luobo656.github.io/longchat-guard/zh-tw/guides/longchat-guard-unable-to-assess/)
 
 LongChat Guard 是一个面向 Chrome / Microsoft Edge 的开源 Manifest V3 扩展。它根据浏览器本地可观测的 ChatGPT 长会话证据，提供**经验风险预警**和续接辅助。它不是 OpenAI 官方 context-limit、token-limit 或剩余额度仪表盘，也不会声称知道服务端真实上下文容量。
 
@@ -17,11 +18,22 @@ LongChat Guard is an open-source, local-first Chrome/Edge extension for empirica
 
 ![LongChat Guard icon](./public/icons/icon128.png)
 
+## Why choose LongChat Guard? / 为什么使用它？
+
+- **Warn before losing momentum** — an empirical local risk trend for working threads that stretch across days or projects, not a universal official OpenAI token quota.
+- **Conservative by design** — if the current chat is not fully measurable or no authentic limit-reached reference exists, the extension says it cannot assess instead of making up a green progress bar.
+- **One-click complete reading** — browser-internal wheel input is temporarily enabled only when you ask to read or calibrate history. The original completeness scanner can still reject the result; debugger is a powerful permission and may show a browser banner.
+- **A practical handoff** — use the continuation prompt to retain the current goal, confirmed decisions, important files, constraints and next action. The extension does not automatically transfer chats or read an official remaining-capacity value.
+
+**Quick start:** ① Install and agree to the local-processing disclosure → ② calibrate using a historical chat *you personally confirmed hit a length limit* → ③ continue normal monitoring, or use the full-read action when older history must be verified. [Read the method](https://luobo656.github.io/longchat-guard/methodology/) · [Privacy/permissions](./PRIVACY.md).
+
+**Status of store updates:** v4.3.0 has been submitted for Chrome/Edge review. Approval and public rollout timing are determined by the stores; the listing can temporarily show an older approved version.
+
 ## 4.3.0 自动读取正式分发候选
 
 4.2.26 的已验证自动滚动版本已在 GitHub 独立冻结。4.3.0 移除人工中键滚动和开发诊断菜单，统一由浏览器内部滚轮模拟预加载历史，再调用既有完整性扫描器。仅在用户主动点击完整读取或历史基准校准时临时启用 debugger；正常实时监测不使用调试器。强权限可能出现浏览器警告，发布须通过 Chrome/Edge 商店审核，具体参见 [隐私政策](./PRIVACY.md) 和 `STORE_SUBMISSION_4_3_0.md`。仍非官方 Token 或官方剩余额度计算。
 
-## 当前 2.1.1 产品模型
+## 当前 4.3.0 风险判断模型（延续原有可靠核心）
 
 LongChat Guard 将“能不能判断”和“风险是什么”分开：
 

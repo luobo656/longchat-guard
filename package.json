@@ -37,6 +37,9 @@
     "verify:site": "node scripts/verify-site.mjs",
     "build:sitemap": "node scripts/generate-site-sitemap.mjs --write",
     "verify:seo": "node scripts/verify-seo-integrity.mjs",
+    "audit:indexability": "node scripts/growth/audit-indexability.mjs",
+    "track:growth": "node scripts/growth/collect-metrics.mjs",
+    "verify:growth": "node scripts/growth/verify-metrics.mjs",
     "test": "vitest run --dir=tests",
     "test:watch": "vitest --dir=tests",
     "typecheck": "tsc --noEmit"
