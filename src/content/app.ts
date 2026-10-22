@@ -74,6 +74,7 @@ import {
 } from './history-scanner'
 import { withHistoryReadGuide, type HistoryReadGuide } from './manual-history-guide'
 import { prepareHistoryWithBrowserInput } from './auto-history-scroll'
+import { ScanComparisonLog, type ScanTestAttempt } from './scan-test-log'
 import {
   BranchPrefixStabilityWitness,
   findCertifiedInheritedPrefix,
@@ -331,6 +332,10 @@ export async function startGuard(): Promise<void> {
     return false
   }
 
+  // Experimental comparison logs are scoped to this page instance only.
+  // They never enter chrome.storage or the background coordinator.
+  const scanTestLog = new ScanComparisonLog(chrome.runtime.getManifest().version)
+
   const ui = new GuardUi({
     onCopyContinuation: () => {
       void copyText(continuationPrompt())
@@ -344,6 +349,19 @@ export async function startGuard(): Promise<void> {
             t('toastCopyFailed', 'Copy failed. Please try again.')
           )
         )
+    },
+
+    onCopyTestLog: () => {
+      if (!scanTestLog.hasReports()) return
+      void copyText(scanTestLog.exportText())
+        .then(() => ui.showToast(t(
+          'toastReadTestLogCopied',
+          'Anonymized read-test results copied. Paste them into the chat.'
+        )))
+        .catch(() => ui.showToast(t(
+          'toastReadTestLogCopyFailed',
+          'Test-log copy failed. Please try again.'
+        )))
     },
 
     onCalibrate: () => {
@@ -905,29 +923,58 @@ export async function startGuard(): Promise<void> {
   /** Both user-initiated full-read paths prepare the renderer, then invoke
    * the unchanged 2.1.1 reader. Passive monitoring never opens this guide.
    */
-  const guidedManualHistoryRead=async():Promise<HistoryScanResult>=>{
+  const guidedManualHistoryRead=async(attempt:ScanTestAttempt):Promise<HistoryScanResult>=>{
     const prepared=await withHistoryReadGuide(async(guide:HistoryReadGuide)=>{
-      const manualDown=async():Promise<boolean>=>await guide.wait('down',0)==='next'
+      const manualDown=async():Promise<boolean>=>{
+        if(await guide.wait('down',0)!=='next'){
+          attempt.cancelled('user_cancelled')
+          return false
+        }
+        attempt.manualBottom()
+        return true
+      }
       const manual=async():Promise<boolean>=>{
-        if(await guide.wait('up',0)!=='next')return false
+        if(await guide.wait('up',0)!=='next'){
+          attempt.cancelled('user_cancelled')
+          return false
+        }
+        attempt.manualTop()
         return manualDown()
       }
-      // The first guide is already the ORIGINAL manual-up instruction.
-      // Confirming "reached top" goes directly to the old manual-down stage;
-      // only the additional auto button chooses CDP.
+      // The original manual path needs no new confirmation steps.
       const selection=await guide.chooseMode()
-      if(selection==='cancel')return false
-      if(selection==='manual')return manualDown()
+      if(selection==='cancel'){
+        attempt.cancelled('user_cancelled')
+        return false
+      }
+      attempt.choose(selection)
+      if(selection==='manual'){
+        attempt.manualTop()
+        return manualDown()
+      }
       const controller=new AbortController()
       const unsubscribe=guide.onCancel(()=>controller.abort())
       try{
-        await prepareHistoryWithBrowserInput(controller.signal,stage=>guide.showAutoProgress(stage))
+        await prepareHistoryWithBrowserInput(
+          controller.signal,
+          stage=>{guide.showAutoProgress(stage);attempt.stage(stage)},
+          document,
+          sample=>attempt.step(sample)
+        )
         return true
-      }catch{
+      }catch(error){
+        attempt.autoFailed(error)
         if(controller.signal.aborted || location.hostname!=='chatgpt.com' ||
-           document.visibilityState==='hidden')return false
-        // Never silently count an automatic failure as an automatic success.
-        if(await guide.offerManualFallback()!=='manual')return false
+           document.visibilityState==='hidden'){
+          attempt.cancelled('user_cancelled')
+          return false
+        }
+        // A failed experiment is recorded as such even if the manual fallback works.
+        if(await guide.offerManualFallback()!=='manual'){
+          attempt.cancelled('user_declined_fallback')
+          return false
+        }
+        attempt.fallBackToManual()
         return manual()
       }finally{
         unsubscribe()
@@ -941,7 +988,9 @@ export async function startGuard(): Promise<void> {
         uncertaintySources:[],diagnostics:[]
       }
     }
-    return scanConversationHistory(document,observePageMessages)
+    const result=await scanConversationHistory(document,observePageMessages)
+    await attempt.scannerResult(result)
+    return result
   }
 
   async function runMeasurementScan(): Promise<void> {
@@ -978,12 +1027,13 @@ export async function startGuard(): Promise<void> {
         latestState.ledgers[persistedKey]?.ledgerRevision ?? 0
     }
 
+    const testAttempt=scanTestLog.start('current_chat',persistedKey)
     activeMeasurementScan = scan
     measurementScanInProgress = true
     ui.setMeasurementBusy(true)
 
     try {
-      const result=await guidedManualHistoryRead()
+      const result=await guidedManualHistoryRead(testAttempt)
 
       if (!isSameActiveMeasurementScan(scan)) {
         throw new Error('scan_session_replaced')
@@ -1011,6 +1061,7 @@ export async function startGuard(): Promise<void> {
       }
 
       if (result.unknownRoleCount > 0) {
+        testAttempt.parserRejected()
         ui.showScanNotice(
           t(
             'measurementParserFailed',
@@ -1040,6 +1091,7 @@ export async function startGuard(): Promise<void> {
         }
       })
       latestState = response.state
+      testAttempt.saved(latestState.ledgers[persistedKey]?.currentEstimatedLoad)
 
       ui.showToast(
         t(
@@ -1049,6 +1101,7 @@ export async function startGuard(): Promise<void> {
         4200
       )
     } catch (error) {
+      testAttempt.failed(error)
       const reason =
         error instanceof Error ? error.message : 'unknown_error'
       ui.showScanNotice(
@@ -1056,6 +1109,8 @@ export async function startGuard(): Promise<void> {
         'error'
       )
     } finally {
+      scanTestLog.complete(testAttempt)
+      ui.setTestLogAvailable(scanTestLog.hasReports())
       if (isSameActiveMeasurementScan(scan)) activeMeasurementScan = undefined
       measurementScanInProgress = false
       ui.setMeasurementBusy(false)
@@ -1129,12 +1184,13 @@ export async function startGuard(): Promise<void> {
       expectedLedgerRevision
     }
 
+    const testAttempt=scanTestLog.start('historical_calibration',persistedKey)
     activeCalibrationScan = scan
     historyScanInProgress = true
     ui.setCalibrationBusy(true)
 
     try {
-      const result = await guidedManualHistoryRead()
+      const result = await guidedManualHistoryRead(testAttempt)
 
       if (!isSameActiveScan(scan)) {
         throw new Error('scan_session_replaced')
@@ -1159,6 +1215,7 @@ export async function startGuard(): Promise<void> {
       }
 
       if (result.unknownRoleCount > 0) {
+        testAttempt.parserRejected()
         ui.showScanNotice(
           t(
             'calibrationParserFailed',
@@ -1193,6 +1250,7 @@ export async function startGuard(): Promise<void> {
         }
       })
       latestState = response.state
+      testAttempt.saved(latestState.ledgers[persistedKey]?.currentEstimatedLoad)
 
       const generation = currentGeneration()
       const summary = generation
@@ -1219,6 +1277,7 @@ export async function startGuard(): Promise<void> {
         )
       }
     } catch (error) {
+      testAttempt.failed(error)
       const reason =
         error instanceof Error ? error.message : 'unknown_error'
       ui.showScanNotice(
@@ -1226,6 +1285,8 @@ export async function startGuard(): Promise<void> {
         'error'
       )
     } finally {
+      scanTestLog.complete(testAttempt)
+      ui.setTestLogAvailable(scanTestLog.hasReports())
       if (isSameActiveScan(scan)) activeCalibrationScan = undefined
       historyScanInProgress = false
       ui.setCalibrationBusy(false)

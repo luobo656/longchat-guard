@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import manifest from '../public/manifest.json'
 
 describe('release manifest', () => {
-  it('isolates the 4.2.22 CDP experiment to one added debugger permission', () => {
-    expect(manifest.version).toBe('4.2.22')
+  it('isolates the 4.2.23 CDP and test-log experiment to one added debugger permission', () => {
+    expect(manifest.version).toBe('4.2.23')
     expect(manifest.permissions).toEqual(['storage', 'debugger'])
     expect(manifest.host_permissions).toEqual(['https://chatgpt.com/*'])
     expect(manifest.name).toBe('__MSG_extensionName__')

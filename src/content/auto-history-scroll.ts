@@ -10,10 +10,22 @@ export interface ScrollMetrics {
   clientHeight: number
 }
 
+export interface WheelPassStep {
+  phase: 'up' | 'down'
+  step: number
+  scrollTop: number
+  scrollHeight: number
+  clientHeight: number
+  moved: boolean
+  heightChanged: boolean
+  atBoundary: boolean
+}
+
 export interface WheelPassOptions {
   maxSteps?: number
   settleMs?: number
   stableRounds?: number
+  onStep?: (sample: WheelPassStep) => void
 }
 
 const WHEEL_STEP = 88
@@ -91,6 +103,11 @@ export async function runWheelPass(
     if (moved) sawMovement = true
     const atBoundary = isScrollBoundary(after, phase, reversed)
     stable = atBoundary && !heightChanged && !moved ? stable + 1 : 0
+    options.onStep?.({
+      phase, step, scrollTop: after.scrollTop,
+      scrollHeight: after.scrollHeight, clientHeight: after.clientHeight,
+      moved, heightChanged, atBoundary
+    })
 
     // Periodic render opportunities for virtualized ChatGPT history.
     if (step > 0 && step % 12 === 0) await wait(350)
@@ -182,7 +199,8 @@ async function sendScrollCommand(request: DebugScrollRequest): Promise<void> {
 export async function prepareHistoryWithBrowserInput(
   signal: AbortSignal,
   report: (phase: 'up' | 'down' | 'settle' | 'done') => void,
-  doc: Document = document
+  doc: Document = document,
+  recordStep?: (sample: WheelPassStep) => void
 ): Promise<void> {
   const surface = findAutoScrollSurface(doc)
   if (!surface) throw new Error('auto_scroll_no_timeline')
@@ -228,12 +246,14 @@ export async function prepareHistoryWithBrowserInput(
     await sendScrollCommand({ type: 'lcg.debugScroll.start', nonce })
     started = true
     report('up')
-    await runWheelPass('up', surface, wheel, wait, ensureUninterrupted)
+    await runWheelPass('up', surface, wheel, wait, ensureUninterrupted,
+      recordStep ? { onStep: recordStep } : {})
     report('settle')
     await wait(800)
     ensureUninterrupted()
     report('down')
-    await runWheelPass('down', surface, wheel, wait, ensureUninterrupted)
+    await runWheelPass('down', surface, wheel, wait, ensureUninterrupted,
+      recordStep ? { onStep: recordStep } : {})
     report('done')
   } finally {
     doc.removeEventListener('pointerdown', rejectOnInterruption, true)

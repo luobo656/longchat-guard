@@ -22,6 +22,9 @@
   "autoReadSettling": {"message":"Waiting for the conversation to finish rendering."},
   "autoReadPrepared": {"message":"Automatic scroll preparation finished; starting the original full-history reader."},
   "autoReadFailed": {"message":"Automatic scroll preparation could not be verified. Nothing was saved. Select the proven manual method or cancel."},
+  "actionCopyReadTestLog": {"message":"Copy read test log"},
+  "toastReadTestLogCopied": {"message":"Anonymized test log copied. Paste it into your chat for comparison."},
+  "toastReadTestLogCopyFailed": {"message":"Could not copy test log. Please try again."},
   "riskNormal": {
     "message": "Lower risk"
   },

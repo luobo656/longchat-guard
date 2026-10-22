@@ -25,6 +25,7 @@ export interface GuardUiCallbacks {
   onCopyContinuation(): void
   onCalibrate(): void
   onMeasureCurrentChat(): void
+  onCopyTestLog(): void
   onRecalibrate(): void
   onToggleMute(): void
   onConfirmFailure(accepted: boolean): void
@@ -63,6 +64,7 @@ export class GuardUi {
   private menuOpen = false
   private calibrationBusy = false
   private measurementBusy = false
+  private testLogAvailable = false
   private preBusyCalibrationState: CalibrationState | undefined
   private toastTimer: number | undefined
   private latestModel: GuardUiModel | undefined
@@ -158,6 +160,7 @@ export class GuardUi {
     this.bindButton('copy', callbacks.onCopyContinuation)
     this.bindButton('calibrate', callbacks.onCalibrate)
     this.bindMenuAction('measure-current', callbacks.onMeasureCurrentChat)
+    this.bindMenuAction('copy-test-log', callbacks.onCopyTestLog)
     this.bindMenuAction('relearn', callbacks.onRecalibrate)
     this.bindMenuAction('mute', callbacks.onToggleMute)
     this.bindButton('confirm-yes', () => callbacks.onConfirmFailure(true))
@@ -245,6 +248,8 @@ export class GuardUi {
     const relearn = button(this.shadow, 'relearn')
     measureCurrent.disabled = this.measurementBusy || this.calibrationBusy
     relearn.disabled = this.measurementBusy || this.calibrationBusy
+    button(this.shadow, 'copy-test-log').disabled =
+      !this.testLogAvailable || this.measurementBusy || this.calibrationBusy
     setText(
       this.shadow,
       'measure-current-label',
@@ -290,6 +295,14 @@ export class GuardUi {
         : t('actionMute', 'Mute this chat')
     )
     mute.disabled = !model.conversationKey
+  }
+
+  /** Experimental test tool only; no restyling of the frozen monitoring card. */
+  setTestLogAvailable(available: boolean): void {
+    this.testLogAvailable = available
+    const action = button(this.shadow, 'copy-test-log')
+    action.hidden = !available
+    action.disabled = !available || this.calibrationBusy || this.measurementBusy
   }
 
   setCalibrationBusy(busy: boolean): void {
@@ -736,6 +749,7 @@ function template(): string {
       </div>
       <div class="menu-popover" data-role="menu-popover" role="menu" aria-label="${t('menuMore', 'More')}" hidden>
         <button class="menu-action" type="button" role="menuitem" tabindex="-1" data-action="measure-current"><span data-value="measure-current-label">${t('actionMeasureCurrentChat', 'Read full current chat')}</span></button>
+        <button class="menu-action" type="button" role="menuitem" tabindex="-1" data-action="copy-test-log" hidden>${t('actionCopyReadTestLog', 'Copy read test log')}</button>
         <button class="menu-action" type="button" role="menuitem" tabindex="-1" data-action="relearn">${t('actionRecalibrate', 'Recalibrate alert reference')}</button>
         <button class="menu-action" type="button" role="menuitem" tabindex="-1" data-action="mute"><span data-value="mute-label">${t('actionMute', 'Mute this chat')}</span></button>
         <div class="menu-version" data-role="menu-version">v${extensionVersion}</div>

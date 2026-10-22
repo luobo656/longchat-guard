@@ -22,6 +22,9 @@
   "autoReadSettling": {"message":"正在等待会话页面加载稳定。"},
   "autoReadPrepared": {"message":"自动滚动准备完成，开始执行原版完整读取。"},
   "autoReadFailed": {"message":"自动滚动未能通过验证，没有保存任何扫描结果。请选择已验证的人工模式继续，或取消。"},
+  "actionCopyReadTestLog": {"message":"复制读取测试日志"},
+  "toastReadTestLogCopied": {"message":"已复制脱敏测试日志，可直接粘贴发送给我进行比较。"},
+  "toastReadTestLogCopyFailed": {"message":"测试日志复制失败，请重试。"},
   "riskNormal": {
     "message": "风险较低"
   },

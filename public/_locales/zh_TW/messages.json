@@ -22,6 +22,9 @@
   "autoReadSettling": {"message":"正在等待對話頁面載入穩定。"},
   "autoReadPrepared": {"message":"自動捲動準備完成，開始執行原版完整讀取。"},
   "autoReadFailed": {"message":"自動捲動未能通過驗證，沒有儲存任何掃描結果。請選擇已驗證的人工模式繼續，或取消。"},
+  "actionCopyReadTestLog": {"message":"複製讀取測試日誌"},
+  "toastReadTestLogCopied": {"message":"已複製去識別化測試日誌，可直接貼上以供比較。"},
+  "toastReadTestLogCopyFailed": {"message":"測試日誌複製失敗，請重試。"},
   "riskNormal": {
     "message": "風險較低"
   },

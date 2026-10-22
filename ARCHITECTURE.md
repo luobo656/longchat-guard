@@ -4,6 +4,10 @@
 
 仅在人工触发的完整读取入口临时使用 `chrome.debugger`（实验版独立必选权限），background 独占当前前台 chatgpt.com 标签页，允许 `Input.dispatchMouseEvent(type=mouseWheel)` 而不得开放其他 CDP 命令；content 只发送边界校验后的坐标与滚动方向，检测页面位置和变化，不在预备阶段采集正文。离开标签、刷新/导航、取消、附加/输入错误都释放调试会话并 fail closed。4.2.21 既有 `storage` 单权限为稳定基线；CDP 实验权限不回写稳定版。预备工作成功后保留调用原 `scanConversationHistory()`，不修改任何读取、计量、基准或风险公式。
 
+## 4.2.23 诊断复制实现约束
+
+新增 `scan-test-log.ts` 纯内存按次记录：仅从原 `HistoryScanResult` 读取安全数值、有限枚举和加盐内容指纹的二次 SHA-256 聚合摘要；摘要只用于比较两次采样的一致性，不是用户消息数据导出。`auto-history-scroll.ts` 仅向诊断记录器报告实际执行的滚轮步数和滚动容器几何状态，不改原来的滚动策略。记录不保存到 chrome.storage、sessionStorage 或 console；只在用户手动点击实验菜单按钮时导出严格白名单 JSON 文本。后台不新增读取聊天内容的权限和功能，`history-scanner.ts`、计量、风险和账本保持不变。
+
 ## 1. 技术栈与边界
 
 - Chrome / Microsoft Edge
