@@ -39,7 +39,7 @@ Important accuracy note: LongChat Guard does not read OpenAI's official remainin
 ## Key Facts
 
 - Product name: LongChat Guard
-- Current version: 2.1.1
+- Current code version: 4.3.0 (store listing may still show previous approved version pending review)
 - Simplified Chinese display name: LongChat Guard · 长会话预警
 - Traditional Chinese display name: LongChat Guard · 長對話預警
 - Brand rule: LongChat Guard is never translated
@@ -48,6 +48,8 @@ Important accuracy note: LongChat Guard does not read OpenAI's official remainin
 - Target website: https://chatgpt.com/
 - Extension model: Manifest V3
 - Primary purpose: local long-conversation risk warning
+- User-triggered full-history reading: automatic wheel scrolling through temporary browser debugger input on the active ChatGPT tab; no manual scrolling guide in 4.3.0; incomplete scans are not saved
+- Permission note: browser debugger permission is powerful and may produce an all-sites warning; code limits its own debugger use to wheel input on the current ChatGPT tab and detaches afterward
 - Risk evidence: current local load + user-confirmed empirical failure reference + reliable whole-turn growth reserve
 - Model label: optional diagnostic metadata only; it does not determine risk or calibration validity
 - Processing model: local-first; no extension server

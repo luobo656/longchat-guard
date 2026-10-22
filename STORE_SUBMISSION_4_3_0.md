@@ -1,6 +1,6 @@
-# LongChat Guard 4.3.0 商店更新提交指南（待真实浏览器验收）
+# LongChat Guard 4.3.0 商店更新提交指南（功能已由用户验收，待商店上架）
 
-**注意：本文件是发布候选材料，不代表 Chrome Web Store / Microsoft Edge Add-ons 已经审核或批准。** 4.3.0 基于远端已冻结 4.2.26 实现自动完整读取。请在真实 Edge/Chrome 验收通过以后再将候选分支合并到主分支并上传商店。
+**注意：用户已确认 4.3.0 全部功能完成真实浏览器测试，本文件是最终上架准备材料，不代表 Chrome Web Store / Microsoft Edge Add-ons 已经审核或批准。** 4.3.0 保留远端已冻结的 4.2.26 回滚基线。商店更新须使用原有扩展条目，不能新建扩展。还需确认 4.3.0 实际截图、公开隐私政策和新增 debugger 权限解释。
 
 ## 已冻结回滚基线
 
@@ -13,11 +13,13 @@
 - 名称、简短说明、详细说明：`store-listing/chrome-{en,zh-CN,zh-TW}.md` 和 `store-listing/edge-{en,zh-CN,zh-TW}.md`。
 - 隐私处理说明：`PRIVACY.md` 和 `store-listing/privacy-disclosure.md`。
 - 审核测试说明：`store-listing/review-notes.md`。
+- 三语言更新内容（可复制进审核备注或详情说明）：`store-listing/whats-new-4.3.0.md`。
+- 4.3.0 实际截图标准：`store-listing/screenshot-plan.md`。
 - 代码包：`release/LongChat-Guard-4.3.0-store-candidate.zip`（从验证的 `dist/` 文件创建，ZIP 根目录应直接是 `manifest.json`）。
 - 包校验值：`release/LongChat-Guard-4.3.0-store-candidate.zip.sha256`，提交前与上传文件核对。
 - 网站：`https://luobo656.github.io/longchat-guard/`
 - 支持：`https://github.com/luobo656/longchat-guard/issues`
-- 隐私政策建议正式地址：`https://github.com/luobo656/longchat-guard/blob/main/PRIVACY.md`。**合并主分支后必须实际打开验证**它包含 debugger 权限描述；如暂未合并，不要填写尚未更新的主分支版本。
+- **隐私政策正式地址（沿用原网站链接）**：`https://luobo656.github.io/longchat-guard/PRIVACY.md`。该 URL 已检查 HTTP 200，主分支发布新版后再次确认内容包含 debugger 权限描述；不要只检查状态码而忽略内容。
 
 ## 单一用途与权限理由（审核表可直接参考）
 
@@ -36,7 +38,7 @@
 - 曾有的“复制读取测试日志”及人工滚动实验入口已从正式候选版删除。
 - 用户仍可以取消自动读取、关闭单个会话的提醒、拒绝首次隐私同意；卸载可以清除扩展本地数据。
 
-## 发布前人工验收（未做不能宣称完成）
+## 正式上架最后核对（用户已完成全部功能测试）
 
 1. **真实浏览器**：重新加载 4.3.0，现有安装/存储/浏览器扩展 ID 不变。检查 3 种语言默认 UI，菜单无版本标签或“复制读取测试日志”。
 2. **完整读取当前会话**：选较长、存在懒加载的会话（优先超过 100 条），点击一次直接自动上下滚动，最后成功执行完整性扫描，没有人工引导；未完成则明确提示失败且不改写账本。

@@ -3,7 +3,7 @@
     "message": "LongChat Guard · 長對話預警"
   },
   "extensionDescription": {
-    "message": "ChatGPT 長對話風險提醒與續接輔助；本機處理，不顯示官方額度，不上傳聊天原文。"
+    "message": "ChatGPT 長對話預警與續接助手：一鍵讀取歷史，依據本機經驗評估風險；不提供官方額度，不上傳聊天原文。"
   },
   "actionTitle": {
     "message": "LongChat Guard"

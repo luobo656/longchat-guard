@@ -38,7 +38,7 @@
         "description": "一個開源、本機優先的 Chrome / Edge 擴充功能，把目前本機對話負載與使用者確認的歷史長度上限參考做比較，學習整輪增長，並提供簡單提醒和續接流程。",
         "applicationCategory": "BrowserApplication",
         "operatingSystem": "Google Chrome, Microsoft Edge, Chromium",
-        "softwareVersion": "2.1.1",
+        "softwareVersion": "4.3.0",
         "inLanguage": ["en", "zh-CN", "zh-TW"],
         "isAccessibleForFree": true,
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
@@ -133,6 +133,7 @@
       <div class="wrap">
         <h2>專為長 ChatGPT 對話設計</h2>
         <p class="lede">核心使用三個本機信號：目前負載 L、使用者確認的經驗失敗參考 R、可靠的整輪增長 G。</p>
+        <p class="lede"><strong>4.3.0 新版：</strong>主動完整讀取或歷史校準時，可一鍵自動載入歷史訊息，並在原版完整性檢查後使用結果。自動讀取顯示三階段提示，可隨時取消；瀏覽器偵錯權限僅於使用者主動讀取時暫時啟用。</p>
         <div class="grid">
           <article class="card"><h3>清楚的風險位置</h3><p>用彩色軌道顯示風險較低、偏長、接近風險、高風險，不把本機估算冒充成官方精確上限。</p></article>
           <article class="card"><h3>本機經驗學習</h3><p>用使用者確認的歷史失敗對話建立本機參考，並從可靠的整輪對話變化中學習增長緩衝。</p></article>
@@ -144,8 +145,8 @@
 
     <section id="product-ui">
       <div class="wrap">
-        <h2>LongChat Guard 2.1.1 真實介面截圖</h2>
-        <p class="lede">全部使用真正的 chatgpt.com 網頁和未修改的 2.1.1 擴充功能截圖，展示高風險、風險較低、操作選單和收合提示。不使用虛構介面，也不將經驗風險誤稱為 OpenAI 官方額度。</p>
+        <h2>歷史介面截圖：2.1.1 版本存檔</h2>
+        <p class="lede">以下是實際執行的 2.1.1 版本歷史截圖，並非目前 4.3.0 的介面截圖。新版提供一鍵自動讀取及重新設計的讀取提示。所有風險提醒仍是本機經驗估算，不代表 OpenAI 官方額度。</p>
         <div class="product-gallery">
           <figure class="product-shot product-shot--feature">
             <a href="../assets/longchat-guard-v2.1.1-zh-tw-high-risk.png" target="_blank" rel="noopener noreferrer" aria-label="高風險：及時整理並續接">
@@ -182,6 +183,7 @@
       <div class="wrap">
         <h2>隱私優先，本機處理</h2>
         <p class="lede">只有在使用者明確同意後才開始監測。可見對話內容只在瀏覽器內暫時處理，不上傳到 LongChat Guard 分析伺服器。</p>
+        <p class="lede">主動完整讀取時會暫時使用瀏覽器偵錯權限模擬目前 ChatGPT 頁面捲動；一般監測不使用偵錯器。詳情請見<a href="../PRIVACY.md">隱私政策與權限說明</a>。</p>
         <div class="grid">
           <article class="card"><h3>沒有開發者分析伺服器</h3><p>LongChat Guard 不把你的 ChatGPT 對話傳送到開發者營運的後端進行分析。</p></article>
           <article class="card"><h3>不持久化聊天原文</h3><p>使用者訊息、Assistant 回覆、Composer 草稿與附件正文不以原文持久化。</p></article>

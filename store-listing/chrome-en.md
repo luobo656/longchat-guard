@@ -6,36 +6,30 @@ LongChat Guard
 
 ## Short Description
 
-Local ChatGPT long-conversation risk warnings and handoff help; no official quota, no chat upload.
+Local ChatGPT long-chat alerts and handoff: one-click history reading, empirical risk estimates, no official quota or chat upload.
 
 ## Long Description
 
-LongChat Guard is a local-first Chrome extension for long ChatGPT conversations on `chatgpt.com`. It helps you judge when a working thread is getting long enough that it is worth organizing the current state and continuing in a fresh chat.
+LongChat Guard helps you recognize when a ChatGPT conversation may be getting too long, so you can organize important context before moving to a fresh chat. It uses local observations and a conversation-length reference that you establish from your own history. It does not claim to know an official OpenAI quota.
 
-It is not an official OpenAI quota, token counter, or context-window meter. LongChat Guard uses only browser-local empirical evidence. Without a usable local failure reference it shows “Not calibrated” instead of pretending the conversation is low risk.
+ONE-CLICK AUTOMATIC READING
+Choose “Read full current chat” to automatically scroll through and load older messages without manual navigation. Open a historical chat you personally know reached its conversation-length limit and choose “Calibrate with this chat” to establish a local empirical reference. The original reader checks message continuity and completeness before accepting a result. Incomplete reads are not saved; you can cancel at any time.
 
-Calibration is one step: open a historical chat that you personally know reached the conversation-length limit and choose “Calibrate with this chat.” If the full history can be read reliably, the extension establishes a strong or conservative local empirical reference. If the scan is incomplete or unreliable, it fails closed and does not create a usable reference.
+CLEAR RISK WARNINGS
+After reliable calibration and measurement, LongChat Guard displays simple states such as Lower risk, Long, Near risk, and High risk, with a segmented color track. Without enough evidence, it shows Not calibrated or Unable to assess instead of inventing a safe-looking score.
 
-After calibration, the risk signal combines the current locally measurable conversation load, the unsent Composer draft, and a reserve learned from reliable whole-turn growth. The UI intentionally uses simple states — Lower risk / Long / Near risk / High risk — rather than exact tokens, percentages, remaining quota, or a claimed universal limit.
+A PRACTICAL HANDOFF
+“Copy continuation prompt” copies an instruction you can paste into your current ChatGPT conversation. The current model can then prepare a self-contained handoff using the conversation and project context it can actually access. The extension does not automatically transfer your conversations or open chats on your behalf.
 
-For handoff, “Copy continuation prompt” copies a meta-instruction for the current GPT. When you paste it into the current conversation, GPT is asked to use the actual conversation and visible project context to produce a self-contained continuation context: current goal, confirmed decisions, constraints, completed work, rejected approaches, unresolved issues, technical state, and the next concrete action. You then copy that generated handoff into a fresh chat. The extension does not auto-transfer chats or upload the conversation.
+LOCAL-FIRST PRIVACY
+Monitoring begins only after your consent. Raw messages, unsent drafts, attachment contents, and tool outputs are not stored as raw text or uploaded to the extension developer. Local storage retains pseudonymous identifiers, measurements, and empirical reference data. No OpenAI API key is required.
 
-The “More” menu also provides “Read full current chat” at any time. This refreshes the local measurement for the current conversation without changing the empirical alert reference.
+Only when you explicitly start a full read or historical calibration does the extension temporarily use the browser's powerful debugger permission to send simulated mouse-wheel input to the active ChatGPT tab. It detaches when the operation ends or is cancelled. The browser may display a debugging warning. Ordinary risk monitoring does not use the debugger.
 
-Key features:
-- local empirical warning for long ChatGPT conversations;
-- colored risk track only when measurement and calibration are reliable;
-- pre-send risk changes from a very large Composer draft;
-- whole-turn growth learning from reliable before/after observations;
-- one-step calibration with a user-confirmed historical limit chat;
-- full-read recovery for ordinary historical chats without changing calibration;
-- continuation meta-prompt for generating a high-quality, self-contained handoff;
-- per-conversation mute/restore controls;
-- English, Simplified Chinese, and Traditional Chinese UI.
+WHAT'S NEW IN 4.3.0
+One-click automatic full-history reading and calibration; a redesigned reading overlay; improved handling of newly created chats in ChatGPT Projects and length-limit notices; removal of the manual scrolling guide, developer test-log controls, and on-screen version label.
 
-Privacy is local-first. Monitoring starts only after affirmative consent. Visible ChatGPT content and Composer text are processed transiently in the browser for the warning function. Raw user messages, assistant responses, Composer drafts, attachment/file bodies, and tool-result text are not persisted or uploaded to a LongChat Guard analysis server. Stored conversation identifiers are install-salted SHA-256 pseudonymous identifiers rather than raw ChatGPT conversation IDs. No OpenAI API key is required.
-
-**One-click automatic reading:** When you explicitly start full-history reading or calibrate with a confirmed limit-reached chat, LongChat Guard temporarily sends browser-internal mouse-wheel events to the active ChatGPT tab to load older content. It displays a progress overlay and a Cancel button, then runs the original continuity and completeness checks. There is no manual scrolling mode and no automatic transmission of chat data. A browser debugging permission warning may appear; the debugging connection is detached after use.
+LongChat Guard is independent and is not affiliated with, endorsed by, or sponsored by OpenAI. Warnings are empirical estimates, not official token counts, remaining capacity, or a universal conversation limit.
 
 ## Single Purpose
 
@@ -55,6 +49,6 @@ LongChat Guard is an independent open-source project and is not affiliated with,
 ## Listing Links
 
 - Official website: https://luobo656.github.io/longchat-guard/
-- Privacy policy: https://github.com/luobo656/longchat-guard/blob/main/PRIVACY.md
+- Privacy policy: https://luobo656.github.io/longchat-guard/PRIVACY.md
 - Source code: https://github.com/luobo656/longchat-guard
 - Support / issues: https://github.com/luobo656/longchat-guard/issues

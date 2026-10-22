@@ -3,7 +3,7 @@
     "message": "LongChat Guard"
   },
   "extensionDescription": {
-    "message": "Local ChatGPT long-conversation risk warnings and handoff help; no official quota, no chat upload."
+    "message": "Local ChatGPT long-chat alerts and handoff: one-click history reading, empirical risk estimates, no official quota or chat upload."
   },
   "actionTitle": {
     "message": "LongChat Guard"

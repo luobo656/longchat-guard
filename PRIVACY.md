@@ -1,5 +1,7 @@
 # Privacy Policy
 
+Last updated: October 22, 2026. Applies to LongChat Guard 4.3.0 and its automatic reading feature.
+
 LongChat Guard is a local browser extension for `chatgpt.com`.
 
 Before the extension reads or processes visible ChatGPT conversation content for the first time, it presents a localized disclosure and requires affirmative consent. Choosing “Not now / 暂不开启 / 暫不啟用” keeps monitoring disabled.

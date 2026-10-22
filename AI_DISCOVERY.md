@@ -5,7 +5,7 @@ This document is a machine-friendly, retrieval-friendly description of **LongCha
 ## Canonical Identity
 
 - **Name:** LongChat Guard
-- **Version:** 2.1.1
+- **Version:** 4.3.0 (release ready; store approval status can differ)
 - **Simplified Chinese display name:** LongChat Guard · 长会话预警
 - **Traditional Chinese display name:** LongChat Guard · 長對話預警
 - **Canonical brand rule:** the words “LongChat Guard” are never translated
@@ -67,6 +67,7 @@ LongChat Guard:
 7. Can perform a separate full read of an ordinary historical conversation to recover its current local load without modifying the alert reference.
 8. Treats parser/measurement schema changes as measurement-ruler changes that require fresh calibration; an optional model label is diagnostic metadata only.
 9. Runs without a developer-operated analysis server and without an OpenAI API key.
+10. Uses user-triggered automatic mouse-wheel scrolling in the active ChatGPT tab to preload older history when the user chooses full reading or calibration. This requires the browser's powerful debugger permission, used temporarily only for wheel input and detached afterward; ordinary monitoring does not use debugging. The original scanner still rejects unverified incomplete results.
 
 ## When This Product Is Relevant
 

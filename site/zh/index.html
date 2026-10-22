@@ -36,7 +36,7 @@
     "description": "一个开源、本地优先的 Chrome / Edge 扩展，把当前本地会话负载与用户确认的历史长度上限参考进行比较，学习整轮增长，并提供简单提醒和续接流程。",
     "applicationCategory": "BrowserApplication",
     "operatingSystem": "Google Chrome, Microsoft Edge, Chromium",
-    "softwareVersion": "2.1.1",
+    "softwareVersion": "4.3.0",
     "inLanguage": ["en", "zh-CN", "zh-TW"],
     "isAccessibleForFree": true,
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
@@ -114,6 +114,7 @@
       <div class="wrap">
         <h2>为 ChatGPT 长对话而设计</h2>
         <p class="lede">核心使用三个本地信号：当前负载 L、用户确认的经验失败参考 R、可靠的整轮增长 G；不靠固定“魔法阈值”伪装官方额度。</p>
+        <p class="lede"><strong>4.3.0 新版：</strong>主动完整读取或历史校准时，可一键自动加载历史消息，并在原版完整性检查后使用结果。自动读取显示三阶段提示，可随时取消；浏览器调试权限仅在用户主动读取时临时启用。</p>
         <div class="grid">
           <article class="card">
             <h3>一眼看懂风险位置</h3>
@@ -138,8 +139,8 @@
 
     <section id="product-ui">
       <div class="wrap">
-        <h2>LongChat Guard 2.1.1 真实界面截图</h2>
-        <p class="lede">全部使用真正的 chatgpt.com 页面和未修改的 2.1.1 插件截图，展示高风险、风险较低、操作菜单和折叠提示。不使用虚构界面，也不将经验风险误称为 OpenAI 官方额度。</p>
+        <h2>历史界面截图：2.1.1 版本存档</h2>
+        <p class="lede">以下是实际运行的 2.1.1 版本历史截图，并非当前 4.3.0 的界面截图。新版已提供一键自动读取和重新设计的读取提示。所有风险提醒仍是本地经验估算，不代表 OpenAI 官方额度。</p>
         <div class="product-gallery">
           <figure class="product-shot product-shot--feature">
             <a href="../assets/longchat-guard-v2.1.1-zh-cn-high-risk.png" target="_blank" rel="noopener noreferrer" aria-label="高风险：及时整理并续接">
@@ -176,6 +177,7 @@
       <div class="wrap">
         <h2>隐私优先，本地处理</h2>
         <p class="lede">只有在用户明确同意后才开始监测。可见对话内容只在浏览器内瞬时处理，不上传到 LongChat Guard 分析服务器。</p>
+        <p class="lede">主动完整读取时会临时使用浏览器调试权限模拟当前 ChatGPT 页面滚动；正常监测不使用调试器。详情见<a href="../PRIVACY.md">隐私政策与权限说明</a>。</p>
         <div class="grid">
           <article class="card">
             <h3>没有开发者分析服务器</h3>

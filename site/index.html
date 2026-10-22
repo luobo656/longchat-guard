@@ -52,7 +52,7 @@
         "description": "An open-source, local-first Chrome and Edge extension that compares current ChatGPT conversation load with a user-confirmed historical length-limit reference, learns whole-turn growth, and provides simple warnings plus a continuation workflow.",
         "applicationCategory": "BrowserApplication",
         "operatingSystem": "Google Chrome, Microsoft Edge, Chromium",
-        "softwareVersion": "2.1.1",
+        "softwareVersion": "4.3.0",
         "inLanguage": ["en", "zh-CN", "zh-TW"],
         "isAccessibleForFree": true,
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
@@ -185,6 +185,7 @@
       <div class="wrap">
         <h2>Built for long ChatGPT conversations</h2>
         <p class="lede">LongChat Guard uses three core local signals—current load (L), a user-confirmed empirical failure reference (R), and reliable whole-turn growth (G)—then turns them into simple, low-distraction risk states.</p>
+        <p class="lede"><strong>New in 4.3.0:</strong> Start full-history reading or historical calibration with one click. LongChat Guard automatically loads older messages, verifies completeness, and shows a refined three-stage overlay. The browser debugger is used temporarily only during user-requested full reads and is detached afterwards.</p>
         <div class="grid">
           <article class="card">
             <h3>Clear risk position</h3>
@@ -209,8 +210,8 @@
 
     <section id="product-ui">
       <div class="wrap">
-        <h2>Real LongChat Guard 2.1.1 screenshots</h2>
-        <p class="lede">All four screenshots show the real ChatGPT website running LongChat Guard 2.1.1: a high-risk warning, a lower-risk reading, the action menu, and the collapsed indicator. These are not fabricated UI mockups or official OpenAI quota measurements.</p>
+        <h2>Earlier interface screenshots (2.1.1 archive)</h2>
+        <p class="lede">This authentic 2.1.1 gallery is preserved as a historical reference, not screenshots of the current 4.3.0 interface. Version 4.3.0 now offers one-click automatic reading and a redesigned reading overlay; the risk signals remain empirical, not official OpenAI quota measurements.</p>
         <div class="product-gallery">
           <figure class="product-shot product-shot--feature">
             <a href="./assets/longchat-guard-v2.1.1-en-high-risk.png" target="_blank" rel="noopener noreferrer" aria-label="High risk — ready to hand off">
@@ -247,6 +248,7 @@
       <div class="wrap">
         <h2>Privacy-first by design</h2>
         <p class="lede">Monitoring only starts after explicit user consent. Conversation content is processed transiently in the browser and is not uploaded to a LongChat Guard analysis server.</p>
+        <p class="lede">User-requested full reads briefly use the browser debugger to simulate wheel scrolling in the current ChatGPT tab; normal monitoring does not. <a href="./PRIVACY.md">Read the full privacy policy and permission explanation</a>.</p>
         <div class="grid">
           <article class="card">
             <h3>No developer-operated backend</h3>

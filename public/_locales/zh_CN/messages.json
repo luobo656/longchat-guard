@@ -3,7 +3,7 @@
     "message": "LongChat Guard · 长会话预警"
   },
   "extensionDescription": {
-    "message": "ChatGPT 长会话风险提醒与续接辅助；本地处理，不显示官方额度，不上传聊天正文。"
+    "message": "ChatGPT 长会话预警与续接助手：一键读取历史，基于本地经验评估风险；不提供官方额度，不上传聊天正文。"
   },
   "actionTitle": {
     "message": "LongChat Guard"

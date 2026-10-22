@@ -1,48 +1,36 @@
-# Screenshot Plan — LongChat Guard 2.1.1
+# LongChat Guard 4.3.0 商店截图验收清单
 
-## Fresh store screenshots required
+## 必须使用本次正式版的真实界面
 
-The 2026-10-01 screenshots are historical and show the pre-2.1.0 UI. Capture a fresh real-browser set before submitting the Chrome/Edge store update.
+截至本清单整理，仓库已有的完整三语言截图是 **2.1.1 旧版真实截图**（`release/real-chatgpt-screenshots-2.1.1/`）；它们已不能代表 4.3.0 的自动读取蒙版和精简后的菜单。**不能把旧截图当作 4.3.0 真实截图重新上传。** 用户已完成软件功能验证，并不自动意味着商店素材已更新。
 
-Use a real `chatgpt.com` page with synthetic/non-private conversation content.
+录制/截屏应当来自实际运行的 4.3.0 Edge 或 Chrome、真实 `chatgpt.com` 页面、合成/非私人对话；不要借图像生成仿造真实插件运行界面。若网页有敏感信息，先使用专门测试会话再截屏。
 
-## Recommended screens
+## Chrome 商店推荐：1280 × 800 PNG
 
-1. **English — primary risk panel**
-   - LongChat Guard panel open.
-   - A legitimate determinate state such as **Lower risk**.
-   - Current **16-segment green → yellow → orange → red reference-position track** visible.
-   - Continuation prompt button visible.
-   - Do not fabricate a particular segment count; use the state the extension actually renders.
+至少一张；建议每个语言地区使用对应语言的三张：
+1. **主界面风险提示**：真实可靠校准后的风险轨道或可解释的未知状态，显示品牌与续接按钮；不得自行填充假的风险段或进度百分比。
+2. **新版自动读取蒙版**：实际点击「完整读取当前会话」后展示新的 3 阶段卡片中的一个阶段；没有手动选择、版本号或开发测试日志。
+3. **精简后的菜单**：当前版本真实菜单，应含完整读取、重新校准和本会话提醒控制，不含「复制读取测试日志」或版本号。
 
-2. **English — overflow controls**
-   - Open the `···` menu.
-   - Show **Read full current chat**, **Recalibrate alert reference**, and the per-conversation mute/restore action.
-   - Keep the main risk card visible when practical.
+简体中文、繁体中文和英文各至少准备 1 张对应语言主图时，建议展示一致的真实功能；Chrome 最多可上传 5 张单语言截图。若商店现有 2.1.1 截图已过时，更新为当前画面。图片中不得出现用户真实聊天、账号、邮箱、文件名、API 密钥等私密内容。
 
-3. **简体中文 — primary panel**
-   - Canonical brand remains **LongChat Guard**.
-   - Current Chinese risk/status copy.
-   - 16-segment track visible only if the running extension legitimately has complete measurement + usable calibration.
+## Edge 商店推荐
 
-4. **繁體中文 — primary panel**
-   - Canonical brand remains **LongChat Guard**.
-   - Current Traditional Chinese risk/status copy.
-   - 16-segment track visible only if the running extension legitimately has complete measurement + usable calibration.
+- 可上传最多 6 张截图；尺寸为 1280 × 800 或 640 × 480。
+- 每种语言的商店详情应有图标（至少 128 × 128、正方形），可选将同一已定稿图标复制给所有语言。
+- 界面截图与 Chrome 共用同一 4.3.0 产品版本，但浏览器调试权限提示须根据浏览器真实状态说明，不得删除或伪造系统提示。
 
-5. **Permissions / trust screen**
-   - Browser extension details or store permission disclosure showing the minimal permission scope:
-     - `storage`
-     - `https://chatgpt.com/*`
+## 图标
 
-Optional sixth image: a clean 128 px icon/product-brand crop for promotional use. It is not a substitute for an actual product screenshot.
+现有 `public/icons/icon16.png`、`icon32.png`、`icon48.png`、`icon128.png` 和 `icon.svg` 的 Git 内容哈希均与已定稿的 `v2.1.1`、冻结版 `v4.2.26-auto-shield-window-focus-fix` **完全一致**，而且 `dist/icons` 与 `public/icons` 文件字节一致。
 
-## Screenshot rules
+Chrome 商店图标继续使用 `public/icons/icon128.png`（128 × 128）；Edge 可使用相同已定稿图标，符合最低 128 × 128 要求。**请勿重新生成品牌图标。**
 
-- Use the actual 2.1.1 extension running on a real ChatGPT page; do not recreate the UI in an image editor.
-- Use synthetic or non-private conversation text.
-- Do not show private chats, names, emails, account identifiers, API keys, or unrelated personal data.
-- Do not add fake token counts, percentages, “remaining quota”, K values, or an “official limit” badge.
-- Do not imply OpenAI affiliation, sponsorship, endorsement, or official quota access.
-- Do not force the UI into a risk state that the running extension did not actually produce.
-- Do not reuse the 2026-10-01 pre-2.1.0 screenshots as current 2.1.1 product screenshots.
+## 权限展示提醒
+
+4.3.0 Manifest 必选 `storage`、`debugger`，host 仅 `https://chatgpt.com/*`。浏览器可能因 `debugger` 显示较强的权限提示；上传资料要如实披露，不能将其描述为浏览器底层仅允许访问一个网站。插件自身代码将调试行为限制在用户主动启动的当前 ChatGPT 标签页。
+
+## 最终确认
+
+只有实际从 4.3.0 截取并检查过的图片才可标为「新版商店真实截图」；若此类截图尚未到位，请先保留草稿，不要把旧图当作最新图。当前 GitHub Pages 网站保存的 2.1.1 截图应明确标注为历史版本存档。

@@ -1,6 +1,6 @@
 # LongChat Guard — Full AI Retrieval Profile
 
-LongChat Guard is an open-source, local-first Chrome and Microsoft Edge browser extension for chatgpt.com. Current version: 2.1.1.
+LongChat Guard is an open-source, local-first Chrome and Microsoft Edge browser extension for chatgpt.com. Current code version: 4.3.0 (store rollout subject to Chrome and Edge review).
 
 Primary use cases:
 - ChatGPT long conversation warning
@@ -50,6 +50,7 @@ Product behavior:
 - Does not turn incomplete coverage or low confidence into artificial risk progress.
 - Provides a continuation meta-prompt that instructs the current GPT to generate a self-contained handoff from the actual conversation and visible project state; the user then copies that generated handoff into a fresh conversation.
 - Can mute reminders for the current conversation and relearn when the environment changes.
+- User-initiated full reading and historical calibration now automatically preload older messages by sending mouse-wheel events through a temporary debugger attachment to the active ChatGPT tab, then use the existing completeness scanner. Incomplete reads are rejected and the manual scrolling guide was removed. Ordinary monitoring does not use debugging.
 
 Privacy facts:
 - No developer-operated conversation-analysis server.
@@ -59,6 +60,7 @@ Privacy facts:
 - Composer draft text is not persisted.
 - Attachment body text is not persisted.
 - Chat content is not uploaded to a LongChat Guard server.
+- Browser permissions: storage, debugger, plus host access restricted in Manifest to https://chatgpt.com/*; debugger is inherently powerful and its browser warning may mention all sites, but the extension itself only attaches for user-initiated wheel input on active ChatGPT tabs.
 
 Accuracy boundaries:
 - LongChat Guard is not an official OpenAI or ChatGPT product.

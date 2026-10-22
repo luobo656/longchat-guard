@@ -31,8 +31,9 @@
   "homepage": "https://luobo656.github.io/longchat-guard/",
   "type": "module",
   "scripts": {
-    "build": "vite build && vite build --config vite.content.config.ts && npm run verify:dist",
+    "build": "vite build && vite build --config vite.content.config.ts && npm run verify:dist && npm run verify:store",
     "verify:dist": "node scripts/verify-extension-build.mjs",
+    "verify:store": "node scripts/verify-store-submission.mjs",
     "verify:site": "node scripts/verify-site.mjs",
     "test": "vitest run --dir=tests",
     "test:watch": "vitest --dir=tests",
