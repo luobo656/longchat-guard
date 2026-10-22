@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How to Calibrate LongChat Guard for ChatGPT | Setup Guide</title>
+  <meta name="description" content="Set up LongChat Guard risk alerts: calibrate with a confirmed limit-reached ChatGPT chat, use one-click reading, and resolve Unable to assess.">
+  <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large">
+  <link rel="canonical" href="https://luobo656.github.io/longchat-guard/guides/how-to-calibrate-longchat-guard/">
+  <link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/guides/how-to-calibrate-longchat-guard/">
+  <link rel="alternate" hreflang="zh-CN" href="https://luobo656.github.io/longchat-guard/zh/guides/how-to-calibrate-longchat-guard/">
+  <link rel="alternate" hreflang="zh-TW" href="https://luobo656.github.io/longchat-guard/zh-tw/guides/how-to-calibrate-longchat-guard/">
+  <link rel="alternate" hreflang="x-default" href="https://luobo656.github.io/longchat-guard/guides/how-to-calibrate-longchat-guard/">
+  <link rel="icon" href="../../icon128.png">
+  <link rel="stylesheet" href="../../styles.css">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="LongChat Guard Setup: Automatic Reading and Calibration">
+  <meta property="og:description" content="Set up LongChat Guard risk alerts: calibrate with a confirmed limit-reached ChatGPT chat, use one-click reading, and resolve Unable to assess.">
+  <meta property="og:url" content="https://luobo656.github.io/longchat-guard/guides/how-to-calibrate-longchat-guard/">
+  <meta property="og:image" content="https://luobo656.github.io/longchat-guard/icon128.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"LongChat Guard Setup: Automatic Reading and Calibration","description":"Set up LongChat Guard risk alerts: calibrate with a confirmed limit-reached ChatGPT chat, use one-click reading, and resolve Unable to assess.","datePublished":"2026-10-22","dateModified":"2026-10-22","inLanguage":"en","mainEntityOfPage":"https://luobo656.github.io/longchat-guard/guides/how-to-calibrate-longchat-guard/","author":{"@type":"Person","name":"luobo656","url":"https://github.com/luobo656"},"about":{"@type":"SoftwareApplication","@id":"https://luobo656.github.io/longchat-guard/#software","name":"LongChat Guard","softwareVersion":"4.3.0","url":"https://luobo656.github.io/longchat-guard/"}}</script>
+</head>
+<body>
+  <header class="topbar"><div class="wrap nav">
+    <a class="brand" href="../../"><img src="../../icon128.png" alt="LongChat Guard"><span>LongChat Guard</span></a>
+    <nav class="navlinks" aria-label="Language and guide navigation">
+      <a href="../../">Home</a>
+      <a href="../../methodology/">Read the measurement method</a>
+      <a href="https://luobo656.github.io/longchat-guard/zh/guides/how-to-calibrate-longchat-guard/" hreflang="zh-CN">简体中文</a><a href="https://luobo656.github.io/longchat-guard/zh-tw/guides/how-to-calibrate-longchat-guard/" hreflang="zh-TW">繁體中文</a>
+    </nav>
+  </div></header>
+  <main><article class="wrap">
+    <section><span class="eyebrow">Guide · LongChat Guard 4.3.0</span>
+      <h1>How to set up LongChat Guard's automatic reading and risk alerts</h1>
+      <p class="lede">LongChat Guard cannot see an official ChatGPT token allowance. It estimates conversation risk locally, so reliable warnings require both a usable current-chat measurement and a historical conversation that you personally know reached the length limit.</p>
+      <div class="answer"><strong>Quick answer:</strong> Install and consent, open a genuinely limit-reached historical conversation, choose the calibration action, keep ChatGPT in the foreground while automatic reading checks both ends, then return to your current chat. A normal long chat is not proof of a limit.</div>
+      <p><time datetime="2026-10-22">Updated October 22, 2026</time></p>
+    </section>
+    <section><h2>Before you calibrate: choose the right conversation</h2><p>Use a historical ChatGPT thread that you personally observed hitting a conversation-length limit. An ordinary long conversation, a slow-loading page, a file upload failure, or a temporary rate limit is not equivalent evidence. If you have no confirmed failure sample yet, continue using ChatGPT normally; LongChat Guard will show <strong>Not calibrated</strong> rather than invent a threshold.</p></section>
+<section><h2>Step-by-step setup</h2><div class="grid">
+<article class="card"><h3>1. Install and consent</h3><p>Install LongChat Guard, open chatgpt.com, and review its local-processing disclosure. It does not require an OpenAI API key or a LongChat Guard account.</p></article>
+<article class="card"><h3>2. Open your confirmed limit-reached chat</h3><p>On that historical page, use the calibration action: the “Calibrate with this chat” option when a genuine limit notice is detected, or the menu action to relearn the reminder baseline.</p></article>
+<article class="card"><h3>3. Let the automatic read finish</h3><p>Keep this ChatGPT tab active. Browser-internal wheel input loads older messages and returns to the newest message; the original scanner then checks continuity. You can cancel; incomplete evidence is not saved.</p></article>
+</div><p>Once a compatible reference exists and the current chat has been measured reliably, the extension can show risk states. A completed historical read alone does not guarantee an authoritative OpenAI limit.</p></section>
+<section><h2>Full current-chat reading is different from calibration</h2><p><strong>Read full current chat</strong> measures the conversation you are viewing (current load, L). <strong>Calibrate with a confirmed historical limit</strong> establishes the failure reference (R). Reading an ongoing chat should not silently replace R. Both actions use the same automatic scrolling preparation and the same message measurement rules.</p><div class="answer"><strong>Why that distinction matters:</strong> using a chat that has not actually failed as your limit reference would make the risk track misleading.</div></section>
+<section><h2>What the status messages mean</h2><div class="grid">
+<article class="card"><h3>Not calibrated</h3><p>No compatible, confirmed historical failure reference is currently available. Wait for genuine evidence rather than treating a long chat as a limit.</p></article>
+<article class="card"><h3>Unable to assess</h3><p>Current chat coverage, message ordering, or the measurement environment cannot be verified. In a long historical chat you can request a full automatic read and try again.</p></article>
+<article class="card"><h3>Lower / Long / Near / High risk</h3><p>These are estimated positions relative to your local reference and observed conversation growth—not exact token percentages or official remaining quotas.</p></article>
+</div></section>
+<section><h2>Why does the browser show a debugger permission?</h2><p>The optional user-started full read uses the browser's powerful <code>debugger</code> permission to send simulated mouse-wheel input to the active ChatGPT tab. LongChat Guard detaches when the operation finishes, is cancelled, or fails. Normal passive risk monitoring does not use this permission. Its underlying browser permission is broader than the extension's self-imposed active-tab restriction, so a strong browser warning is expected.</p><p>Chat text is read transiently by the website content script for local measurement, not by the debugger, and is not uploaded to a developer analysis server. See the <a href="../../PRIVACY.md">privacy policy</a>.</p></section>
+<section><h2>When should I start a fresh ChatGPT conversation?</h2><p>When the locally estimated risk becomes meaningful, ask your current ChatGPT conversation to prepare a handoff. Carry forward the goal, confirmed decisions, constraints, relevant file/code state, unresolved issues, and next actions; verify the key facts in the new conversation. The extension provides a continuation prompt, not an automatic transfer.</p><p>Neither the warning nor the handoff implies an official OpenAI capacity number.</p></section>
+<section><h2>Quick troubleshooting</h2><div class="faq">
+<details open><summary>Do I need to scroll manually?</summary><p>No. The 4.3.0 reading flow is automatic. Keep the tab in front, do not interact during reading, and use Cancel if needed.</p></details>
+<details><summary>Can I calibrate before any chat reaches its limit?</summary><p>No trustworthy historical failure reference is available in that situation. Continue using the extension, and establish the reference only after a confirmed length-limit event.</p></details>
+<details><summary>Will the tool tell me exactly how many tokens remain?</summary><p>No. Its internal load units are not official OpenAI token counts, and it does not promise one universal ChatGPT limit.</p></details>
+</div></section>
+    <section><h2>Automatic reading and empirical calibration</h2>
+      <p>LongChat Guard is an independent open-source extension and is not affiliated with or endorsed by OpenAI.</p>
+      <div class="actions">
+        <a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">Install from Chrome Web Store</a>
+        <a class="btn" href="../../methodology/">Review the full method</a>
+      </div>
+    </section>
+  </article></main>
+  <footer><div class="wrap footer-grid"><span>LongChat Guard · MIT License</span>
+    <span><a href="../../PRIVACY.md">Privacy</a> · <a href="https://github.com/luobo656/longchat-guard">GitHub</a></span>
+  </div></footer>
+</body></html>

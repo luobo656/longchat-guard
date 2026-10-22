@@ -18,7 +18,7 @@
   <meta property="og:title" content="LongChat Guard · 長對話預警">
   <meta property="og:description" content="ChatGPT 長對話本機風險提醒與續接輔助；不顯示官方額度，不上傳聊天原文。">
   <meta property="og:url" content="https://luobo656.github.io/longchat-guard/zh-tw/">
-  <meta property="og:image" content="https://luobo656.github.io/longchat-guard/assets/longchat-guard-v2.1.1-zh-tw-high-risk.png">
+  <meta property="og:image" content="https://luobo656.github.io/longchat-guard/icon128.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="800">
   <script type="application/ld+json">
@@ -27,6 +27,7 @@
     "@graph": [
       {
         "@type": "SoftwareApplication",
+        "dateModified": "2026-10-22",
         "@id": "https://luobo656.github.io/longchat-guard/#software",
         "name": "LongChat Guard",
         "alternateName": [
@@ -177,7 +178,7 @@
     </section>
 
 
-    <section id="quick-start"><div class="wrap"><h2>三步使用 LongChat Guard</h2><p class="lede">剛安裝後顯示「未校準」或「暫無法判斷」是正常情況。擴充功能不會把未知風險誤當成安全。</p><div class="grid"><article class="card"><h3>1. 安裝並同意本機監測</h3><p>在 chatgpt.com 頁面同意使用本機可見資料；不需要額外帳號或 OpenAI API Key。</p></article><article class="card"><h3>2. 用真正達到上限的歷史對話校準</h3><p>開啟你確定曾達到對話長度上限的歷史對話，選擇「用此對話校準」。掃描不完整時不會建立有效參考。</p></article><article class="card"><h3>3. 依風險適時續接</h3><p>測量和校準都可靠後才顯示經驗風險；需要新對話時，讓目前 GPT 產生自包含的續接內容。</p></article></div><div class="actions"><a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">前往 Chrome 商店免費安裝</a><a class="btn" href="./guides/how-to-continue-long-chatgpt-conversation/">查看續接指南</a></div></div></section>
+    <section id="quick-start"><div class="wrap"><h2>三步使用 LongChat Guard</h2><p class="lede">剛安裝後顯示「未校準」或「暫無法判斷」是正常情況。擴充功能不會把未知風險誤當成安全。</p><div class="grid"><article class="card"><h3>1. 安裝並同意本機監測</h3><p>在 chatgpt.com 頁面同意使用本機可見資料；不需要額外帳號或 OpenAI API Key。</p></article><article class="card"><h3>2. 用真正達到上限的歷史對話校準</h3><p>開啟你確定曾達到對話長度上限的歷史對話，選擇「用此對話校準」。掃描不完整時不會建立有效參考。</p></article><article class="card"><h3>3. 依風險適時續接</h3><p>測量和校準都可靠後才顯示經驗風險；需要新對話時，讓目前 GPT 產生自包含的續接內容。</p></article></div><div class="actions"><a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">前往 Chrome 商店免費安裝</a><a class="btn" href="./guides/how-to-calibrate-longchat-guard/">自動讀取與校準教學</a><a class="btn" href="./guides/how-to-continue-long-chatgpt-conversation/">查看續接指南</a></div></div></section>
 
     <section id="privacy">
       <div class="wrap">
@@ -197,6 +198,7 @@
         <h2>實用指南與方法說明</h2>
         <p class="lede">直接回答長 ChatGPT 對話最常見的兩個問題：什麼時候值得開新對話，以及 LongChat Guard 的本機風險信號是怎麼來的。</p>
         <div class="grid">
+          <article class="card"><h3><a href="./guides/how-to-calibrate-longchat-guard/">一鍵自動讀取與校準教學</a></h3><p>利用已確認達到上限的歷史對話建立經驗參考，分辨完整讀取與校準，排解「暫無法判斷」。</p></article>
           <article class="card"><h3><a href="./guides/chatgpt-long-conversation-warning/">ChatGPT 長對話預警指南</a></h3><p>長對話越來越難管理時，什麼時候值得整理或續接。</p></article>
           <article class="card"><h3><a href="./guides/chatgpt-context-window-warning/">上下文視窗提醒</a></h3><p>釐清本機風險信號與 OpenAI 官方 context window 概念的差別。</p></article>
           <article class="card"><h3><a href="./guides/when-to-start-new-chatgpt-conversation/">什麼時候應該開新對話？</a></h3><p>用實務工作狀態判斷何時適合總結並移到新執行緒。</p></article>
@@ -227,7 +229,7 @@
   <footer>
     <div class="wrap footer-grid">
       <span>LongChat Guard · MIT License</span>
-      <span><a href="../llms.txt">llms.txt</a> · <a href="https://github.com/luobo656/longchat-guard/blob/main/PRIVACY.md">隱私政策</a> · <a href="https://github.com/luobo656/longchat-guard">GitHub</a></span>
+      <span><a href="../llms.txt">llms.txt</a> · <a href="../PRIVACY.md">隱私政策</a> · <a href="https://github.com/luobo656/longchat-guard">GitHub</a></span>
     </div>
   </footer>
 </body>

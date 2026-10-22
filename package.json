@@ -35,6 +35,8 @@
     "verify:dist": "node scripts/verify-extension-build.mjs",
     "verify:store": "node scripts/verify-store-submission.mjs",
     "verify:site": "node scripts/verify-site.mjs",
+    "build:sitemap": "node scripts/generate-site-sitemap.mjs --write",
+    "verify:seo": "node scripts/verify-seo-integrity.mjs",
     "test": "vitest run --dir=tests",
     "test:watch": "vitest --dir=tests",
     "typecheck": "tsc --noEmit"

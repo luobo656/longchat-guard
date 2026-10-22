@@ -33,6 +33,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate multilingual SEO and sitemap
+        run: |
+          node scripts/generate-site-sitemap.mjs
+          node scripts/verify-seo-integrity.mjs
+
       - name: Prepare discovery files
         run: |
           cp public/icons/icon128.png site/icon128.png
@@ -67,6 +72,9 @@ jobs:
                 "https://luobo656.github.io/longchat-guard/",
                 "https://luobo656.github.io/longchat-guard/zh/",
                 "https://luobo656.github.io/longchat-guard/zh-tw/",
+                "https://luobo656.github.io/longchat-guard/guides/how-to-calibrate-longchat-guard/",
+                "https://luobo656.github.io/longchat-guard/zh/guides/how-to-calibrate-longchat-guard/",
+                "https://luobo656.github.io/longchat-guard/zh-tw/guides/how-to-calibrate-longchat-guard/",
                 "https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-warning/",
                 "https://luobo656.github.io/longchat-guard/zh/guides/chatgpt-long-conversation-warning/",
                 "https://luobo656.github.io/longchat-guard/zh-tw/guides/chatgpt-long-conversation-warning/",

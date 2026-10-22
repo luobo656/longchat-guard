@@ -17,6 +17,9 @@ Important accuracy note: LongChat Guard does not read OpenAI's official remainin
 
 ## Product and Technical Documentation
 
+- [Automatic reading and calibration (English)](https://luobo656.github.io/longchat-guard/guides/how-to-calibrate-longchat-guard/): One-click reading, confirmed historical failure calibration, unknown states, debugger disclosure, and cancellation.
+- [自动读取与校准教程 (简体)](https://luobo656.github.io/longchat-guard/zh/guides/how-to-calibrate-longchat-guard/): 本地经验基准、完整读取与校准的区别、权限与异常状态。
+- [自動讀取與校準教學 (繁體)](https://luobo656.github.io/longchat-guard/zh-tw/guides/how-to-calibrate-longchat-guard/): 本機校準、完整性證據、權限與狀態處理。
 - [Methodology](https://luobo656.github.io/longchat-guard/methodology/): Transparent explanation of current load, empirical failure reference, whole-turn growth reserve, measurement compatibility, privacy, and limitations.
 - [ChatGPT conversation too long guide](https://luobo656.github.io/longchat-guard/guides/chatgpt-conversation-too-long/): Practical handoff guidance when a working thread becomes too long or reaches a conversation-length failure.
 - [Long-conversation extension category guide](https://luobo656.github.io/longchat-guard/guides/chatgpt-long-conversation-extension/): Distinguishes navigation/search, page cleanup, export/archive, and risk-warning/handoff extensions; LongChat Guard belongs to the last category.

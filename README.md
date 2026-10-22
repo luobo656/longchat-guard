@@ -9,6 +9,7 @@
 
 **Official project site:** https://luobo656.github.io/longchat-guard/ · [简体中文](https://luobo656.github.io/longchat-guard/zh/) · [繁體中文](https://luobo656.github.io/longchat-guard/zh-tw/)
 **Install:** [Chrome Web Store](https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop) · **Source:** https://github.com/luobo656/longchat-guard
+**User guides (4.3.0):** [Automatic reading & calibration](https://luobo656.github.io/longchat-guard/guides/how-to-calibrate-longchat-guard/) · [一键读取与校准](https://luobo656.github.io/longchat-guard/zh/guides/how-to-calibrate-longchat-guard/) · [一鍵讀取與校準](https://luobo656.github.io/longchat-guard/zh-tw/guides/how-to-calibrate-longchat-guard/)
 
 LongChat Guard 是一个面向 Chrome / Microsoft Edge 的开源 Manifest V3 扩展。它根据浏览器本地可观测的 ChatGPT 长会话证据，提供**经验风险预警**和续接辅助。它不是 OpenAI 官方 context-limit、token-limit 或剩余额度仪表盘，也不会声称知道服务端真实上下文容量。
 

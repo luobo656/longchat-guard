@@ -18,13 +18,14 @@
   <meta property="og:title" content="LongChat Guard · 长会话预警">
   <meta property="og:description" content="ChatGPT 长会话本地风险提醒与续接辅助：不伪造官方额度，不上传聊天原文。">
   <meta property="og:url" content="https://luobo656.github.io/longchat-guard/zh/">
-  <meta property="og:image" content="https://luobo656.github.io/longchat-guard/assets/longchat-guard-v2.1.1-zh-cn-high-risk.png">
+  <meta property="og:image" content="https://luobo656.github.io/longchat-guard/icon128.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="800">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
+    "dateModified": "2026-10-22",
     "name": "LongChat Guard",
     "alternateName": [
       "LongChat Guard · 长会话预警",
@@ -171,7 +172,7 @@
     </section>
 
 
-    <section id="quick-start"><div class="wrap"><h2>三步使用 LongChat Guard</h2><p class="lede">初次安装后显示“未校准”或“暂无法判断”是正常现象。插件不会把未知风险伪装成安全。</p><div class="grid"><article class="card"><h3>1. 安装并同意本地监测</h3><p>在 chatgpt.com 页面同意插件使用本地可见数据；无需插件账号或 OpenAI API Key。</p></article><article class="card"><h3>2. 用真实上限历史会话校准</h3><p>打开你明确知道曾达到会话长度上限的历史对话，点击“用此会话校准”。扫描不完整时不会建立有效参考。</p></article><article class="card"><h3>3. 根据风险适时续接</h3><p>测量和校准都可靠后才显示经验风险；需要新开会话时，让当前 GPT 生成自包含的续接上下文。</p></article></div><div class="actions"><a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">Chrome 商店免费安装</a><a class="btn" href="./guides/how-to-continue-long-chatgpt-conversation/">查看续接指南</a></div></div></section>
+    <section id="quick-start"><div class="wrap"><h2>三步使用 LongChat Guard</h2><p class="lede">初次安装后显示“未校准”或“暂无法判断”是正常现象。插件不会把未知风险伪装成安全。</p><div class="grid"><article class="card"><h3>1. 安装并同意本地监测</h3><p>在 chatgpt.com 页面同意插件使用本地可见数据；无需插件账号或 OpenAI API Key。</p></article><article class="card"><h3>2. 用真实上限历史会话校准</h3><p>打开你明确知道曾达到会话长度上限的历史对话，点击“用此会话校准”。扫描不完整时不会建立有效参考。</p></article><article class="card"><h3>3. 根据风险适时续接</h3><p>测量和校准都可靠后才显示经验风险；需要新开会话时，让当前 GPT 生成自包含的续接上下文。</p></article></div><div class="actions"><a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">Chrome 商店免费安装</a><a class="btn" href="./guides/how-to-calibrate-longchat-guard/">自动读取与校准教程</a><a class="btn" href="./guides/how-to-continue-long-chatgpt-conversation/">查看续接指南</a></div></div></section>
 
     <section id="privacy">
       <div class="wrap">
@@ -213,12 +214,13 @@
         <h2>实用指南</h2>
         <p class="lede">针对“ChatGPT 长会话预警”和“上下文窗口提醒”两类高频搜索意图，提供更完整、可引用的解释。</p>
         <div class="grid">
+          <article class="card"><h3><a href="./guides/how-to-calibrate-longchat-guard/">一键自动读取与校准教程</a></h3><p>从已确认触顶的历史会话建立经验参考，区分完整读取和校准，并排查「暂无法判断」。</p></article>
           <article class="card"><h3><a href="./guides/chatgpt-long-conversation-warning/">ChatGPT 长会话预警指南</a></h3><p>解释长对话为什么越来越难管理、本地风险提醒代表什么，以及什么时候适合整理或续接。</p></article>
           <article class="card"><h3><a href="./guides/chatgpt-context-window-warning/">ChatGPT 上下文窗口提醒指南</a></h3><p>解释本地上下文风险信号与 OpenAI 官方 context limit 的区别。</p></article>
           <article class="card"><h3><a href="./guides/when-to-start-new-chatgpt-conversation/">什么时候应该新开一个 ChatGPT 会话？</a></h3><p>解释哪些实用信号说明当前长对话适合总结并开启一个更干净的新线程。</p></article>
           <article class="card"><h3><a href="./guides/how-to-continue-long-chatgpt-conversation/">ChatGPT 长会话怎么续接？</a></h3><p>让当前 GPT 根据真实会话状态生成自包含的续接上下文，再把生成结果带到新会话，而不是复制全部历史。</p></article>
           <article class="card"><h3><a href="./guides/chatgpt-conversation-too-long/">ChatGPT 会话太长了怎么办？</a></h3><p>直接说明“conversation too long”类问题代表什么、应该保留哪些上下文，以及如何安全地续接到新会话。</p></article>
-          <article class="card"><h3><a href="./methodology/">LongChat Guard 风险判断方法</a></h3><p>公开解释 2.1.1 的本地学习证据、风险分档、环境变化处理与隐私边界。</p></article>
+          <article class="card"><h3><a href="./methodology/">LongChat Guard 风险判断方法</a></h3><p>公开解释当前版本的本地学习证据、风险分档、环境变化处理与隐私边界。</p></article>
           <article class="card"><h3><a href="./guides/chatgpt-long-conversation-extension/">ChatGPT 长会话插件怎么选？</a></h3><p>区分搜索导航、页面整理、导出归档和风险预警/续接四类不同工具，避免把功能相近的名字当成同一种产品。</p></article>
           <article class="card"><h3><a href="../llms.txt">AI / LLM 检索索引</a></h3><p>提供规范实体信息、术语、权威来源和面向 AI 检索系统的项目说明。</p></article>
         </div>

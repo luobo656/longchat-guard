@@ -19,7 +19,7 @@
   <meta property="og:url" content="https://luobo656.github.io/longchat-guard/methodology/">
   <meta property="og:image" content="https://luobo656.github.io/longchat-guard/icon128.png">
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"TechArticle","headline":"How LongChat Guard Estimates ChatGPT Long-Conversation Risk","description":"Transparent methodology for LongChat Guard: current local load, a user-confirmed empirical failure reference, whole-turn growth reserve, privacy, and limitations.","datePublished":"2026-10-01","dateModified":"2026-10-08","mainEntityOfPage":"https://luobo656.github.io/longchat-guard/methodology/","author":{"@type":"Person","name":"luobo656","url":"https://github.com/luobo656"},"about":{"@type":"SoftwareApplication","name":"LongChat Guard","softwareVersion":"2.1.1","url":"https://luobo656.github.io/longchat-guard/"}}
+  {"@context":"https://schema.org","@type":"TechArticle","headline":"How LongChat Guard Estimates ChatGPT Long-Conversation Risk","description":"Transparent methodology for LongChat Guard: current local load, a user-confirmed empirical failure reference, whole-turn growth reserve, privacy, and limitations.","datePublished":"2026-10-01","dateModified":"2026-10-22","mainEntityOfPage":"https://luobo656.github.io/longchat-guard/methodology/","author":{"@type":"Person","name":"luobo656","url":"https://github.com/luobo656"},"about":{"@type":"SoftwareApplication","name":"LongChat Guard","softwareVersion":"4.3.0","url":"https://luobo656.github.io/longchat-guard/"}}
   </script>
 </head>
 <body>
@@ -27,7 +27,7 @@
   <main>
     <article class="wrap">
       <section>
-        <span class="eyebrow">LongChat Guard 2.1.1 · Methodology</span>
+        <span class="eyebrow">LongChat Guard 4.3.0 · Measurement method</span>
         <h1>How LongChat Guard estimates long-conversation risk without an official quota</h1>
         <p class="lede">LongChat Guard does not know OpenAI's private remaining-conversation allowance. It measures the current chat locally and compares it with a historical chat that you personally confirmed reached the conversation-length limit.</p>
         <div class="answer"><strong>Short answer:</strong> the risk model uses current local load (L), an empirical failure reference (R), and a whole-turn growth reserve (G). The purpose is not to predict an official token limit; it is to show where the current conversation sits relative to a failure point observed in your own local history.</div>
@@ -52,6 +52,10 @@
         <p>ChatGPT's web product does not expose a simple, universal public “conversation remaining” meter that a browser extension can truthfully present as official. A fixed magic threshold would therefore look precise while being weakly grounded. LongChat Guard instead anchors warnings to a user-confirmed local failure reference and the conversation's own measured growth.</p>
         <p>This is also why the visual track is a local risk indicator rather than an official OpenAI quota meter.</p>
       </section>
+      <section><h2>How automatic full reading fits the method</h2>
+        <p>In version 4.3.0, users can start an automatic full read or historical calibration without manual scrolling. The browser temporarily sends wheel input to load dynamically rendered older messages, then the <strong>same existing scanner</strong> verifies message order and completeness. Arriving at the top of the webpage alone is not proof that the entire conversation was read.</p>
+        <p>Reading the current chat updates its local load (L); only a historical chat <em>confirmed by the user to have reached the conversation-length limit</em> can establish the empirical failure reference (R). <a href="../guides/how-to-calibrate-longchat-guard/">Read the step-by-step calibration guide</a>.</p>
+      </section>
       <section>
         <h2>Measurement compatibility and recalibration</h2>
         <p>Parser and measurement schema versions define the measurement ruler. If that ruler changes, the previous R becomes a stale prior and a fresh calibration is required before determinate risk is shown again. A model label, when readable, is diagnostic metadata only and does not invalidate an otherwise compatible calibration.</p>
@@ -63,7 +67,7 @@
       <section>
         <h2>What this method can and cannot tell you</h2>
         <p>It can provide a browser-local signal for when a long working thread is becoming risky based on evidence from your own use. It cannot certify OpenAI's exact token count, model context window, remaining quota, billing limit, or a universal conversation maximum.</p>
-        <div class="actions"><a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">Install LongChat Guard</a><a class="btn" href="../guides/chatgpt-conversation-too-long/">Conversation too long? What to do</a></div>
+        <div class="actions"><a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">Install LongChat Guard</a><a class="btn" href="../guides/how-to-calibrate-longchat-guard/">Automatic reading setup</a><a class="btn" href="../guides/chatgpt-conversation-too-long/">Conversation too long? What to do</a></div>
       </section>
     </article></main>
   <footer><div class="wrap footer-grid"><span>LongChat Guard · MIT License</span><span><a href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">Chrome Web Store</a> · <a href="https://github.com/luobo656/longchat-guard">Source</a></span></div></footer>

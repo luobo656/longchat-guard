@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LongChat Guard 怎么校准？ChatGPT 长会话自动读取与风险提醒教程</title>
+  <meta name="description" content="LongChat Guard 4.3.0 使用指南：如何用已确认触顶的 ChatGPT 历史会话完成校准、一键自动读取、理解“暂无法判断”及调试权限。">
+  <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large">
+  <link rel="canonical" href="https://luobo656.github.io/longchat-guard/zh/guides/how-to-calibrate-longchat-guard/">
+  <link rel="alternate" hreflang="en" href="https://luobo656.github.io/longchat-guard/guides/how-to-calibrate-longchat-guard/">
+  <link rel="alternate" hreflang="zh-CN" href="https://luobo656.github.io/longchat-guard/zh/guides/how-to-calibrate-longchat-guard/">
+  <link rel="alternate" hreflang="zh-TW" href="https://luobo656.github.io/longchat-guard/zh-tw/guides/how-to-calibrate-longchat-guard/">
+  <link rel="alternate" hreflang="x-default" href="https://luobo656.github.io/longchat-guard/guides/how-to-calibrate-longchat-guard/">
+  <link rel="icon" href="../../../icon128.png">
+  <link rel="stylesheet" href="../../../styles.css">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="LongChat Guard 校准和自动读取使用指南">
+  <meta property="og:description" content="LongChat Guard 4.3.0 使用指南：如何用已确认触顶的 ChatGPT 历史会话完成校准、一键自动读取、理解“暂无法判断”及调试权限。">
+  <meta property="og:url" content="https://luobo656.github.io/longchat-guard/zh/guides/how-to-calibrate-longchat-guard/">
+  <meta property="og:image" content="https://luobo656.github.io/longchat-guard/icon128.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"LongChat Guard 校准和自动读取使用指南","description":"LongChat Guard 4.3.0 使用指南：如何用已确认触顶的 ChatGPT 历史会话完成校准、一键自动读取、理解“暂无法判断”及调试权限。","datePublished":"2026-10-22","dateModified":"2026-10-22","inLanguage":"zh-CN","mainEntityOfPage":"https://luobo656.github.io/longchat-guard/zh/guides/how-to-calibrate-longchat-guard/","author":{"@type":"Person","name":"luobo656","url":"https://github.com/luobo656"},"about":{"@type":"SoftwareApplication","@id":"https://luobo656.github.io/longchat-guard/#software","name":"LongChat Guard","softwareVersion":"4.3.0","url":"https://luobo656.github.io/longchat-guard/"}}</script>
+</head>
+<body>
+  <header class="topbar"><div class="wrap nav">
+    <a class="brand" href="../../"><img src="../../../icon128.png" alt="LongChat Guard"><span>LongChat Guard</span></a>
+    <nav class="navlinks" aria-label="Language and guide navigation">
+      <a href="../../">中文首页</a>
+      <a href="../../methodology/">风险判断方法</a>
+      <a href="https://luobo656.github.io/longchat-guard/guides/how-to-calibrate-longchat-guard/" hreflang="en">English</a><a href="https://luobo656.github.io/longchat-guard/zh-tw/guides/how-to-calibrate-longchat-guard/" hreflang="zh-TW">繁體中文</a>
+    </nav>
+  </div></header>
+  <main><article class="wrap">
+    <section><span class="eyebrow">使用指南 · LongChat Guard 4.3.0</span>
+      <h1>LongChat Guard 如何校准与自动读取 ChatGPT 长会话？</h1>
+      <p class="lede">LongChat Guard 不读取 OpenAI 官方剩余额度。它以本地可验证的对话测量和用户亲自确认达到过长度上限的历史会话作为经验参考，因此只有证据完整时才显示确定性的风险状态。</p>
+      <div class="answer"><strong>简短答案：</strong> 安装并同意本地处理，打开真正达到会话长度上限的历史对话，选择校准，让自动读取完成上下滚动和完整性检查，再返回正在使用的会话查看风险。普通长会话不能冒充触顶样本。</div>
+      <p><time datetime="2026-10-22">2026 年 10 月 22 日更新</time></p>
+    </section>
+    <section><h2>校准前：先找到真正触顶的历史会话</h2><p>必须是你亲自观察过 ChatGPT 提示会话长度达到上限的历史对话。会话消息很多、网页加载慢、文件上传失败或暂时受到频率限制，都不能单独证明它已经达到会话长度上限。如果没有可靠触顶样本，插件会保持<strong>未校准</strong>，不会编造一个额度。</p></section>
+<section><h2>三步完成首次设置</h2><div class="grid">
+<article class="card"><h3>1. 安装并明确同意</h3><p>安装 LongChat Guard，打开 chatgpt.com，阅读并同意本地处理提示。无需创建插件账号，也不需要 OpenAI API Key。</p></article>
+<article class="card"><h3>2. 打开已确认触顶的历史对话</h3><p>在对应会话中使用校准操作：遇到真实长度错误候选时选择「用此会话校准」，或通过菜单的「重新校准提醒基准」发起读取。</p></article>
+<article class="card"><h3>3. 完成一键自动读取</h3><p>保持 ChatGPT 标签页位于前台。浏览器模拟滚轮自动加载较早消息、返回最新消息，随后原版读取器检查消息连续性与完整性；可以随时取消，不会保存不完整结果。</p></article>
+</div><p>只有校准参考适用于当前测量环境，并且当前会话本身已可靠测量，插件才会显示经验风险状态。历史读取成功不等于知道 OpenAI 官方上限。</p></section>
+<section><h2>「完整读取当前会话」和「校准」不是一回事</h2><p><strong>完整读取当前会话</strong>用于恢复或检查当前会话的测量负载 L；<strong>使用已确认触顶的历史会话校准</strong>用于建立经验失败参考 R。读取普通进行中的会话，不会自动把它当成新的上限。两项操作共用同一套自动滚动准备和正文计量规则。</p><div class="answer"><strong>关键原则：</strong>没有真正触顶的证据，就不能建立看似精确却实际错误的风险基准。</div></section>
+<section><h2>界面状态代表什么？</h2><div class="grid">
+<article class="card"><h3>未校准</h3><p>当前环境还没有可使用的真实历史失败参考。正常继续使用即可，不要为了让进度条出现而拿普通长聊天校准。</p></article>
+<article class="card"><h3>暂无法判断</h3><p>当前会话的消息完整性、顺序或读取环境无法证明可靠。在适用的长会话中可以主动完整读取，再根据检查结果判断。</p></article>
+<article class="card"><h3>风险较低／偏长／接近风险／高风险</h3><p>这是相对本地历史失败参考和实际增长趋势的经验分档，不是官方 Token 剩余额度，也不是精确百分比。</p></article>
+</div></section>
+<section><h2>为什么自动读取需要浏览器调试权限？</h2><p>用户主动发起完整读取或校准时，插件临时使用浏览器的 <code>debugger</code> 强权限，向当前前台 ChatGPT 标签页发送模拟鼠标滚轮操作。完成、取消或失败后会解除调试连接；正常实时监测不会启用调试器。该浏览器权限本身较广，因此出现较明显的系统警告是可能的。</p><p>聊天文本由网页内容脚本在浏览器内瞬时处理用于本地估算，不通过调试器导出，不上传开发者分析服务器。详情见<a href="../../../PRIVACY.md">隐私政策</a>。</p></section>
+<section><h2>什么时候应该开新会话？</h2><p>当本地经验风险提示值得整理时，可以在当前 ChatGPT 会话中使用插件提供的续接提示词，让当前模型整理目标、已经确认的决定、重要限制、文件或代码状态、未解决问题和下一步，再自行将生成的内容带到新会话。插件不会代替你自动搬运对话。</p><p>风险提醒和续接结果都不代表官方上下文上限。</p></section>
+<section><h2>常见问题排查</h2><div class="faq">
+<details open><summary>还要用鼠标手动滚动吗？</summary><p>不需要。4.3.0 使用一键自动读取。读取时保持标签页在前台，避免操作网页，需要时可以取消。</p></details>
+<details><summary>没有达到上限的旧会话，能提前校准吗？</summary><p>不能用它建立可靠的失败参考。只有真实长度上限事件得到用户确认、历史可以完整读取时才能校准。</p></details>
+<details><summary>能显示官方 Token 剩余额度吗？</summary><p>不能。内部内容单位不等于 OpenAI 官方 Token 数，也不存在适用于所有会话的固定官方上限估值。</p></details>
+</div></section>
+    <section><h2>一键自动读取与本地经验校准</h2>
+      <p>LongChat Guard 为独立开源扩展，与 OpenAI 没有隶属、赞助或合作关系。</p>
+      <div class="actions">
+        <a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">前往 Chrome 商店安装</a>
+        <a class="btn" href="../../methodology/">了解风险判断方法</a>
+      </div>
+    </section>
+  </article></main>
+  <footer><div class="wrap footer-grid"><span>LongChat Guard · MIT License</span>
+    <span><a href="../../../PRIVACY.md">隐私政策</a> · <a href="https://github.com/luobo656/longchat-guard">GitHub</a></span>
+  </div></footer>
+</body></html>

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ChatGPT Long Conversation Warning & Handoff | LongChat Guard</title>
-  <meta name="description" content="Local-first Chrome/Edge extension that warns when ChatGPT conversations get long and helps create a clean handoff to a new chat. No fake official quota.">
+  <meta name="description" content="LongChat Guard warns when ChatGPT chats become long. Learn one-click automatic history reading, local empirical calibration, and safe conversation handoffs.">
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
   <meta name="theme-color" content="#071512">
   <link rel="canonical" href="https://luobo656.github.io/longchat-guard/">
@@ -18,11 +18,11 @@
   <meta property="og:title" content="ChatGPT Long Conversation Warning & Handoff | LongChat Guard">
   <meta property="og:description" content="Local-first ChatGPT long-conversation warning and handoff extension for Chrome and Edge. No fake official quota and no chat upload.">
   <meta property="og:url" content="https://luobo656.github.io/longchat-guard/">
-  <meta property="og:image" content="https://luobo656.github.io/longchat-guard/assets/longchat-guard-v2.1.1-en-high-risk.png">
-  <meta property="og:image:width" content="1280">
-  <meta property="og:image:height" content="800">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://luobo656.github.io/longchat-guard/assets/longchat-guard-v2.1.1-en-high-risk.png">
+  <meta property="og:image" content="https://luobo656.github.io/longchat-guard/icon128.png">
+  <meta property="og:image:width" content="128">
+  <meta property="og:image:height" content="128">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:image" content="https://luobo656.github.io/longchat-guard/icon128.png">
   <meta name="twitter:title" content="LongChat Guard">
   <meta name="twitter:description" content="Local-first ChatGPT long-conversation warnings plus a clean handoff workflow for fresh chats.">
   <script type="application/ld+json">
@@ -31,6 +31,7 @@
     "@graph": [
       {
         "@type": "WebSite",
+        "dateModified": "2026-10-22",
         "@id": "https://luobo656.github.io/longchat-guard/#website",
         "url": "https://luobo656.github.io/longchat-guard/",
         "name": "LongChat Guard",
@@ -61,7 +62,6 @@
         "downloadUrl": "https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop",
         "url": "https://luobo656.github.io/longchat-guard/",
         "image": "https://luobo656.github.io/longchat-guard/icon128.png",
-        "screenshot": "https://luobo656.github.io/longchat-guard/assets/longchat-guard-v2.1.1-en-high-risk.png",
         "author": {
           "@type": "Person",
           "name": "luobo656",
@@ -242,7 +242,7 @@
     </section>
 
 
-    <section id="quick-start"><div class="wrap"><h2>Start using LongChat Guard in three steps</h2><p class="lede">After installation, an unknown risk state is normal. The extension needs reliable measurement and a user-confirmed historical failure reference before it can give a determinate warning.</p><div class="grid"><article class="card"><h3>1. Install and give consent</h3><p>Enable local monitoring on chatgpt.com. No account with us or OpenAI API key is needed.</p></article><article class="card"><h3>2. Calibrate from a real limit</h3><p>Open a historical chat you know reached the conversation-length limit, then choose “Calibrate with this chat”. An incomplete scan cannot create a valid reference.</p></article><article class="card"><h3>3. Watch risk and hand off</h3><p>Once measurement and calibration are reliable, use the risk signal. Let the current GPT create a self-contained handoff before moving to a fresh chat.</p></article></div><div class="actions"><a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">Get the free Chrome extension</a><a class="btn" href="./guides/how-to-continue-long-chatgpt-conversation/">Read the continuation guide</a></div></div></section>
+    <section id="quick-start"><div class="wrap"><h2>Start using LongChat Guard in three steps</h2><p class="lede">After installation, an unknown risk state is normal. The extension needs reliable measurement and a user-confirmed historical failure reference before it can give a determinate warning.</p><div class="grid"><article class="card"><h3>1. Install and give consent</h3><p>Enable local monitoring on chatgpt.com. No account with us or OpenAI API key is needed.</p></article><article class="card"><h3>2. Calibrate from a real limit</h3><p>Open a historical chat you know reached the conversation-length limit, then choose “Calibrate with this chat”. An incomplete scan cannot create a valid reference.</p></article><article class="card"><h3>3. Watch risk and hand off</h3><p>Once measurement and calibration are reliable, use the risk signal. Let the current GPT create a self-contained handoff before moving to a fresh chat.</p></article></div><div class="actions"><a class="btn primary" href="https://chromewebstore.google.com/detail/longchat-guard/njeoedopjhefbhgllpjadjkljpnfioop">Get the free Chrome extension</a><a class="btn" href="./guides/how-to-calibrate-longchat-guard/">Automatic reading &amp; calibration guide</a><a class="btn" href="./guides/how-to-continue-long-chatgpt-conversation/">Read the continuation guide</a></div></div></section>
 
     <section id="privacy">
       <div class="wrap">
@@ -284,12 +284,13 @@
         <h2>Practical guides</h2>
         <p class="lede">Useful, retrieval-friendly explanations for the two questions people most often mean when they search for a ChatGPT long-conversation or context-window warning.</p>
         <div class="grid">
+          <article class="card"><h3><a href="./guides/how-to-calibrate-longchat-guard/">Set up automatic reading and calibration</a></h3><p>Step-by-step setup, confirmed length-limit references, the difference between full reading and calibration, and reasons for an unknown status.</p></article>
           <article class="card"><h3><a href="./guides/chatgpt-long-conversation-warning/">ChatGPT long conversation warning</a></h3><p>Why long chats become harder to manage, what a local warning means, and when organizing or continuing in a fresh conversation can help.</p></article>
           <article class="card"><h3><a href="./guides/chatgpt-context-window-warning/">ChatGPT context window warning</a></h3><p>The difference between a local context-risk signal and an official OpenAI context limit.</p></article>
           <article class="card"><h3><a href="./guides/when-to-start-new-chatgpt-conversation/">When should I start a new ChatGPT conversation?</a></h3><p>Practical signs that a long thread is worth summarizing and continuing in a fresh conversation.</p></article>
           <article class="card"><h3><a href="./guides/how-to-continue-long-chatgpt-conversation/">How to continue a long ChatGPT conversation</a></h3><p>A compact handoff method for moving only the important working context into a new chat.</p></article>
           <article class="card"><h3><a href="./guides/chatgpt-conversation-too-long/">ChatGPT conversation too long</a></h3><p>A direct explanation of what “conversation too long” means, what to preserve, and how to continue safely in a fresh chat.</p></article>
-          <article class="card"><h3><a href="./methodology/">How LongChat Guard estimates risk</a></h3><p>The transparent 2.1.1 L/R/G model: current load, user-confirmed empirical failure reference, whole-turn growth, evidence rules, privacy boundaries, and limitations.</p></article>
+          <article class="card"><h3><a href="./methodology/">How LongChat Guard estimates risk</a></h3><p>Current load, a user-confirmed failure reference, whole-turn growth, reliability checks, privacy boundaries, and limitations.</p></article>
           <article class="card"><h3><a href="./guides/chatgpt-long-conversation-extension/">Which kind of long-conversation extension do you need?</a></h3><p>A neutral category guide covering navigation, cleanup, export, and risk-warning/handoff tools.</p></article>
           <article class="card"><h3><a href="./llms.txt">AI / LLM discovery index</a></h3><p>Canonical entity facts, terminology, source links, and retrieval-oriented documentation for AI assistants and search systems.</p></article>
         </div>
