@@ -252,6 +252,37 @@ export function findComposerElement(doc: Document): HTMLElement | undefined {
   return generic
 }
 
+/** ChatGPT can display a hard conversation limit as a plain page banner.
+ * The message transcript is never an application-error source.
+ */
+export function readConversationLengthBanner(doc: Document): string | undefined {
+  const roots = Array.from(doc.querySelectorAll<HTMLElement>('main, [role="main"]'))
+  const hardLimit = /(?:你已达到此对话的长度上限|你已達到此對話的長度上限|已达到此会话的长度上限|已達到此會話的長度上限|(?:you(?:'ve| have)? reached|reached) the (?:maximum )?length (?:limit )?for this conversation)/i
+  const transcript = '[data-turn-key], [data-message-author-role], [data-turn="user"], [data-turn="assistant"], [data-testid*="conversation-turn"], article, [role="article"]'
+  for (const root of roots) {
+    for (const leaf of Array.from(root.querySelectorAll<HTMLElement>('p, span, div'))) {
+      // Never classify a quoted message or a wrapper containing a whole chat.
+      if (leaf.children.length > 0) continue
+      const value = (leaf.innerText || leaf.textContent || '').trim()
+      if (!value || value.length > 200 || !hardLimit.test(value)) continue
+      let excluded = false
+      for (let node: HTMLElement | null = leaf; node; node = node.parentElement) {
+        if (node.matches(transcript) || node.hasAttribute('hidden') ||
+            node.getAttribute('aria-hidden') === 'true') {
+          excluded = true
+          break
+        }
+        if (node === root) break
+      }
+      if (excluded) continue
+      if (typeof leaf.getClientRects === 'function' &&
+          leaf.getClientRects().length === 0) continue
+      return value
+    }
+  }
+  return undefined
+}
+
 export function readVisibleErrors(doc: Document): string[] {
   const visible = Array.from(doc.querySelectorAll<HTMLElement>(
     '[role="alert"], [data-testid*="toast"]'
@@ -272,7 +303,9 @@ export function readVisibleErrors(doc: Document): string[] {
       ancestor = ancestor.parentElement
     }
     return true
-  }).map(readText).filter((value) => value.length > 0 && value.length <= 280)))
+  }).map(readText).filter((value) => value.length > 0 && value.length <= 280).concat(
+    readConversationLengthBanner(doc) ?? []
+  )))
 }
 
 export function readGenerationState(doc: Document): 'generating' | 'idle' | 'unknown' {
