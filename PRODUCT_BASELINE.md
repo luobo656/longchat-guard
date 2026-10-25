@@ -1,5 +1,9 @@
 # LongChat Guard 2.1.1 产品基线
 
+## 4.3.1 本地实验版版本号与可识别性
+
+经用户确认，4.3.1 实验修复不能继续伪装成 Manifest 4.3.0。将真实扩展 manifest.version、npm package.json、package-lock.json（顶层及根包）和版本验收测试统一为 `4.3.1`，以便用户在 Edge/Chrome 扩展管理页面直接核对是否重新加载新版。保留 4.3.0 已提交商店版本、历史网页/商店文案和冻结标签，不把 4.3.1 错称已上架。此前已定稿的极简前端不恢复右上角版本号或开发诊断菜单。升级过程不更换扩展 ID/源域、权限、本地匿名盐、schema/measurement/parser 契约和校准状态。
+
 ## 4.3.1 后续修复：跨版本持久缓存和失败参考保护（实验）
 
 只升级 Manifest/前端外观、或调整与测量无关的功能，不得使已经认证的历史失败参考 R、已经完整读取的同口径会话 L 失效或要求重新扫描。插件版本号、运行时实例与测量契约分开；真正兼容性门槛仍是已保存的 parserSchemaVersion + measurementSchemaVersion、当前 generation、coverage complete、parser healthy、sequence reliable。modelHint 不参与兼容性；无法证明同口径时必须继续保守未知，不能自动重用旧量化值、冒充官方 Token 或自动提高质量。
