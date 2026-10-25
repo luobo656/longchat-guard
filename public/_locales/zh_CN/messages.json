@@ -64,6 +64,9 @@
   "riskAdviceOrganize": {
     "message": "已接近风险区，建议准备续接新会话。"
   },
+  "visibleLimitHelp": {
+    "message": "ChatGPT 已明确提示当前会话达到长度上限。请在新会话继续；此提示来自网页本身，不代表插件测得官方 Token 额度。"
+  },
   "riskAdviceHigh": {
     "message": "已进入高风险区，建议尽快续接新会话。"
   },
