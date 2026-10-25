@@ -535,7 +535,7 @@ function visibleStatus(model: GuardUiModel): { label: string } {
 
 function statusDescription(model: GuardUiModel): string {
   if (model.visibleLengthLimit) {
-    return t('visibleLimitHelp', 'ChatGPT reports that this conversation has reached its length limit. Continue in a new chat. This notice is not a measured official token quota.')
+    return t('visibleLimitHelp', 'ChatGPT reports that this conversation has reached its length limit. Continue in a new chat. The notice comes directly from ChatGPT, not a capacity estimate.')
   }
   if (model.calibrationState === 'calibrating') {
     return t(
