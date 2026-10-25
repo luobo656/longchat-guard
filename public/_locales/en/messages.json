@@ -64,6 +64,9 @@
   "riskAdviceOrganize": {
     "message": "This chat is nearing the risk range. Prepare to continue in a new chat."
   },
+  "visibleLimitHelp": {
+    "message": "ChatGPT reports that this conversation has reached its length limit. Continue in a new chat. This is not a measured official token quota."
+  },
   "riskAdviceHigh": {
     "message": "This chat is in the high-risk range. Continue in a new chat soon."
   },
