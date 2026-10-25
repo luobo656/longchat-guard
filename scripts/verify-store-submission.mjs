@@ -11,11 +11,11 @@ const expected = {
 }
 const manifest = json('dist/manifest.json')
 // v4.3.0 store listings and site version are frozen historical release
-// material. v4.3.1 is an UNPUBLISHED local test build; validate its actual
+// material. v4.3.1/v4.3.2 are UNPUBLISHED local test builds; validate actual
 // manifest/package lockstep without rewriting the submitted store copy.
 const pkg = json('package.json')
 const lock = json('package-lock.json')
-if (!['4.3.0', '4.3.1'].includes(manifest.version) ||
+if (!['4.3.0', '4.3.1', '4.3.2'].includes(manifest.version) ||
     pkg.version !== manifest.version ||
     lock.version !== manifest.version ||
     lock.packages?.['']?.version !== manifest.version) fail('version_mismatch')

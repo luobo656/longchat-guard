@@ -57,7 +57,7 @@ import {
   resetConversationSession,
   resolveConversationSession,
   resolveObservedConversationKey,
-  resolveSessionConversationId,
+  resolveLiveConversationIdentity,
   shouldArmNewChatFromComposerActivity
 } from './conversation-session'
 import {
@@ -505,19 +505,30 @@ export async function startGuard(): Promise<void> {
         'none'
       )
       const environmentSignature = readEnvironmentSignature(document)
+      const initialConversationSession = conversationSession
       const previousSessionConversationId =
-        conversationSession.activeConversationId
+        initialConversationSession.activeConversationId
       const routeConversationId =
         parseConversationIdFromUrl(location.href)
       const observedConversationId =
         resolveConversationId(preliminarySnapshot)
+      const liveIdentity = resolveLiveConversationIdentity(
+        initialConversationSession,
+        {
+          routeConversationId,
+          observedConversationId,
+          now: Date.now()
+        }
+      )
+      if (liveIdentity.ignoreUntrustedHints) {
+        // A new Project chat can briefly show the old chat's canonical/DOM
+        // identity before its real /c route exists. Such a hint cannot be
+        // passed on to the adapter or persisted as a new conversation.
+        preliminarySnapshot.conversationIdHints = []
+      }
       const resolvedConversationId = isBlankConversationRoute(location.href)
         ? undefined
-        : resolveSessionConversationId({
-            activeConversationId: previousSessionConversationId,
-            routeConversationId,
-            observedConversationId
-          })
+        : liveIdentity.conversationId
       const previousSessionConversationKey =
         previousSessionConversationId
           ? await persistedConversationKey(
@@ -560,7 +571,9 @@ export async function startGuard(): Promise<void> {
         (!resolvedConversationId && preliminarySnapshot.messages.length === 0)
       const lookupConversationId =
         resolvedConversationId ??
-        conversationSession.activeConversationId
+        (liveIdentity.ignoreUntrustedHints
+          ? undefined
+          : initialConversationSession.activeConversationId)
       const knownConversationKey = lookupConversationId
         ? await persistedConversationKey(
             `chatgpt:${lookupConversationId}`
@@ -616,13 +629,20 @@ export async function startGuard(): Promise<void> {
         branchPrefixWitness.reset()
       }
 
-      if (!routeStillCurrent()) return
+      if (!routeStillCurrent() ||
+          conversationSession !== initialConversationSession) {
+        // A composer/new-chat event may have started while awaited DOM
+        // hashes were computed; replay with the newer birth evidence.
+        window.setTimeout(() => scheduleRun?.(), 0)
+        return
+      }
       const nowForSession = Date.now()
       const sessionResolution = resolveConversationSession(
-        conversationSession,
+        initialConversationSession,
         {
           conversationId: resolvedConversationId,
           isBlankSurface: blankConversationSurface,
+          ignoreUntrustedActiveId: liveIdentity.ignoreUntrustedHints,
           messageCount: preliminarySnapshot.messages.length,
           hasUserMessage: preliminarySnapshot.messages.some(
             (message) => message.role === 'user'
@@ -635,12 +655,8 @@ export async function startGuard(): Promise<void> {
           now: nowForSession
         }
       )
-      conversationSession = sessionResolution.state
       preliminarySnapshot.coverageEvidence =
         sessionResolution.coverageEvidence
-      if (sessionResolution.consumedBridgedStart) {
-        clearNewChatStartSessionEvidence()
-      }
 
       const adapterResult = analyzePageSnapshot(preliminarySnapshot)
       const parserCanary = parserCanaryPasses(
@@ -656,6 +672,18 @@ export async function startGuard(): Promise<void> {
         ? await persistedConversationKey(rawObservedKey)
         : undefined
 
+      // Do not consume first-send/blank-surface provenance for an obsolete
+      // route, nor overwrite a newer composer/navigation event with an
+      // awaited older observation. Commit the session and bridge atomically.
+      if (!routeStillCurrent() ||
+          conversationSession !== initialConversationSession) {
+        window.setTimeout(() => scheduleRun?.(), 0)
+        return
+      }
+      conversationSession = sessionResolution.state
+      if (sessionResolution.consumedBridgedStart) {
+        clearNewChatStartSessionEvidence()
+      }
 
       if (
         !conversationKey ||

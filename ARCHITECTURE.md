@@ -1,5 +1,12 @@
 # LongChat Guard 2.1.1 架构基线
 
+## 4.3.2 项目新对话实时监控：起点候选不得在 SPA 过渡期静默丢失
+
+- `resolveConversationSession` 必须将从真实空白路由/创建操作观察的 `blankSurfaceObserved` 保持到有可靠 ID 与首个用户消息完成绑定；临时中间 route 尚没有会话 ID、初始渲染助手/加载片段先出现，不得清空出生证据。旧会话直接打开、切换或分支不会获得该标记。
+- `resolveSessionConversationId` 对明确处于 **从头新建、尚未认证真实会话 ID** 的项目中间路径优先等待可信 `/c/<id>`；该阶段不能将旧 canonical/DOM hint 直接绑定为当前新 ID。直接 `/c` 路由是更高优先级身份，已绑定会话 ID 的延续继续按现有证据处理。
+- 禁止通过无证据短聊天长度、助手刚回复、消息数量小来推定新会话完整；观察首个真实 user 轮次后才允许现有 SequenceReconciler 正常建立完整账本，且过渡中的不确定状态仍明确显示未知。
+- 失败先行的跨状态测试：空白项目→没有 ID 的中间路径→分配 `/c`→首条 user→assistant→后续轮次；包括带旧 canonical 的中间页面、仅有 assistant/loading 片段、直接旧 `/c` 历史页、分支与路由切换负例。不能放宽永久缓存或测量 schema 门禁。
+
 ## 4.3.1 跨升级无损缓存约束（实验）
 
 - `storage.compactGeneration` 保留全部 strong/conservative 已确认失败样本，在剩余空间的固定数量内保留近期成功/暂定样本；禁止常规 safe-only 成功聊天冲掉历史 R。当前代际、环境漂移及保守样本质量规则不变。

@@ -16,6 +16,7 @@ export interface ConversationSessionObservation {
   sameConversationEvidence?: boolean | undefined
   verifiedInheritedPrefix?: boolean | undefined
   bridgedNewChatStartedAt?: number | undefined
+  ignoreUntrustedActiveId?: boolean | undefined
   now: number
 }
 
@@ -83,6 +84,47 @@ export function resolveSessionConversationId(input: {
   return input.observedConversationId
 }
 
+/**
+ * A fresh Project chat can traverse a non-/c URL while its DOM still carries
+ * an old canonical or conversation-id hint. Never spend our verified blank
+ * composer birth on that unrelated identity; the next real /c route is the
+ * authoritative ID. This returns both the ID and a directive to remove
+ * untrusted hints from the matching PageAdapter snapshot.
+ */
+export function resolveLiveConversationIdentity(
+  state: ConversationSessionState,
+  input: {
+    routeConversationId?: string | undefined
+    observedConversationId?: string | undefined
+    now: number
+  }
+): { conversationId?: string; ignoreUntrustedHints: boolean } {
+  const recentBirth = recentTimestamp(
+    state.pendingNewChatStartedAt,
+    input.now
+  ) !== undefined
+  const awaitingNewChatId = (
+    state.observedFromStartConversationId === undefined &&
+    (state.blankSurfaceObserved === true || recentBirth)
+  )
+  const ignoreUntrustedHints = (
+    awaitingNewChatId && !input.routeConversationId
+  )
+  const conversationId = resolveSessionConversationId({
+    ...(ignoreUntrustedHints
+      ? {}
+      : {
+          activeConversationId: state.activeConversationId,
+          observedConversationId: input.observedConversationId
+        }),
+    routeConversationId: input.routeConversationId
+  })
+  return {
+    ...(conversationId ? { conversationId } : {}),
+    ignoreUntrustedHints
+  }
+}
+
 /** Coverage evidence and the persisted ledger must use the SAME identity.
  * Once a session is bound, a stale canonical DOM hint cannot override it.
  */
@@ -139,14 +181,23 @@ export function resolveConversationSession(
     }
   }
 
-  const conversationId =
-    observation.conversationId ?? state.activeConversationId
+  const conversationId = observation.conversationId ??
+    (observation.ignoreUntrustedActiveId
+      ? undefined
+      : state.activeConversationId)
 
   if (!conversationId) {
+    // A blank Project composer remains a witnessed new-chat origin while
+    // the SPA visits intermediate routes without a trustworthy /c ID.
     return {
-      state: pendingNewChatStartedAt !== undefined
-        ? { pendingNewChatStartedAt }
-        : {},
+      state: {
+        ...(state.blankSurfaceObserved === true
+          ? { blankSurfaceObserved: true }
+          : {}),
+        ...(pendingNewChatStartedAt !== undefined
+          ? { pendingNewChatStartedAt }
+          : {})
+      },
       coverageEvidence: 'none',
       consumedBridgedStart: false
     }
@@ -173,10 +224,12 @@ export function resolveConversationSession(
     canBindNewChatStart ||
     observation.verifiedInheritedPrefix === true
 
+  // A loading or assistant fragment can render before the first USER root.
+  // Its presence cannot consume a known first-send origin.
+  const keepBirthCandidate =
+    !canBindNewChatStart && !observation.hasUserMessage
   const keepPendingStart =
-    !canBindNewChatStart &&
-    pendingNewChatStartedAt !== undefined &&
-    observation.messageCount === 0
+    keepBirthCandidate && pendingNewChatStartedAt !== undefined
 
   const next: ConversationSessionState = {
     activeConversationId: conversationId,
@@ -185,6 +238,9 @@ export function resolveConversationSession(
       : {}),
     ...(keepPendingStart
       ? { pendingNewChatStartedAt }
+      : {}),
+    ...(keepBirthCandidate && state.blankSurfaceObserved === true
+      ? { blankSurfaceObserved: true }
       : {})
   }
 

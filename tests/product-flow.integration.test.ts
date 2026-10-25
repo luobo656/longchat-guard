@@ -9,6 +9,12 @@ import {
 } from '../src/core/product-state'
 import type { LocalStorageArea } from '../src/core/storage'
 import { shouldRenderRiskTrack } from '../src/content/ui'
+import { analyzePageSnapshot } from '../src/core/page-adapter'
+import {
+  createConversationSessionState,
+  resolveConversationSession,
+  resolveLiveConversationIdentity
+} from '../src/content/conversation-session'
 
 class MemoryStorage implements LocalStorageArea {
   private readonly values = new Map<string, unknown>()
@@ -118,6 +124,171 @@ async function calibrateStrong(
 }
 
 describe('product-flow integration matrix', () => {
+  it('certifies a new Project chat from witnessed blank origin through two complete question-answer rounds', async () => {
+    const coordinator = new StorageMutationCoordinator(new MemoryStorage())
+    const calibrated = await calibrateStrong(coordinator)
+    const generationId = calibrated.state.settings.generationId
+    const blank = resolveConversationSession(createConversationSessionState(), {
+      isBlankSurface: true,
+      messageCount: 0,
+      hasUserMessage: false,
+      persistedAuthoritative: false,
+      now: 1000
+    })
+
+    // The Project SPA shows a stale canonical of a previous conversation,
+    // and a nonblank intermediary URL before the actual /c is assigned.
+    const interimIdentity = resolveLiveConversationIdentity(blank.state, {
+      observedConversationId: 'stale-prior-chat',
+      now: 1050
+    })
+    expect(interimIdentity.ignoreUntrustedHints).toBe(true)
+    expect(interimIdentity.conversationId).toBeUndefined()
+    const interim = resolveConversationSession(blank.state, {
+      isBlankSurface: false,
+      messageCount: 0,
+      hasUserMessage: false,
+      persistedAuthoritative: false,
+      now: 1100
+    })
+    expect(interim.state.blankSurfaceObserved).toBe(true)
+
+    const interimSnapshot = analyzePageSnapshot({
+      url: 'https://chatgpt.com/g/g-p-project/transient',
+      conversationIdHints: interimIdentity.ignoreUntrustedHints
+        ? []
+        : ['stale-prior-chat'],
+      messages: [],
+      visibleErrors: [],
+      coverageEvidence: interim.coverageEvidence,
+      generationState: 'unknown',
+      tailEvidence: 'unknown'
+    })
+    expect(interimSnapshot.conversationKey).toBeUndefined()
+    expect(interimSnapshot.coverageState).toBe('unknown')
+
+    const current = resolveLiveConversationIdentity(interim.state, {
+      routeConversationId: 'new-project-chat',
+      observedConversationId: 'stale-prior-chat',
+      now: 1200
+    })
+    expect(current.conversationId).toBe('new-project-chat')
+    const first = resolveConversationSession(interim.state, {
+      conversationId: current.conversationId,
+      isBlankSurface: false,
+      messageCount: 1,
+      hasUserMessage: true,
+      persistedAuthoritative: false,
+      now: 1200
+    })
+    const snap = analyzePageSnapshot({
+      url: 'https://chatgpt.com/g/g-p-project/c/new-project-chat',
+      conversationIdHints: ['stale-prior-chat'],
+      messages: [{
+        role: 'user',
+        text: 'First real Project prompt',
+        ordinalHint: 0,
+        semanticScore: 1,
+        hasCode: false,
+        attachmentCount: 0
+      }],
+      visibleErrors: [],
+      coverageEvidence: first.coverageEvidence,
+      generationState: 'unknown',
+      tailEvidence: 'unknown'
+    })
+    expect(snap.health).toBe('healthy')
+    expect(snap.coverageState).toBe('complete')
+
+    const acceptedFirst = await coordinator.observeWindow({
+      conversationKey: snap.conversationKey!,
+      coverageState: snap.coverageState,
+      parserHealth: snap.health,
+      tailEvidence: 'unknown',
+      observedMessages: [observed('first-real-user', 'user', 18, 1300)],
+      composerTokenEstimate: 0,
+      environmentSignature: env,
+      uncertaintySources: [],
+      expectedGenerationId: generationId,
+      baseRevision: 0,
+      observationEpoch: 1300,
+      observedAt: 1300
+    })
+    expect(acceptedFirst.snapshot?.coverageState).toBe('complete')
+    expect(acceptedFirst.snapshot?.sequenceReliability).toBe('reliable')
+    expect(acceptedFirst.risk?.state).toBe('normal')
+
+    const assistant = resolveConversationSession(first.state, {
+      conversationId: 'new-project-chat',
+      isBlankSurface: false,
+      messageCount: 2,
+      hasUserMessage: true,
+      persistedAuthoritative: false,
+      now: 1500
+    })
+    expect(assistant.coverageEvidence).toBe('observed_from_start')
+    const acceptedReply = await coordinator.observeWindow({
+      conversationKey: snap.conversationKey!,
+      coverageState: 'complete',
+      parserHealth: 'healthy',
+      tailEvidence: 'at_tail',
+      observedMessages: [
+        observed('first-real-user', 'user', 18, 1600),
+        observed('first-real-assistant', 'assistant', 170, 1600)
+      ],
+      composerTokenEstimate: 0,
+      environmentSignature: env,
+      uncertaintySources: [],
+      expectedGenerationId: generationId,
+      baseRevision: acceptedFirst.snapshot!.ledgerRevision,
+      observationEpoch: 1600,
+      observedAt: 1600
+    })
+    expect(acceptedReply.snapshot?.currentEstimatedLoad).toBe(188)
+    expect(acceptedReply.snapshot?.coverageState).toBe('complete')
+    expect(acceptedReply.risk?.state).toBe('normal')
+    const secondRound = resolveConversationSession(assistant.state, {
+      conversationId: 'new-project-chat',
+      isBlankSurface: false,
+      messageCount: 4,
+      hasUserMessage: true,
+      persistedAuthoritative: false,
+      now: 1750
+    })
+    expect(secondRound.coverageEvidence).toBe('observed_from_start')
+    const acceptedSecondRound = await coordinator.observeWindow({
+      conversationKey: snap.conversationKey!,
+      coverageState: 'complete',
+      parserHealth: 'healthy',
+      tailEvidence: 'at_tail',
+      observedMessages: [
+        observed('first-real-user', 'user', 18, 1900),
+        observed('first-real-assistant', 'assistant', 170, 1900),
+        observed('second-real-user', 'user', 25, 1900),
+        observed('second-real-assistant', 'assistant', 65, 1900)
+      ],
+      composerTokenEstimate: 0,
+      environmentSignature: env,
+      uncertaintySources: [],
+      expectedGenerationId: generationId,
+      baseRevision: acceptedReply.snapshot!.ledgerRevision,
+      observationEpoch: 1900,
+      observedAt: 1900
+    })
+    expect(acceptedSecondRound.snapshot?.currentEstimatedLoad).toBe(278)
+    expect(acceptedSecondRound.snapshot?.sequenceReliability).toBe('reliable')
+    expect(acceptedSecondRound.risk?.state).toBe('normal')
+    const persisted = await coordinator.loadState()
+    const staleKey = await anonymizeConversationKey(
+      'chatgpt:stale-prior-chat', persisted.installSalt
+    )
+    const realKey = await anonymizeConversationKey(
+      'chatgpt:new-project-chat', persisted.installSalt
+    )
+    expect(persisted.ledgers[staleKey]).toBeUndefined()
+    expect(persisted.ledgers[realKey]?.currentEstimatedLoad).toBe(278)
+  })
+
   it('first run and no calibration stay unknown with no full risk track', async () => {
     const coordinator = new StorageMutationCoordinator(
       new MemoryStorage()

@@ -4,8 +4,8 @@ import packageInfo from '../package.json'
 import packageLock from '../package-lock.json'
 
 describe('release manifest', () => {
-  it('labels the experimental 4.3.1 build correctly without changing its extension permissions', () => {
-    expect(manifest.version).toBe('4.3.1')
+  it('labels the experimental 4.3.2 Project new-chat repair correctly without changing extension permissions', () => {
+    expect(manifest.version).toBe('4.3.2')
     expect(packageInfo.version).toBe(manifest.version)
     expect(packageLock.version).toBe(manifest.version)
     expect(packageLock.packages[''].version).toBe(manifest.version)

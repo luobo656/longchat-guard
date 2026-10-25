@@ -6,6 +6,7 @@ import {
   resetConversationSession,
   resolveConversationSession,
   resolveObservedConversationKey,
+  resolveLiveConversationIdentity,
   resolveSessionConversationId,
   shouldArmNewChatFromComposerActivity
 } from '../src/content/conversation-session'
@@ -55,6 +56,55 @@ describe('conversation identity source precedence', () => {
     })).toBe('chatgpt:first-observed-id')
   })
 
+  it('does not let a stale canonical/sidebar hint consume a witnessed new Project composer birth', () => {
+    const born = markNewChatStarted(createConversationSessionState(), 10_000)
+    const duringProjectTransition = resolveLiveConversationIdentity(born, {
+      observedConversationId: 'stale-previous-project-chat',
+      now: 10_500
+    })
+    expect(duringProjectTransition.ignoreUntrustedHints).toBe(true)
+    expect(duringProjectTransition.conversationId).toBeUndefined()
+
+    const realAssignedRoute = resolveLiveConversationIdentity(born, {
+      routeConversationId: 'fresh-project-chat',
+      observedConversationId: 'stale-previous-project-chat',
+      now: 10_800
+    })
+    expect(realAssignedRoute.ignoreUntrustedHints).toBe(false)
+    expect(realAssignedRoute.conversationId).toBe('fresh-project-chat')
+  })
+
+  it('continues preferring an authenticated active chat and never invents birth for directly opened old history', () => {
+    const ongoing = resolveLiveConversationIdentity({
+      activeConversationId: 'bound-existing',
+      observedFromStartConversationId: 'bound-existing'
+    }, {
+      observedConversationId: 'stale-other',
+      now: 20_000
+    })
+    expect(ongoing.ignoreUntrustedHints).toBe(false)
+    expect(ongoing.conversationId).toBe('bound-existing')
+
+    const reopened = resolveLiveConversationIdentity(createConversationSessionState(), {
+      routeConversationId: 'real-old-chat',
+      observedConversationId: 'left-panel-stale',
+      now: 20_500
+    })
+    expect(reopened.conversationId).toBe('real-old-chat')
+    expect(reopened.ignoreUntrustedHints).toBe(false)
+  })
+
+  it('does not promote stale same-tab birth timestamps past their evidence window', () => {
+    const expired = resolveLiveConversationIdentity({
+      pendingNewChatStartedAt: 10_000
+    }, {
+      observedConversationId: 'ordinary-history-hint',
+      now: 50_000
+    })
+    expect(expired.ignoreUntrustedHints).toBe(false)
+    expect(expired.conversationId).toBe('ordinary-history-hint')
+  })
+
   it('allows an explicit /c route to replace the previous session identity', () => {
     expect(
       resolveSessionConversationId({
@@ -96,6 +146,140 @@ describe('new-chat composer activity', () => {
 })
 
 describe('conversation session lifecycle', () => {
+  it('preserves a witnessed blank Project birth through a nonblank SPA transition without an ID', () => {
+    const first = resolveConversationSession(
+      createConversationSessionState(),
+      {
+        isBlankSurface: true,
+        messageCount: 0,
+        hasUserMessage: false,
+        persistedAuthoritative: false,
+        now: 1_000
+      }
+    )
+    expect(first.state.blankSurfaceObserved).toBe(true)
+
+    // Project UI moves away from /g/.../project before /c/<id> becomes
+    // available. The intermediate page has no trusted conversation ID.
+    const transitioning = resolveConversationSession(first.state, {
+      isBlankSurface: false,
+      messageCount: 0,
+      hasUserMessage: false,
+      persistedAuthoritative: false,
+      now: 1_500
+    })
+    expect(transitioning.coverageEvidence).toBe('none')
+    expect(transitioning.state.blankSurfaceObserved).toBe(true)
+
+    const firstUser = resolveConversationSession(transitioning.state, {
+      conversationId: 'real-project-new-chat',
+      isBlankSurface: false,
+      messageCount: 1,
+      hasUserMessage: true,
+      persistedAuthoritative: false,
+      now: 2_000
+    })
+    expect(firstUser.coverageEvidence).toBe('observed_from_start')
+    expect(firstUser.activeConversationId).toBe('real-project-new-chat')
+
+    const assistant = resolveConversationSession(firstUser.state, {
+      conversationId: 'real-project-new-chat',
+      isBlankSurface: false,
+      messageCount: 2,
+      hasUserMessage: true,
+      persistedAuthoritative: false,
+      now: 2_300
+    })
+    expect(assistant.coverageEvidence).toBe('observed_from_start')
+  })
+
+  it('never consumes new-chat birth against a provisional ID when the real /c route is still missing', () => {
+    const started = markNewChatStarted(createConversationSessionState(), 10_000)
+    const provisional = resolveConversationSession(started, {
+      conversationId: 'provisional-hint',
+      isBlankSurface: false,
+      messageCount: 1,
+      hasUserMessage: false,
+      persistedAuthoritative: false,
+      now: 10_200
+    })
+    expect(provisional.state.blankSurfaceObserved).toBe(true)
+
+    // The first USER root appears while still on an untrusted transitional
+    // Project route. The earlier provisional active ID is not authoritative:
+    // wait for /c instead of certifying the first turn under the wrong key.
+    const noRealIdYet = resolveConversationSession(provisional.state, {
+      isBlankSurface: false,
+      messageCount: 2,
+      hasUserMessage: true,
+      ignoreUntrustedActiveId: true,
+      persistedAuthoritative: false,
+      now: 10_350
+    })
+    expect(noRealIdYet.coverageEvidence).toBe('none')
+    expect(noRealIdYet.activeConversationId).toBeUndefined()
+    expect(noRealIdYet.state.blankSurfaceObserved).toBe(true)
+    expect(noRealIdYet.state.pendingNewChatStartedAt).toBe(10_000)
+
+    const assigned = resolveConversationSession(noRealIdYet.state, {
+      conversationId: 'actual-project-conversation',
+      isBlankSurface: false,
+      messageCount: 2,
+      hasUserMessage: true,
+      persistedAuthoritative: false,
+      now: 10_500
+    })
+    expect(assigned.coverageEvidence).toBe('observed_from_start')
+    expect(assigned.activeConversationId).toBe('actual-project-conversation')
+  })
+
+  it('keeps a user-created Project birth when a provisional assistant/loading fragment appears before the first user root', () => {
+    const started = markNewChatStarted(createConversationSessionState(), 10_000)
+    const provisional = resolveConversationSession(started, {
+      conversationId: 'intermediate-route-id',
+      isBlankSurface: false,
+      messageCount: 1,
+      hasUserMessage: false,
+      persistedAuthoritative: false,
+      now: 10_500
+    })
+    expect(provisional.coverageEvidence).toBe('none')
+    expect(provisional.state.pendingNewChatStartedAt).toBe(10_000)
+    expect(provisional.state.observedFromStartConversationId).toBeUndefined()
+
+    const realChat = resolveConversationSession(provisional.state, {
+      conversationId: 'assigned-real-id',
+      isBlankSurface: false,
+      messageCount: 2,
+      hasUserMessage: true,
+      persistedAuthoritative: false,
+      now: 11_000
+    })
+    expect(realChat.coverageEvidence).toBe('observed_from_start')
+    expect(realChat.state.observedFromStartConversationId).toBe('assigned-real-id')
+  })
+
+  it('does not fabricate new-birth proof for direct existing project-history route load', () => {
+    const intermediate = resolveConversationSession(
+      createConversationSessionState(), {
+        isBlankSurface: false,
+        messageCount: 0,
+        hasUserMessage: false,
+        persistedAuthoritative: false,
+        now: 20_000
+      }
+    )
+    const loaded = resolveConversationSession(intermediate.state, {
+      conversationId: 'historical-project-chat',
+      isBlankSurface: false,
+      messageCount: 2,
+      hasUserMessage: true,
+      persistedAuthoritative: false,
+      now: 20_200
+    })
+    expect(loaded.coverageEvidence).toBe('none')
+  })
+
   it('binds an SPA-created chat from a blank surface even if the send control is not recognized', () => {
     const blank = resolveConversationSession(
       createConversationSessionState(),
