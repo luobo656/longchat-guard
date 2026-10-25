@@ -452,6 +452,13 @@ function compactLedger(
       : {}),
     role: message.role,
     tokenEstimate: message.tokenEstimate,
+    // The sequence reconciler uses bounded ordinal/role evidence to match
+    // a streaming assistant when ChatGPT replaces provisional DOM IDs.
+    // Dropping it during every save makes that safe fallback unreachable.
+    ...(Number.isSafeInteger(message.ordinalHint) &&
+      message.ordinalHint !== undefined && message.ordinalHint >= 0
+      ? { ordinalHint: message.ordinalHint }
+      : {}),
     observedAt: message.observedAt
   }))
 

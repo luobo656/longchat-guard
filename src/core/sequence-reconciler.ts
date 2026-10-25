@@ -200,6 +200,12 @@ function updateMatchedRecord(record: MessageRecord, observed: ObservedMessageRec
     lastObservedAt: observed.observedAt
   }
   if (observed.stableHintHash) updated.stableHintHash = observed.stableHintHash
+  // Backfill matching metadata on existing 4.3.0 ledgers that discarded it
+  // during persistence; no conversation text or new identifier is retained.
+  if (observed.ordinalHint !== undefined &&
+      Number.isSafeInteger(observed.ordinalHint) && observed.ordinalHint >= 0) {
+    updated.ordinalHint = observed.ordinalHint
+  }
   return updated
 }
 

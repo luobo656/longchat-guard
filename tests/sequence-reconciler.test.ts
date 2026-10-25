@@ -119,6 +119,43 @@ describe('sequence reconciler', () => {
     expect(result.messages[0]?.observedAt).toBe(1)
   })
 
+
+  it('restores missing ordinal matching evidence after observing a legacy 4.3.0 ledger', () => {
+    const old: MessageRecord[] = [
+      { fingerprint: 'stable:old-user', stableHintHash: 'old-user',
+        contentFingerprint: 'same-user', role: 'user', tokenEstimate: 7, observedAt: 1 },
+      { fingerprint: 'stable:old-assistant', stableHintHash: 'old-assistant',
+        contentFingerprint: 'partial', role: 'assistant', tokenEstimate: 13, observedAt: 1 }
+    ]
+    const bridge = reconcileSequence({
+      existingMessages: old,
+      activeFingerprints: old.map((m) => m.fingerprint),
+      observed: [
+        { stableHintHash: 'old-user', contentFingerprint: 'same-user',
+          role: 'user', tokenEstimate: 7, charCount: 24, observedAt: 2, ordinalHint: 0 },
+        { stableHintHash: 'old-assistant', contentFingerprint: 'partial',
+          role: 'assistant', tokenEstimate: 13, charCount: 28, observedAt: 2, ordinalHint: 1 }
+      ],
+      tailEvidence: 'unknown', coverageState: 'complete',
+      parserHealth: 'healthy', now: 2
+    })
+    expect(bridge.messages.map((m) => m.ordinalHint)).toEqual([0, 1])
+    const upgraded = reconcileSequence({
+      existingMessages: bridge.messages,
+      activeFingerprints: bridge.activeFingerprints,
+      observed: [
+        { stableHintHash: 'new-user', contentFingerprint: 'same-user',
+          role: 'user', tokenEstimate: 7, charCount: 24, observedAt: 3, ordinalHint: 0 },
+        { stableHintHash: 'new-assistant', contentFingerprint: 'complete answer',
+          role: 'assistant', tokenEstimate: 55, charCount: 54, observedAt: 3, ordinalHint: 1 }
+      ],
+      tailEvidence: 'unknown', coverageState: 'complete',
+      parserHealth: 'healthy', now: 3
+    })
+    expect(upgraded.reliability).toBe('reliable')
+    expect(load(upgraded.messages, upgraded.activeFingerprints)).toBe(62)
+  })
+
   it('keeps a streaming assistant reliable across renderer stable-hint changes when ordinal and role stay aligned', () => {
     const existing: MessageRecord[] = [
       {

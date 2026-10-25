@@ -79,6 +79,9 @@
   "statusCalibrating": {
     "message": "正在校準"
   },
+  "statusLengthLimitReached": {
+    "message": "已達對話長度上限"
+  },
   "statusUnknown": {
     "message": "暫無法判斷"
   },

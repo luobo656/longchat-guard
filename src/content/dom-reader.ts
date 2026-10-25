@@ -103,6 +103,21 @@ export function readMessages(doc: Document): PageMessageSnapshot[] {
 
   if (groupedRendererMessages.length === 0) return messages
   if (messages.length === 0) return groupedRendererMessages
+
+  // A single assistant turn can contain several markdown/author-role
+  // fragments. The grouped renderer already concatenates those into ONE
+  // response. More generic assistant nodes are not evidence of more turns;
+  // switching representations mid-stream would corrupt message identity.
+  const groupedUsers = groupedRendererMessages.filter((m) => m.role === 'user').length
+  const groupedAssistants = groupedRendererMessages.filter((m) => m.role === 'assistant').length
+  const genericUsers = messages.filter((m) => m.role === 'user').length
+  const genericAssistants = messages.filter((m) => m.role === 'assistant').length
+  if (groupedUsers > 0 && groupedAssistants > 0 &&
+      Math.min(groupedUsers, groupedAssistants) >=
+        Math.min(genericUsers, genericAssistants) &&
+      groupedUsers >= genericUsers) {
+    return groupedRendererMessages
+  }
   return messageRepresentationScore(messages) > messageRepresentationScore(groupedRendererMessages)
     ? messages
     : groupedRendererMessages

@@ -357,7 +357,10 @@ export class GuardUi {
     this.scanNoticeText.textContent = ''
   }
 
-  showUnavailable(calibrationState: CalibrationState = 'uncalibrated'): void {
+  showUnavailable(
+    calibrationState: CalibrationState = 'uncalibrated',
+    visibleLengthLimit = false
+  ): void {
     this.update({
       measurementState: 'unavailable',
       calibrationState,
@@ -368,6 +371,7 @@ export class GuardUi {
       growthReserveReady: false,
       muted: false,
       pendingFailureConfirmation: false,
+      visibleLengthLimit,
       uncertaintySources: []
     })
   }
@@ -504,7 +508,9 @@ export class GuardUi {
 }
 
 function visibleStatus(model: GuardUiModel): { label: string } {
-  if (model.visibleLengthLimit) return { label: t('riskHigh', 'High risk') }
+  if (model.visibleLengthLimit) {
+    return { label: t('statusLengthLimitReached', 'Conversation limit reached') }
+  }
   if (model.calibrationState === 'calibrating') {
     return { label: t('statusCalibrating', 'Calibrating') }
   }

@@ -79,6 +79,9 @@
   "statusCalibrating": {
     "message": "Calibrating"
   },
+  "statusLengthLimitReached": {
+    "message": "Conversation limit reached"
+  },
   "statusUnknown": {
     "message": "Unable to assess"
   },

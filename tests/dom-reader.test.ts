@@ -80,6 +80,26 @@ describe('chatgpt DOM reader', () => {
     ])
   })
 
+
+  it('keeps one grouped assistant turn despite multiple generic markdown fragments', () => {
+    const user = el('div', { 'data-message-author-role': 'user' }, [], 'hello')
+    const first = el('div', {
+      'data-message-author-role': 'assistant',
+      'data-markdown-text-style': 'assistant-message'
+    }, [], 'first paragraph')
+    const second = el('div', {
+      'data-message-author-role': 'assistant',
+      'data-markdown-text-style': 'assistant-message'
+    }, [], 'second paragraph')
+    const group = el('div', { 'data-turn-key': 'turn-one' }, [user, first, second])
+    const result = readMessages(fakeDocument([group]) as unknown as Document)
+
+    expect(result.map((m) => m.role)).toEqual(['user', 'assistant'])
+    expect(result[1]?.text.split(String.fromCharCode(10)).filter(Boolean))
+      .toEqual(['first paragraph', 'second paragraph'])
+    expect(result[1]?.stableHint).toBe('turn-key:turn-one:assistant')
+  })
+
   it('prefers the complete author-role representation when grouped renderer is temporarily incomplete', () => {
     const user = el(
       'div',
