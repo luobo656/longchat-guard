@@ -64,6 +64,9 @@
   "riskAdviceOrganize": {
     "message": "This chat is nearing the risk range. Prepare to continue in a new chat."
   },
+  "visibleLimitHelp": {
+    "message": "ChatGPT reports that this conversation has reached its length limit. Continue in a new chat. The message comes directly from ChatGPT, not from a capacity estimate."
+  },
   "riskAdviceHigh": {
     "message": "This chat is in the high-risk range. Continue in a new chat soon."
   },
@@ -75,6 +78,9 @@
   },
   "statusCalibrating": {
     "message": "Calibrating"
+  },
+  "statusLengthLimitReached": {
+    "message": "Conversation limit reached"
   },
   "statusUnknown": {
     "message": "Unable to assess"

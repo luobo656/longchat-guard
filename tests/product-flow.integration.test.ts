@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { StorageMutationCoordinator } from '../src/background/coordinator'
 import { summarizeGeneration } from '../src/core/calibration'
+import { anonymizeConversationKey } from '../src/core/fingerprinter'
 import {
   calibrationNeedsFreshGeneration,
   deriveCalibrationState,
@@ -266,6 +267,97 @@ describe('product-flow integration matrix', () => {
     expect(recovered.risk.state).toBe('normal')
     expect(afterSummary.failureReference).toEqual(beforeSummary.failureReference)
     expect(afterGeneration.samples).toEqual(beforeGeneration.samples)
+  })
+
+
+  it('restores a completed historical L and the same confirmed R after many chats and an extension restart', async () => {
+    const storage = new MemoryStorage()
+    const beforeRestart = new StorageMutationCoordinator(storage)
+    const calibrated = await calibrateStrong(beforeRestart)
+    const expectedReference = summarizeGeneration(calibrated.state.generations[0]!).failureReference
+
+    const original = await beforeRestart.commitMeasurementScan({
+      conversationKey: 'chatgpt:fully-read-before-upgrade',
+      expectedGenerationId: calibrated.state.settings.generationId,
+      expectedLedgerRevision: 0,
+      environmentSignature: env,
+      uncertaintySources: [],
+      observedMessages: [
+        observed('original-user', 'user', 250, 20),
+        observed('original-answer', 'assistant', 750, 20)
+      ],
+      observedAt: 20
+    })
+    expect(original.snapshot.currentEstimatedLoad).toBe(1000)
+
+    for (let i = 0; i < 23; i += 1) {
+      await beforeRestart.commitMeasurementScan({
+        conversationKey: `chatgpt:later-full-read-${i}`,
+        expectedGenerationId: calibrated.state.settings.generationId,
+        expectedLedgerRevision: 0,
+        environmentSignature: env,
+        uncertaintySources: [],
+        observedMessages: [
+          observed(`later-${i}-user`, 'user', 5_000 + i, 50 + i),
+          observed(`later-${i}-answer`, 'assistant', 500, 50 + i)
+        ],
+        observedAt: 50 + i
+      })
+    }
+
+    // A new Coordinator is the same as a newly started service worker after
+    // a same-extension-ID upgrade: it can only read durable browser storage.
+    const afterRestart = new StorageMutationCoordinator(storage)
+    const restored = await afterRestart.loadState()
+    const key = await anonymizeConversationKey(
+      'chatgpt:fully-read-before-upgrade', restored.installSalt
+    )
+    const ledger = restored.ledgers[key]!
+    const generation = restored.generations[0]!
+    expect(ledger).toBeDefined()
+    expect(ledger.currentEstimatedLoad).toBe(1000)
+    expect(ledger.coverageState).toBe('complete')
+    expect(deriveMeasurementState({ supported: true, ledger })).toBe('complete')
+    expect(summarizeGeneration(generation).failureReference).toEqual(expectedReference)
+    expect(deriveCalibrationState({
+      generation, currentEnvironment: envWithoutModel
+    })).toBe('calibrated')
+    expect(shouldRenderRiskTrack({
+      measurementState: 'complete',
+      calibrationState: 'calibrated',
+      riskState: 'normal',
+      environmentConfidence: 'verified',
+      referencePositionScore: 2,
+      trackAvailable: true,
+      growthReserveReady: false,
+      muted: false,
+      pendingFailureConfirmation: false,
+      uncertaintySources: []
+    })).toBe(true)
+
+    // A temporary weak post-upgrade DOM window may not replace the
+    // prior completed measurement or falsely require an expensive scan.
+    const weak = await afterRestart.observeWindow({
+      conversationKey: 'chatgpt:fully-read-before-upgrade',
+      coverageState: 'incomplete',
+      parserHealth: 'degraded',
+      tailEvidence: 'unknown',
+      observedMessages: [observed('unknown-window', 'user', 20, 100)],
+      composerTokenEstimate: 0,
+      environmentSignature: envWithoutModel,
+      uncertaintySources: [],
+      expectedGenerationId: restored.settings.generationId,
+      baseRevision: ledger.ledgerRevision,
+      observationEpoch: 100,
+      observedAt: 100
+    })
+    expect(weak.observationDisposition).toBe('retained_authoritative')
+    expect(weak.snapshot?.currentEstimatedLoad).toBe(1000)
+    expect(weak.snapshot?.ledgerRevision).toBe(ledger.ledgerRevision)
+    expect(weak.risk?.state).toBe('normal')
+    expect(deriveCalibrationState({
+      generation, currentEnvironment: previousParserEnv
+    })).toBe('stale')
   })
 
   it('attachment calibration is conservative, usable and still renders risk track', async () => {
