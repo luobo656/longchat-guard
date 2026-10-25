@@ -18,6 +18,8 @@ export interface GuardUiModel {
   growthReserveReady: boolean
   muted: boolean
   pendingFailureConfirmation: boolean
+  /** Visible, first-party ChatGPT hard-limit banner; independent of empirical R. */
+  visibleLengthLimit?: boolean
   uncertaintySources: UncertaintySource[]
 }
 
@@ -198,9 +200,9 @@ export class GuardUi {
     this.consentPanel.hidden = true
 
     const visibleState = visibleStatus(model)
-    this.root.dataset.risk = model.riskState
+    this.root.dataset.risk = model.visibleLengthLimit ? 'high' : model.riskState
     this.statusText.textContent = visibleState.label
-    this.statusDot.dataset.risk = model.riskState
+    this.statusDot.dataset.risk = model.visibleLengthLimit ? 'high' : model.riskState
 
     const renderTrack = shouldRenderRiskTrack(model)
     setText(this.shadow, 'card-caption', renderTrack
@@ -209,7 +211,7 @@ export class GuardUi {
     setText(this.shadow, 'card-status', visibleState.label)
 
     const riskCard = requireElement<HTMLElement>(this.shadow, '[data-role="trend"]')
-    riskCard.dataset.risk = model.riskState
+    riskCard.dataset.risk = model.visibleLengthLimit ? 'high' : model.riskState
     riskCard.dataset.trackAvailable = String(renderTrack)
 
     const riskTrack = requireElement<HTMLElement>(
@@ -355,7 +357,10 @@ export class GuardUi {
     this.scanNoticeText.textContent = ''
   }
 
-  showUnavailable(calibrationState: CalibrationState = 'uncalibrated'): void {
+  showUnavailable(
+    calibrationState: CalibrationState = 'uncalibrated',
+    visibleLengthLimit = false
+  ): void {
     this.update({
       measurementState: 'unavailable',
       calibrationState,
@@ -366,6 +371,7 @@ export class GuardUi {
       growthReserveReady: false,
       muted: false,
       pendingFailureConfirmation: false,
+      visibleLengthLimit,
       uncertaintySources: []
     })
   }
@@ -502,6 +508,9 @@ export class GuardUi {
 }
 
 function visibleStatus(model: GuardUiModel): { label: string } {
+  if (model.visibleLengthLimit) {
+    return { label: t('statusLengthLimitReached', 'Conversation limit reached') }
+  }
   if (model.calibrationState === 'calibrating') {
     return { label: t('statusCalibrating', 'Calibrating') }
   }
@@ -531,6 +540,9 @@ function visibleStatus(model: GuardUiModel): { label: string } {
 }
 
 function statusDescription(model: GuardUiModel): string {
+  if (model.visibleLengthLimit) {
+    return t('visibleLimitHelp', 'ChatGPT reports that this conversation has reached its length limit. Continue in a new chat. The notice comes directly from ChatGPT, not a capacity estimate.')
+  }
   if (model.calibrationState === 'calibrating') {
     return t(
       'statusCalibratingHelp',
@@ -766,6 +778,8 @@ export function activeRiskSegmentCount(score: number): number {
 }
 
 export function shouldRenderRiskTrack(model: GuardUiModel): boolean {
+  // A server-side limit notice is direct status, not an empirical percentage.
+  if (model.visibleLengthLimit) return false
   const calibrated =
     model.calibrationState === 'calibrated' ||
     model.calibrationState === 'calibrated_conservative'

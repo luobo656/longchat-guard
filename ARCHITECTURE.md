@@ -1,5 +1,28 @@
 # LongChat Guard 2.1.1 架构基线
 
+## 4.3.2 项目新对话实时监控：起点候选不得在 SPA 过渡期静默丢失
+
+- `resolveConversationSession` 必须将从真实空白路由/创建操作观察的 `blankSurfaceObserved` 保持到有可靠 ID 与首个用户消息完成绑定；临时中间 route 尚没有会话 ID、初始渲染助手/加载片段先出现，不得清空出生证据。旧会话直接打开、切换或分支不会获得该标记。
+- `resolveSessionConversationId` 对明确处于 **从头新建、尚未认证真实会话 ID** 的项目中间路径优先等待可信 `/c/<id>`；该阶段不能将旧 canonical/DOM hint 直接绑定为当前新 ID。直接 `/c` 路由是更高优先级身份，已绑定会话 ID 的延续继续按现有证据处理。
+- 禁止通过无证据短聊天长度、助手刚回复、消息数量小来推定新会话完整；观察首个真实 user 轮次后才允许现有 SequenceReconciler 正常建立完整账本，且过渡中的不确定状态仍明确显示未知。
+- 失败先行的跨状态测试：空白项目→没有 ID 的中间路径→分配 `/c`→首条 user→assistant→后续轮次；包括带旧 canonical 的中间页面、仅有 assistant/loading 片段、直接旧 `/c` 历史页、分支与路由切换负例。不能放宽永久缓存或测量 schema 门禁。
+
+## 4.3.1 跨升级无损缓存约束（实验）
+
+- `storage.compactGeneration` 保留全部 strong/conservative 已确认失败样本，在剩余空间的固定数量内保留近期成功/暂定样本；禁止常规 safe-only 成功聊天冲掉历史 R。当前代际、环境漂移及保守样本质量规则不变。
+- `storage.compactLedgers` 保持近期 12 条账本的较详细匿名消息锚点；对当前 generation 中 complete/healthy/reliable、带有效 parser/measurement signature 且具备真实活跃消息锚点的其它账本，改用极轻量冷档（末尾 8 条锚点 + retainedPrefixLoad + totalUnits + revision + quality + uncertainty + 环境签名），不以“最近 12 条”上限驱逐已认证会话。重复压缩保持数值幂等、消息正文始终不落盘。未认证/未匹配旧记录可以按近期上限清理，避免模糊状态长期增长。
+- 冷档回访时若当前 DOM 显示的前部消息早于保存的末尾 8 条锚点，SequenceReconciler 可以在 **at_tail 且完整匹配已保存的末尾有序锚点** 的条件下，忽略已经由 retainedPrefixLoad 代表的更早可见前缀，仅计算后续新增消息；其余无锚点/重排/未在尾部的情形保持不确定。决不把更早可见消息重复加入已知前缀负载。
+- 恢复时只在同一匿名 ID / 同一 generation / 相同 parser & measurement schema 且已认证的前提下使用旧 R 与 L；活跃新消息靠原 SequenceReconciler 追加并严格验证，证据不足就 fail closed。已丢失的数据不凭经验推断。未引入更多权限或新服务器。
+- 即使长期积累的历史记录最终达到浏览器 storage.local 配额，也不能无通知地删除 strong R 与认证完整 L。扩展应保留上一次成功保存的状态并按现有错误路径停止本次更新，后续额外容量迁移须独立设计和验证。
+
+## 4.3.1 未发布实验修复：消息连续性、统一身份和硬限制直观反馈
+
+- `readConversationLengthBanner` 只检测主会话区内真正可见的 ChatGPT 硬限制文案；排除聊天正文、隐藏元素，显式空白路由继续隔离旧 DOM。`GuardUiModel.visibleLengthLimit` 作为独立状态优先显示准确文案，隐藏经验刻度；它不自动记入校准，`showUnavailable` 的页面失效分支也能显示硬停止状态。
+- `dom-reader.readMessages` 使用配对且覆盖用户轮次的 `[data-turn-key]` 分组，保证多个 assistant markdown 片段仍计量为一条回复；当分组缺漏而 generic 拥有更完整的真实配对/用户轮次时可以回退到 generic。
+- `storage.compactLedger` 在现有有限匿名指纹记录中保留安全整型 `ordinalHint`；`sequence-reconciler.updateMatchedRecord` 对旧版丢失顺序字段的账本，在真实成功匹配时补齐，避免任意弱关系自动桥接。保持既有 R/L 口径、加载算法和强校准不变。
+- `resolveObservedConversationKey` 统一 `resolveConversationSession` 的 ID 和 `guard.observeWindow` 写入键；页面旧 canonical/DOM hint 不得将从头观察的证据绑定到其他 conversation。真正跨 ID 缺少可信证据时继续未知。
+- 验证从真实 Coordinator `saveState -> loadState -> reconcile` 路径测试，涵盖新会话从 user 到 assistant streaming/final、聊天 ID/renderer 改变、旧账本恢复、正文中引用触顶文案及负例。仍待用户在真实浏览器长会话和项目内新会话上测试。
+
 ## 4.2.22 CDP 滚动实验附录
 
 仅在人工触发的完整读取入口临时使用 `chrome.debugger`（实验版独立必选权限），background 独占当前前台 chatgpt.com 标签页，允许 `Input.dispatchMouseEvent(type=mouseWheel)` 而不得开放其他 CDP 命令；content 只发送边界校验后的坐标与滚动方向，检测页面位置和变化，不在预备阶段采集正文。离开标签、刷新/导航、取消、附加/输入错误都释放调试会话并 fail closed。4.2.21 既有 `storage` 单权限为稳定基线；CDP 实验权限不回写稳定版。预备工作成功后保留调用原 `scanConversationHistory()`，不修改任何读取、计量、基准或风险公式。
