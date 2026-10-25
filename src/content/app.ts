@@ -64,6 +64,7 @@ import {
   hasConversationMessageRoots,
   readComposerText,
   readVisibleErrors,
+  readConversationLengthBanner,
   readPageSnapshot
 } from './dom-reader'
 import {
@@ -236,6 +237,7 @@ export async function startGuard(): Promise<void> {
           calibrationIsUsable(calibrationState),
         growthReserveReady: summary.growthReserveReady,
         muted: control.muted ?? false,
+        visibleLengthLimit: Boolean(readConversationLengthBanner(document)),
         pendingFailureConfirmation:
           generation.pendingFailureConfirmations.some(
             (item) => item.conversationKey === conversationKey
@@ -946,6 +948,7 @@ export async function startGuard(): Promise<void> {
           growthReserveReady: summary.growthReserveReady,
           muted: effectiveControl.muted ?? false,
           pendingFailureConfirmation,
+          visibleLengthLimit: Boolean(readConversationLengthBanner(document)),
           uncertaintySources: ledger.uncertaintySources
         })
 
