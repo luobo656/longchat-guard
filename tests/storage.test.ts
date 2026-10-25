@@ -546,6 +546,229 @@ describe('chrome local storage persistence model', () => {
     expect(saved.messages[0]).not.toHaveProperty('attachmentCount')
   })
 
+
+  it('retains confirmed historical R after over 24 later safe-only chats and a same-contract restart', async () => {
+    const storage = new MemoryStorage()
+    const state = await loadState(storage)
+    const generation = state.generations[0]!
+    generation.environmentSignature = env
+    generation.samples = [
+      {
+        conversationKey: 'chatgpt:certified-strong',
+        generationId: generation.id,
+        empiricalFailureLoad: 60_000,
+        failureReferenceQuality: 'strong',
+        coverageState: 'complete',
+        parserHealth: 'healthy',
+        sequenceReliability: 'reliable',
+        uncertaintySources: [],
+        environmentSignature: env,
+        updatedAt: 1
+      },
+      {
+        conversationKey: 'chatgpt:certified-conservative',
+        generationId: generation.id,
+        empiricalFailureLoad: 55_000,
+        failureReferenceQuality: 'conservative',
+        coverageState: 'complete',
+        parserHealth: 'healthy',
+        sequenceReliability: 'reliable',
+        uncertaintySources: ['attachment'],
+        environmentSignature: env,
+        updatedAt: 2
+      },
+      ...Array.from({ length: 34 }, (_, i) => ({
+        conversationKey: `chatgpt:safe-only-${i}`,
+        generationId: generation.id,
+        highestConfirmedSafeLoad: 500 + i,
+        coverageState: 'complete' as const,
+        parserHealth: 'healthy' as const,
+        sequenceReliability: 'reliable' as const,
+        uncertaintySources: [],
+        environmentSignature: env,
+        updatedAt: 100 + i
+      }))
+    ]
+
+    await saveState(storage, state)
+    const upgraded = await loadState(storage)
+    const accepted = upgraded.generations[0]!
+    const failureKeys = await Promise.all(
+      ['chatgpt:certified-strong', 'chatgpt:certified-conservative']
+        .map((id) => anonymizeConversationKey(id, upgraded.installSalt))
+    )
+    expect(accepted.samples.filter((sample) =>
+      sample.empiricalFailureLoad !== undefined &&
+      sample.failureReferenceQuality !== 'provisional'
+    ).map((sample) => sample.conversationKey).sort())
+      .toEqual(failureKeys.sort())
+    expect(accepted.samples.filter((s) => s.empiricalFailureLoad === undefined))
+      .toHaveLength(24)
+    expect(accepted.environmentSignature).toEqual(env)
+    expect(deriveCalibrationState({
+      generation: accepted, currentEnvironment: env
+    })).toBe('calibrated')
+    expect(deriveCalibrationState({
+      generation: accepted,
+      currentEnvironment: { ...env, measurementSchemaVersion: 999 }
+    })).toBe('stale')
+    expect(upgraded.installSalt).toBe(state.installSalt)
+
+    const writesBeforeNoopUpgrade = storage.setCount
+    expect(await loadState(storage)).toEqual(upgraded)
+    expect(storage.setCount).toBe(writesBeforeNoopUpgrade)
+  })
+
+  it('keeps old certified full-read L snapshots beyond the recent 12 ledgers without rescanning', async () => {
+    const storage = new MemoryStorage()
+    const state = await loadState(storage)
+    for (let i = 0; i < 25; i += 1) {
+      const key = `chatgpt:certified-history-${i}`
+      const messages = Array.from({ length: 40 }, (_, index) => ({
+        fingerprint: `stable-${i}-${index}`,
+        contentFingerprint: `content-${i}-${index}`,
+        role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
+        tokenEstimate: 10,
+        ordinalHint: index,
+        observedAt: 1000 + i * 100 + index
+      }))
+      state.ledgers[key] = {
+        ...ledger({ key, revision: 1, epoch: 100 + i, load: 400 }),
+        generationId: state.settings.generationId,
+        messages,
+        activeFingerprints: messages.map((m) => m.fingerprint),
+        updatedAt: 100 + i
+      }
+    }
+    await saveState(storage, state)
+    const restored = await loadState(storage)
+    expect(Object.keys(restored.ledgers)).toHaveLength(25)
+
+    const oldestKey = await anonymizeConversationKey(
+      'chatgpt:certified-history-0', restored.installSalt
+    )
+    const newestKey = await anonymizeConversationKey(
+      'chatgpt:certified-history-24', restored.installSalt
+    )
+    const oldest = restored.ledgers[oldestKey]!
+    const newest = restored.ledgers[newestKey]!
+    expect(oldest.currentEstimatedLoad).toBe(400)
+    expect(oldest.messages).toHaveLength(8)
+    expect(oldest.activeFingerprints).toHaveLength(8)
+    expect(oldest.retainedPrefixLoad).toBe(320)
+    expect(newest.messages).toHaveLength(32)
+    expect(newest.retainedPrefixLoad).toBe(80)
+    expect(oldest.coverageState).toBe('complete')
+    expect(oldest.parserHealth).toBe('healthy')
+    expect(oldest.sequenceReliability).toBe('reliable')
+    expect(oldest.environmentSignature).toEqual(env)
+
+    const writesBeforeReload = storage.setCount
+    expect(await loadState(storage)).toEqual(restored)
+    expect(storage.setCount).toBe(writesBeforeReload)
+    expect(JSON.stringify(restored)).not.toContain('chatgpt:certified-history-0')
+  })
+
+  it('still discards old uncertified transient observations instead of treating them as complete caches', async () => {
+    const storage = new MemoryStorage()
+    const state = await loadState(storage)
+    for (let i = 0; i < 20; i += 1) {
+      const key = `chatgpt:partial-${i}`
+      state.ledgers[key] = {
+        ...ledger({ key, revision: 1, epoch: 50 + i, load: 10 }),
+        generationId: state.settings.generationId,
+        coverageState: 'incomplete',
+        updatedAt: 50 + i
+      }
+    }
+    await saveState(storage, state)
+    const normalized = await loadState(storage)
+    expect(Object.keys(normalized.ledgers)).toHaveLength(12)
+    const oldestKey = await anonymizeConversationKey(
+      'chatgpt:partial-0', normalized.installSalt
+    )
+    expect(normalized.ledgers[oldestKey]).toBeUndefined()
+  })
+
+
+
+  it('does not archive a legacy complete-looking ledger whose anchors cannot be authenticated', async () => {
+    const storage = new MemoryStorage()
+    const state = await loadState(storage)
+    state.ledgers['chatgpt:unverifiable'] = {
+      ...ledger({ key: 'chatgpt:unverifiable', revision: 1, epoch: 1, load: 100 }),
+      generationId: state.settings.generationId,
+      // An old schema may say complete but have no content fingerprint.
+      // A bare local label cannot establish the same message instance.
+      messages: [{
+        fingerprint: 'bare-anchor',
+        role: 'user',
+        tokenEstimate: 100,
+        observedAt: 1
+      }],
+      activeFingerprints: ['bare-anchor'],
+      updatedAt: 1
+    }
+    for (let i = 0; i < 13; i += 1) {
+      const key = `chatgpt:partial-new-${i}`
+      state.ledgers[key] = {
+        ...ledger({ key, revision: 1, epoch: 50 + i, load: 10 }),
+        generationId: state.settings.generationId,
+        coverageState: 'incomplete',
+        updatedAt: 50 + i
+      }
+    }
+    await saveState(storage, state)
+    const restored = await loadState(storage)
+    const unverified = await anonymizeConversationKey(
+      'chatgpt:unverifiable', restored.installSalt
+    )
+    expect(restored.ledgers[unverified]).toBeUndefined()
+    expect(Object.keys(restored.ledgers)).toHaveLength(12)
+  })
+
+  it('does not silently delete existing reference or certified L when browser local storage rejects a write', async () => {
+    const memory = new MemoryStorage()
+    const state = await loadState(memory)
+    state.generations[0]!.environmentSignature = env
+    state.generations[0]!.samples = [{
+      conversationKey: 'chatgpt:calibrated-before-quota',
+      generationId: state.settings.generationId,
+      empiricalFailureLoad: 70_000,
+      failureReferenceQuality: 'strong',
+      coverageState: 'complete',
+      parserHealth: 'healthy',
+      sequenceReliability: 'reliable',
+      uncertaintySources: [],
+      environmentSignature: env,
+      updatedAt: 1
+    }]
+    state.ledgers['chatgpt:complete-before-quota'] = {
+      ...ledger({ key: 'chatgpt:complete-before-quota', revision: 1, epoch: 2, load: 10_000 }),
+      generationId: state.settings.generationId
+    }
+    await saveState(memory, state)
+    const before = await readState(memory)
+    const deniedStorage: LocalStorageArea = {
+      get: (keys) => memory.get(keys),
+      set: async () => { throw new Error('QUOTA_BYTES') }
+    }
+    const extra = { ...before, ledgers: {
+      ...before.ledgers,
+      'chatgpt:attempted-new-entry': {
+        ...ledger({ key: 'chatgpt:attempted-new-entry', revision: 1, epoch: 3, load: 500 }),
+        generationId: state.settings.generationId
+      }
+    }}
+    await expect(saveState(deniedStorage, extra)).rejects.toThrow('QUOTA_BYTES')
+    const unchanged = await readState(memory)
+    expect(unchanged).toEqual(before)
+    expect(deriveCalibrationState({
+      generation: unchanged.generations[0]!,
+      currentEnvironment: env
+    })).toBe('calibrated')
+  })
+
   it('records affirmative privacy consent and keeps declined consent disabled', async () => {
     const storage = new MemoryStorage()
     const state = await loadState(storage)

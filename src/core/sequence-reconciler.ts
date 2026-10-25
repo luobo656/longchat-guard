@@ -60,10 +60,13 @@ export function reconcileSequence(input: ReconcileInput): ReconcileResult {
   }
 
   const anchoredTailStart = findTailAnchorStart(activeIds, matchedFingerprints)
-  if (input.tailEvidence === 'at_tail' && anchoredTailStart >= 0) {
+  if (input.tailEvidence === 'at_tail' && anchoredTailStart !== undefined) {
     const nextActive = [
-      ...activeIds.slice(0, anchoredTailStart),
-      ...matchedFingerprints
+      ...activeIds.slice(0, Math.max(0, anchoredTailStart)),
+      // A cold archive keeps only the final bounded anchors. The visible DOM
+      // may include older messages already counted in retainedPrefixLoad;
+      // never append those older visible items to the active sequence again.
+      ...matchedFingerprints.slice(Math.max(0, -anchoredTailStart))
     ]
     return finish(input, Array.from(messagesById.values()), nextActive, 'reliable')
   }
@@ -240,18 +243,33 @@ function longestPrefixPrefixOverlap(left: MessageRecord[], right: MessageRecord[
   return size
 }
 
-function findTailAnchorStart(activeIds: string[], visibleIds: string[]): number {
-  if (visibleIds.length === 0) return -1
+function findTailAnchorStart(
+  activeIds: string[],
+  visibleIds: string[]
+): number | undefined {
+  if (visibleIds.length === 0) return undefined
   const firstKnownIndex = visibleIds.findIndex((id) => activeIds.includes(id))
-  if (firstKnownIndex < 0) return -1
+  if (firstKnownIndex < 0) return undefined
   const activeStart = activeIds.indexOf(visibleIds[firstKnownIndex]!)
   for (let offset = firstKnownIndex; offset < visibleIds.length; offset += 1) {
     const visibleId = visibleIds[offset]
-    if (!visibleId) return -1
+    if (!visibleId) return undefined
     const activeId = activeIds[activeStart + offset - firstKnownIndex]
-    if (activeId && visibleId !== activeId && activeIds.includes(visibleId)) return -1
+    if (activeId && visibleId !== activeId && activeIds.includes(visibleId)) {
+      return undefined
+    }
   }
-  return activeStart - firstKnownIndex
+  const start = activeStart - firstKnownIndex
+  if (start < 0) {
+    // Visible prefix predates our archived tail anchors. Only bridge when
+    // EVERY cached tail anchor is visibly aligned in order. Anything less
+    // would silently reinterpret edited/unrelated history as an append.
+    const cachedStartInWindow = -start
+    if (!activeIds.every((id, index) =>
+      visibleIds[cachedStartInWindow + index] === id
+    )) return undefined
+  }
+  return start
 }
 
 function finish(

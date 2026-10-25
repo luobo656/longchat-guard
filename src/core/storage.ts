@@ -43,12 +43,15 @@ const STATE_KEY = 'conversationGuardState'
 const DEFAULT_GENERATION_ID = 'default-generation'
 export const CURRENT_SCHEMA_VERSION = 10
 export const REQUIRED_PRIVACY_CONSENT_VERSION = 1
-const MAX_PERSISTED_LEDGERS = 12
+// The recent detail cache is bounded, but certified complete history MUST NOT
+// be evicted simply because a user opens more than twelve conversations.
+const MAX_RECENT_DETAILED_LEDGERS = 12
 const MAX_EVIDENCE_SAMPLES = 24
 const MAX_GROWTH_SAMPLES = 32
 const MAX_COMPLETION_KEYS = 32
 const MAX_FAILURE_KEYS = 8
 const MAX_LEDGER_MESSAGE_RECORDS = 32
+const MAX_ARCHIVED_LEDGER_MESSAGE_RECORDS = 8
 const MAX_CONVERSATION_CONTROLS = 16
 
 export async function loadState(storage: LocalStorageArea): Promise<PersistedState> {
@@ -203,7 +206,7 @@ export async function normalizeState(raw: PersistedState): Promise<PersistedStat
     createInitialGeneration(generationId, now)
 
   const activeGeneration = compactGeneration(selectedGeneration)
-  const compactedLedgers = compactLedgers(ledgers)
+  const compactedLedgers = compactLedgers(ledgers, activeGeneration.id)
   const conversationControls = compactConversationControls(
     normalizeControls(raw.conversationControls ?? {}),
     compactedLedgers
@@ -392,28 +395,89 @@ function compactGeneration(
 ): CalibrationGeneration {
   return {
     ...generation,
-    samples: [...generation.samples]
-      .sort((a, b) => b.updatedAt - a.updatedAt)
-      .slice(0, MAX_EVIDENCE_SAMPLES),
+    // An old confirmed failure reference is the user's expensive empirical
+    // calibration. A stream of later safe-only conversations must not evict it.
+    // Only transient, provisional and successful evidence uses the LRU cap.
+    samples: [
+      ...generation.samples.filter(hasConfirmedFailureReference),
+      ...generation.samples
+        .filter((sample) => !hasConfirmedFailureReference(sample))
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, MAX_EVIDENCE_SAMPLES)
+    ].sort((a, b) => b.updatedAt - a.updatedAt),
     turnGrowthSamples: generation.turnGrowthSamples.slice(-MAX_GROWTH_SAMPLES),
     environmentConflictKeys: unique(generation.environmentConflictKeys).slice(-8),
     pendingFailureConfirmations: generation.pendingFailureConfirmations.slice(-4)
   }
 }
 
-function compactLedgers(
-  ledgers: Record<string, PersistedConversationLedger>
-): Record<string, PersistedConversationLedger> {
-  return Object.fromEntries(
-    Object.values(ledgers)
-      .sort((a, b) => b.updatedAt - a.updatedAt)
-      .slice(0, MAX_PERSISTED_LEDGERS)
-      .map((ledger) => [ledger.conversationKey, compactLedger(ledger)])
+function hasConfirmedFailureReference(sample: CalibrationEvidenceSample): boolean {
+  return (
+    sample.empiricalFailureLoad !== undefined &&
+    Number.isFinite(sample.empiricalFailureLoad) &&
+    (sample.failureReferenceQuality === 'strong' ||
+      sample.failureReferenceQuality === 'conservative')
   )
 }
 
+/** Only a previously certified, same-generation measurement may be archived
+ * as a reusable full-load snapshot. The current parser/metric match is still
+ * checked independently before the UI can display its empirical risk track.
+ */
+function isDurableCompleteLedger(
+  ledger: PersistedConversationLedger,
+  generationId: string
+): boolean {
+  if (
+    ledger.generationId !== generationId ||
+    ledger.coverageState !== 'complete' ||
+    ledger.parserHealth !== 'healthy' ||
+    ledger.sequenceReliability !== 'reliable' ||
+    !isEnvironmentSignature(ledger.environmentSignature) ||
+    !Number.isFinite(ledger.currentEstimatedLoad) ||
+    ledger.currentEstimatedLoad < 0
+  ) return false
+
+  const authenticatedIds = new Set(ledger.messages
+    .filter((message) =>
+      (message.role === 'user' || message.role === 'assistant') &&
+      typeof message.contentFingerprint === 'string' &&
+      message.contentFingerprint.length > 0 &&
+      Number.isFinite(message.tokenEstimate) &&
+      message.tokenEstimate >= 0
+    )
+    .map((message) => message.fingerprint))
+  return ledger.activeFingerprints.some((fingerprint) =>
+    authenticatedIds.has(fingerprint)
+  )
+}
+
+function compactLedgers(
+  ledgers: Record<string, PersistedConversationLedger>,
+  generationId: string
+): Record<string, PersistedConversationLedger> {
+  const sorted = Object.values(ledgers)
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+
+  return Object.fromEntries(sorted.flatMap((ledger, index) => {
+    if (index < MAX_RECENT_DETAILED_LEDGERS) {
+      return [[ledger.conversationKey, compactLedger(ledger)]]
+    }
+    if (isDurableCompleteLedger(ledger, generationId)) {
+      // Store only eight recent anonymized anchors and the exact preserved
+      // prefix sum. Rereading the full virtualized chat is not necessary.
+      return [[
+        ledger.conversationKey,
+        compactLedger(ledger, MAX_ARCHIVED_LEDGER_MESSAGE_RECORDS)
+      ]]
+    }
+    return []
+  }))
+}
+
 function compactLedger(
-  ledger: PersistedConversationLedger
+  ledger: PersistedConversationLedger,
+  maxRecords = MAX_LEDGER_MESSAGE_RECORDS
 ): PersistedConversationLedger {
   const recordsByFingerprint = new Map(
     ledger.messages.map((message) => [message.fingerprint, message])
@@ -425,7 +489,7 @@ function compactLedger(
   const sourceRecords =
     activeRecords.length > 0
       ? activeRecords
-      : ledger.messages.slice(-MAX_LEDGER_MESSAGE_RECORDS)
+      : ledger.messages.slice(-maxRecords)
 
   const sourceLoad = sourceRecords.reduce(
     (sum, message) => sum + Math.max(0, message.tokenEstimate),
@@ -436,7 +500,7 @@ function compactLedger(
     ledger.retainedPrefixLoad ??
       ledger.currentEstimatedLoad - sourceLoad
   )
-  const retainedRecords = sourceRecords.slice(-MAX_LEDGER_MESSAGE_RECORDS)
+  const retainedRecords = sourceRecords.slice(-maxRecords)
   const droppedLoad = sourceRecords
     .slice(0, Math.max(0, sourceRecords.length - retainedRecords.length))
     .reduce((sum, message) => sum + Math.max(0, message.tokenEstimate), 0)

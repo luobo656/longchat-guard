@@ -1,5 +1,13 @@
 # LongChat Guard 2.1.1 架构基线
 
+## 4.3.1 跨升级无损缓存约束（实验）
+
+- `storage.compactGeneration` 保留全部 strong/conservative 已确认失败样本，在剩余空间的固定数量内保留近期成功/暂定样本；禁止常规 safe-only 成功聊天冲掉历史 R。当前代际、环境漂移及保守样本质量规则不变。
+- `storage.compactLedgers` 保持近期 12 条账本的较详细匿名消息锚点；对当前 generation 中 complete/healthy/reliable、带有效 parser/measurement signature 且具备真实活跃消息锚点的其它账本，改用极轻量冷档（末尾 8 条锚点 + retainedPrefixLoad + totalUnits + revision + quality + uncertainty + 环境签名），不以“最近 12 条”上限驱逐已认证会话。重复压缩保持数值幂等、消息正文始终不落盘。未认证/未匹配旧记录可以按近期上限清理，避免模糊状态长期增长。
+- 冷档回访时若当前 DOM 显示的前部消息早于保存的末尾 8 条锚点，SequenceReconciler 可以在 **at_tail 且完整匹配已保存的末尾有序锚点** 的条件下，忽略已经由 retainedPrefixLoad 代表的更早可见前缀，仅计算后续新增消息；其余无锚点/重排/未在尾部的情形保持不确定。决不把更早可见消息重复加入已知前缀负载。
+- 恢复时只在同一匿名 ID / 同一 generation / 相同 parser & measurement schema 且已认证的前提下使用旧 R 与 L；活跃新消息靠原 SequenceReconciler 追加并严格验证，证据不足就 fail closed。已丢失的数据不凭经验推断。未引入更多权限或新服务器。
+- 即使长期积累的历史记录最终达到浏览器 storage.local 配额，也不能无通知地删除 strong R 与认证完整 L。扩展应保留上一次成功保存的状态并按现有错误路径停止本次更新，后续额外容量迁移须独立设计和验证。
+
 ## 4.3.1 未发布实验修复：消息连续性、统一身份和硬限制直观反馈
 
 - `readConversationLengthBanner` 只检测主会话区内真正可见的 ChatGPT 硬限制文案；排除聊天正文、隐藏元素，显式空白路由继续隔离旧 DOM。`GuardUiModel.visibleLengthLimit` 作为独立状态优先显示准确文案，隐藏经验刻度；它不自动记入校准，`showUnavailable` 的页面失效分支也能显示硬停止状态。
