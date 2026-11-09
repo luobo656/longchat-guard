@@ -119,6 +119,43 @@ describe('sequence reconciler', () => {
     expect(result.messages[0]?.observedAt).toBe(1)
   })
 
+
+  it('restores missing ordinal matching evidence after observing a legacy 4.3.0 ledger', () => {
+    const old: MessageRecord[] = [
+      { fingerprint: 'stable:old-user', stableHintHash: 'old-user',
+        contentFingerprint: 'same-user', role: 'user', tokenEstimate: 7, observedAt: 1 },
+      { fingerprint: 'stable:old-assistant', stableHintHash: 'old-assistant',
+        contentFingerprint: 'partial', role: 'assistant', tokenEstimate: 13, observedAt: 1 }
+    ]
+    const bridge = reconcileSequence({
+      existingMessages: old,
+      activeFingerprints: old.map((m) => m.fingerprint),
+      observed: [
+        { stableHintHash: 'old-user', contentFingerprint: 'same-user',
+          role: 'user', tokenEstimate: 7, charCount: 24, observedAt: 2, ordinalHint: 0 },
+        { stableHintHash: 'old-assistant', contentFingerprint: 'partial',
+          role: 'assistant', tokenEstimate: 13, charCount: 28, observedAt: 2, ordinalHint: 1 }
+      ],
+      tailEvidence: 'unknown', coverageState: 'complete',
+      parserHealth: 'healthy', now: 2
+    })
+    expect(bridge.messages.map((m) => m.ordinalHint)).toEqual([0, 1])
+    const upgraded = reconcileSequence({
+      existingMessages: bridge.messages,
+      activeFingerprints: bridge.activeFingerprints,
+      observed: [
+        { stableHintHash: 'new-user', contentFingerprint: 'same-user',
+          role: 'user', tokenEstimate: 7, charCount: 24, observedAt: 3, ordinalHint: 0 },
+        { stableHintHash: 'new-assistant', contentFingerprint: 'complete answer',
+          role: 'assistant', tokenEstimate: 55, charCount: 54, observedAt: 3, ordinalHint: 1 }
+      ],
+      tailEvidence: 'unknown', coverageState: 'complete',
+      parserHealth: 'healthy', now: 3
+    })
+    expect(upgraded.reliability).toBe('reliable')
+    expect(load(upgraded.messages, upgraded.activeFingerprints)).toBe(62)
+  })
+
   it('keeps a streaming assistant reliable across renderer stable-hint changes when ordinal and role stay aligned', () => {
     const existing: MessageRecord[] = [
       {
@@ -244,6 +281,57 @@ describe('sequence reconciler', () => {
     expect(result.reliability).toBe('uncertain')
     expect(result.coverageState).toBe('mostly_complete')
     expect(result.parserHealth).toBe('degraded')
+  })
+
+
+  it('extends a certified cold archive without double-counting older visible prefix messages', () => {
+    const cachedTail = records(Array.from({ length: 8 }, (_, i) => `cached-${i}`))
+    // The earlier twelve visible messages are ALREADY represented by a
+    // retainedPrefixLoad of 120 in the compacted ledger, not active records.
+    const observedWindow = [
+      ...Array.from({ length: 12 }, (_, i) => `older-${i}`),
+      ...cachedTail.map((record) => record.contentFingerprint!),
+      'new-after-upgrade'
+    ]
+    const result = reconcileSequence({
+      existingMessages: cachedTail,
+      activeFingerprints: ids(cachedTail),
+      observed: observed(observedWindow),
+      tailEvidence: 'at_tail',
+      coverageState: 'complete',
+      parserHealth: 'healthy',
+      now: 210
+    })
+    expect(result.reliability).toBe('reliable')
+    expect(result.activeFingerprints.map((id) => contentOf(result.messages, id)))
+      .toEqual([...cachedTail.map((m) => m.contentFingerprint!), 'new-after-upgrade'])
+    expect(120 + load(result.messages, result.activeFingerprints)).toBe(210)
+  })
+
+  it('does not accept an older prefix as an archive tail bridge when anchors are reordered or not at tail', () => {
+    const cachedTail = records(Array.from({ length: 8 }, (_, i) => `cached-${i}`))
+    const shuffled = ['older', ...cachedTail.map((m) => m.contentFingerprint!)]
+    const swapped = shuffled[3]!
+    shuffled[3] = shuffled[4]!
+    shuffled[4] = swapped
+
+    for (const [window, tailEvidence] of [
+      [shuffled, 'at_tail'],
+      [['older', ...cachedTail.map((m) => m.contentFingerprint!), 'new'], 'unknown']
+    ] as const) {
+      const result = reconcileSequence({
+        existingMessages: cachedTail,
+        activeFingerprints: ids(cachedTail),
+        observed: observed([...window]),
+        tailEvidence,
+        coverageState: 'complete',
+        parserHealth: 'healthy',
+        now: 211
+      })
+      expect(result.reliability).toBe('uncertain')
+      expect(result.coverageState).toBe('mostly_complete')
+      expect(result.activeFingerprints).toEqual(ids(cachedTail))
+    }
   })
 
   it('treats same role/text at different positions as two instances without stable hints', () => {
