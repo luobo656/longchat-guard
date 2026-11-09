@@ -56,6 +56,7 @@ import {
   NEW_CHAT_START_EVIDENCE_TTL_MS,
   resetConversationSession,
   resolveConversationSession,
+  resolveObservedConversationKey,
   resolveSessionConversationId,
   shouldArmNewChatFromComposerActivity
 } from './conversation-session'
@@ -64,6 +65,7 @@ import {
   hasConversationMessageRoots,
   readComposerText,
   readVisibleErrors,
+  readConversationLengthBanner,
   readPageSnapshot
 } from './dom-reader'
 import {
@@ -173,10 +175,16 @@ export async function startGuard(): Promise<void> {
     ui.update(model)
   }
 
+  // The hard-limit banner is direct ChatGPT status, independent of local R.
+  // Blank composer routes can still show stale banners from the prior chat.
+  const hasLiveLengthLimit = (): boolean =>
+    !isBlankConversationRoute(location.href) &&
+    Boolean(readConversationLengthBanner(document))
+
   const renderUnavailable = (
     calibrationState: CalibrationState
   ): void => {
-    ui.showUnavailable(calibrationState)
+    ui.showUnavailable(calibrationState, hasLiveLengthLimit())
   }
 
   const renderCurrentUiFromState = (): void => {
@@ -236,6 +244,7 @@ export async function startGuard(): Promise<void> {
           calibrationIsUsable(calibrationState),
         growthReserveReady: summary.growthReserveReady,
         muted: control.muted ?? false,
+        visibleLengthLimit: hasLiveLengthLimit(),
         pendingFailureConfirmation:
           generation.pendingFailureConfirmations.some(
             (item) => item.conversationKey === conversationKey
@@ -633,19 +642,19 @@ export async function startGuard(): Promise<void> {
         clearNewChatStartSessionEvidence()
       }
 
-      const activeSessionConversationKey =
-        sessionResolution.activeConversationId
-          ? await persistedConversationKey(
-              `chatgpt:${sessionResolution.activeConversationId}`
-            )
-          : undefined
       const adapterResult = analyzePageSnapshot(preliminarySnapshot)
       const parserCanary = parserCanaryPasses(
         adapterResult.messages
       )
-      const conversationKey = adapterResult.conversationKey
-        ? await persistedConversationKey(adapterResult.conversationKey)
-        : activeSessionConversationKey
+      const rawObservedKey = resolveObservedConversationKey({
+        activeSessionConversationId: sessionResolution.activeConversationId,
+        adapterConversationKey: adapterResult.conversationKey
+      })
+      // Never compute coverage for one SPA identity and save it under a
+      // different (possibly stale canonical) conversation key.
+      const conversationKey = rawObservedKey
+        ? await persistedConversationKey(rawObservedKey)
+        : undefined
 
 
       if (
@@ -946,6 +955,7 @@ export async function startGuard(): Promise<void> {
           growthReserveReady: summary.growthReserveReady,
           muted: effectiveControl.muted ?? false,
           pendingFailureConfirmation,
+          visibleLengthLimit: hasLiveLengthLimit(),
           uncertaintySources: ledger.uncertaintySources
         })
 

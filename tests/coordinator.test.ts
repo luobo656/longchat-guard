@@ -251,6 +251,72 @@ describe('storage mutation coordinator state transitions', () => {
     ).toBe('complete')
   })
 
+
+  it('survives a persisted new-chat assistant renderer transition with unknown scroll-tail evidence', async () => {
+    const coordinator = new StorageMutationCoordinator(new MemoryStorage())
+    const firstState = await coordinator.loadState()
+    const observed = (
+      stable: string,
+      content: string,
+      role: 'user' | 'assistant',
+      ordinal: number,
+      units: number,
+      at: number
+    ) => ({
+      stableHintHash: stable,
+      contentFingerprint: content,
+      role,
+      ordinalHint: ordinal,
+      tokenEstimate: units,
+      charCount: units * 4,
+      observedAt: at
+    })
+    // A first user turn and partial assistant answer have already been
+    // saved to chrome.storage before the next renderer observation.
+    const first = await coordinator.observeWindow({
+      conversationKey: 'chatgpt:project-first-turn',
+      coverageState: 'complete',
+      parserHealth: 'healthy',
+      tailEvidence: 'unknown',
+      observedMessages: [
+        observed('group:user', 'same-user-text', 'user', 0, 15, 10),
+        observed('group:assistant', 'assistant-streaming', 'assistant', 1, 25, 10)
+      ],
+      composerTokenEstimate: 0,
+      environmentSignature: env,
+      uncertaintySources: [],
+      expectedGenerationId: firstState.settings.generationId,
+      baseRevision: 0,
+      observationEpoch: 10,
+      observedAt: 10
+    })
+    expect(first.snapshot?.currentEstimatedLoad).toBe(40)
+
+    // The renderer changes IDs and the assistant text completes. One
+    // stable user body anchors the same ordered sequence; no tail guess.
+    const second = await coordinator.observeWindow({
+      conversationKey: 'chatgpt:project-first-turn',
+      coverageState: 'complete',
+      parserHealth: 'healthy',
+      tailEvidence: 'unknown',
+      observedMessages: [
+        observed('server:user', 'same-user-text', 'user', 0, 15, 20),
+        observed('server:assistant', 'assistant-final-response', 'assistant', 1, 95, 20)
+      ],
+      composerTokenEstimate: 0,
+      environmentSignature: env,
+      uncertaintySources: [],
+      expectedGenerationId: firstState.settings.generationId,
+      baseRevision: first.snapshot?.ledgerRevision ?? -1,
+      observationEpoch: 20,
+      observedAt: 20
+    })
+    expect(second.observationDisposition).toBe('committed')
+    expect(second.snapshot?.sequenceReliability).toBe('reliable')
+    expect(second.snapshot?.currentEstimatedLoad).toBe(110)
+    expect(second.snapshot?.activeFingerprints).toHaveLength(2)
+  })
+
   it('rejects stale observation, completion, and failure events from an old generation', async () => {
     const coordinator = new StorageMutationCoordinator(
       new MemoryStorage()

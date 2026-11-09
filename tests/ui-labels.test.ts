@@ -95,6 +95,13 @@ describe('guard UI product contract', () => {
     ).toBe(false)
   })
 
+  it('hides the empirical risk scale when ChatGPT itself reports a hard limit', () => {
+    expect(shouldRenderRiskTrack(model({
+      riskState: 'normal', visibleLengthLimit: true
+    }))).toBe(false)
+    expect(en.visibleLimitHelp.message).toContain('ChatGPT')
+  })
+
   it('centers calibrated UI copy on risk rather than optional model metadata', () => {
     expect(en.riskNormal.message).toBe('Lower risk')
     expect(en.riskAdviceNormal.message).toContain('lower-risk range')
