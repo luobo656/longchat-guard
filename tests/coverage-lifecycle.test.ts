@@ -5,6 +5,7 @@ import {
   markNewChatStarted,
   resetConversationSession,
   resolveConversationSession,
+  resolveObservedConversationKey,
   resolveSessionConversationId,
   shouldArmNewChatFromComposerActivity
 } from '../src/content/conversation-session'
@@ -42,6 +43,16 @@ describe('conversation identity source precedence', () => {
         observedConversationId: 'sidebar-chat'
       })
     ).toBe('current-chat')
+  })
+
+  it('does not persist observed-from-start coverage under a stale adapter canonical ID', () => {
+    expect(resolveObservedConversationKey({
+      activeSessionConversationId: 'bound-project-chat',
+      adapterConversationKey: 'chatgpt:stale-canonical'
+    })).toBe('chatgpt:bound-project-chat')
+    expect(resolveObservedConversationKey({
+      adapterConversationKey: 'chatgpt:first-observed-id'
+    })).toBe('chatgpt:first-observed-id')
   })
 
   it('allows an explicit /c route to replace the previous session identity', () => {

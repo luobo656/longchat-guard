@@ -10,7 +10,15 @@ const expected = {
   zh_TW: { suffix: 'zh-TW', title: 'LongChat Guard · 長對話預警', shortHeading: '簡短說明', longHeading: '詳細說明', singleHeading: '單一用途' }
 }
 const manifest = json('dist/manifest.json')
-if (manifest.version !== '4.3.0' || json('package.json').version !== manifest.version) fail('version_mismatch')
+// v4.3.0 store listings and site version are frozen historical release
+// material. v4.3.1 is an UNPUBLISHED local test build; validate its actual
+// manifest/package lockstep without rewriting the submitted store copy.
+const pkg = json('package.json')
+const lock = json('package-lock.json')
+if (!['4.3.0', '4.3.1'].includes(manifest.version) ||
+    pkg.version !== manifest.version ||
+    lock.version !== manifest.version ||
+    lock.packages?.['']?.version !== manifest.version) fail('version_mismatch')
 if (manifest.manifest_version !== 3) fail('not_mv3')
 if (JSON.stringify(manifest.permissions) !== JSON.stringify(['storage', 'debugger'])) fail('permission_mismatch')
 if (JSON.stringify(manifest.host_permissions) !== JSON.stringify(['https://chatgpt.com/*'])) fail('host_permission_mismatch')
@@ -67,4 +75,4 @@ for (const [path, archivalLabel] of [
   const html = text(path)
   if (!html.includes('"softwareVersion": "4.3.0"') || !html.includes(archivalLabel)) fail(`site_not_current:${path}`)
 }
-console.log('Store preflight passed: 4.3.0, approved icons, 3 locales, 6 listings, permission/privacy copy, archived screenshots.')
+console.log(`Store preflight passed for build ${manifest.version}: approved icons, 3 locales, 6 archived v4.3.0 listings, permission/privacy copy, screenshots.`)

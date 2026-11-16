@@ -64,6 +64,9 @@
   "riskAdviceOrganize": {
     "message": "已接近風險區，建議準備續接新對話。"
   },
+  "visibleLimitHelp": {
+    "message": "ChatGPT 已明確提示目前對話達到長度上限。請在新對話繼續；此提示來自網頁本身，不代表擴充功能測得官方 Token 額度。"
+  },
   "riskAdviceHigh": {
     "message": "已進入高風險區，建議盡快續接新對話。"
   },
@@ -75,6 +78,9 @@
   },
   "statusCalibrating": {
     "message": "正在校準"
+  },
+  "statusLengthLimitReached": {
+    "message": "已達對話長度上限"
   },
   "statusUnknown": {
     "message": "暫無法判斷"

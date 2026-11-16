@@ -83,6 +83,18 @@ export function resolveSessionConversationId(input: {
   return input.observedConversationId
 }
 
+/** Coverage evidence and the persisted ledger must use the SAME identity.
+ * Once a session is bound, a stale canonical DOM hint cannot override it.
+ */
+export function resolveObservedConversationKey(input: {
+  activeSessionConversationId?: string | undefined
+  adapterConversationKey?: string | undefined
+}): string | undefined {
+  return input.activeSessionConversationId
+    ? `chatgpt:${input.activeSessionConversationId}`
+    : input.adapterConversationKey
+}
+
 export function resolveConversationSession(
   state: ConversationSessionState,
   observation: ConversationSessionObservation
