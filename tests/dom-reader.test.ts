@@ -8,6 +8,7 @@ import {
   readMessages,
   readPageSnapshot,
   readVisibleErrors,
+  readConversationLengthBanner,
   readTailEvidence
 } from '../src/content/dom-reader'
 
@@ -77,6 +78,26 @@ describe('chatgpt DOM reader', () => {
       ['user', 'hello', 'turn-key:turn-abc:user'],
       ['assistant', 'world', 'turn-key:turn-abc:assistant']
     ])
+  })
+
+
+  it('keeps one grouped assistant turn despite multiple generic markdown fragments', () => {
+    const user = el('div', { 'data-message-author-role': 'user' }, [], 'hello')
+    const first = el('div', {
+      'data-message-author-role': 'assistant',
+      'data-markdown-text-style': 'assistant-message'
+    }, [], 'first paragraph')
+    const second = el('div', {
+      'data-message-author-role': 'assistant',
+      'data-markdown-text-style': 'assistant-message'
+    }, [], 'second paragraph')
+    const group = el('div', { 'data-turn-key': 'turn-one' }, [user, first, second])
+    const result = readMessages(fakeDocument([group]) as unknown as Document)
+
+    expect(result.map((m) => m.role)).toEqual(['user', 'assistant'])
+    expect(result[1]?.text.split(String.fromCharCode(10)).filter(Boolean))
+      .toEqual(['first paragraph', 'second paragraph'])
+    expect(result[1]?.stableHint).toBe('turn-key:turn-one:assistant')
   })
 
   it('prefers the complete author-role representation when grouped renderer is temporarily incomplete', () => {
@@ -377,6 +398,35 @@ describe('chatgpt DOM reader', () => {
     expect(readMessages(doc as unknown as Document)[0]?.stableHint).toBe(
       'conversation-turn:conversation-turn-42'
     )
+  })
+})
+
+describe('first-party hard-limit banner', () => {
+  it('recognizes the visible Chinese banner outside alerts', () => {
+    const text = '你已达到此对话的长度上限，你可以开始新聊天以继续对话。'
+    const doc = fakeDocument([el('main', {}, [el('section', {}, [el('p', {}, [], text)])])])
+    expect(readConversationLengthBanner(doc as unknown as Document)).toBe(text)
+    expect(readVisibleErrors(doc as unknown as Document)).toContain(text)
+  })
+
+  it('does not mistake a quotation or blank project route for a hard limit', () => {
+    const text = '你已达到此对话的长度上限，你可以开始新聊天以继续对话。'
+    const quoted = fakeDocument([el('main', {}, [
+      el('article', { 'data-turn-key': 'quoted' }, [el('p', {}, [], text)])
+    ])])
+    expect(readVisibleErrors(quoted as unknown as Document)).toEqual([])
+    const visible = fakeDocument([el('main', {}, [el('p', {}, [], text)])])
+    expect(readPageSnapshot(visible as unknown as Document,
+      'https://chatgpt.com/g/project-id/project', 'none').visibleErrors).toEqual([])
+  })
+
+  it('ignores hidden and explanatory text', () => {
+    const text = '你已达到此对话的长度上限，你可以开始新聊天以继续对话。'
+    const doc = fakeDocument([el('main', {}, [
+      el('p', { hidden: '' }, [], text),
+      el('p', {}, [], '本页面介绍 ChatGPT 的会话长度上限')
+    ])])
+    expect(readVisibleErrors(doc as unknown as Document)).toEqual([])
   })
 })
 
